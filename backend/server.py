@@ -140,12 +140,22 @@ async def root():
 async def upload_liquor_data(file: UploadFile = File(...)):
     """Upload and process Excel/CSV file with liquor data"""
     try:
-        # Validate file type
-        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
-            raise HTTPException(status_code=400, detail="Only Excel (.xlsx, .xls) and CSV files are supported")
+        # Validate file type first
+        if not file.filename or not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "Invalid file type",
+                    "message": "Only Excel (.xlsx, .xls) and CSV files are supported",
+                    "supported_formats": [".xlsx", ".xls", ".csv"]
+                }
+            )
         
         # Read file content
         content = await file.read()
+        
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
         
         # Parse the data
         parsed_data = parse_excel_data(content)
@@ -173,6 +183,9 @@ async def upload_liquor_data(file: UploadFile = File(...)):
             }
         )
         
+    except HTTPException:
+        # Re-raise HTTPExceptions (400 errors) as-is
+        raise
     except Exception as e:
         logging.error(f"Error uploading data: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
