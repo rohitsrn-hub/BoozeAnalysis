@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-10-02T03:25:58.765005",
-  "total_tests": 16,
-  "passed_tests": 16,
+  "timestamp": "2025-10-02T08:57:42.076063",
+  "total_tests": 17,
+  "passed_tests": 17,
   "success_rate": 100.0,
   "test_results": [
     {
@@ -22,27 +22,27 @@
     {
       "test": "Analytics Endpoint (multiplier=3.0)",
       "success": true,
-      "details": "Total brands: 5, Overstocked: 3"
+      "details": "Total brands: 5, Overstocked: 0"
     },
     {
       "test": "Analytics Endpoint (multiplier=2.0)",
       "success": true,
-      "details": "Total brands: 5, Overstocked: 3"
+      "details": "Total brands: 5, Overstocked: 0"
     },
     {
       "test": "Analytics Endpoint (multiplier=2.5)",
       "success": true,
-      "details": "Total brands: 5, Overstocked: 3"
+      "details": "Total brands: 5, Overstocked: 0"
     },
     {
       "test": "Analytics Endpoint (multiplier=3.0)",
       "success": true,
-      "details": "Total brands: 5, Overstocked: 3"
+      "details": "Total brands: 5, Overstocked: 0"
     },
     {
       "test": "Analytics Endpoint (multiplier=4.0)",
       "success": true,
-      "details": "Total brands: 5, Overstocked: 1"
+      "details": "Total brands: 5, Overstocked: 0"
     },
     {
       "test": "Analytics Endpoint (multiplier=5.0)",
@@ -67,12 +67,17 @@
     {
       "test": "Demand Recommendations Endpoint",
       "success": true,
-      "details": "Retrieved 2 recommendations, Urgency distribution: {'MEDIUM': 1, 'LOW': 1}"
+      "details": "Retrieved 3 recommendations, Urgency distribution: {'LOW': 3}, Wholesale rates properly calculated"
     },
     {
-      "test": "Excel Export Endpoint",
+      "test": "Enhanced Excel Export Validation",
       "success": true,
-      "details": "Excel file exported, size: 5076 bytes, proper download headers set"
+      "details": "Excel file exported, size: 5420 bytes, proper download headers set, All 6 required columns present, Total row present, Uses original brand indexes (not serial numbers), Total calculation errors - Stock: 288 vs 288, Demand: 62 vs 62, Monthly Sale: 173485.72 vs 173485.71, 3 data rows + 1 total row"
+    },
+    {
+      "test": "Enhanced Excel Export - Three Key Improvements",
+      "success": true,
+      "details": "\u2713 Uses original brand index numbers; \u2713 Projected Monthly Sale column has valid data; \u2713 Total row present with correct format; \u2713 Total row calculations are accurate; \u2713 All Excel brands match recommendation data"
     },
     {
       "test": "Analytics - No Data Handling",
