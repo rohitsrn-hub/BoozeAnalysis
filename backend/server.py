@@ -915,7 +915,8 @@ async def export_demand_list():
             'Wholesale Rate': f'Cost: {round(total_wholesale_cost, 2)}',
             'Projected Monthly Sale (Qty)': int(round(total_projected_monthly_sale, 0)),
             'Quantity held in Stock': total_quantity_in_stock,
-            'Quantity to be Demanded': total_quantity_demanded
+            'Quantity to be Demanded': total_quantity_demanded,
+            'Number of Cases to be Demanded': total_cases_demanded
         })
         
         df = pd.DataFrame(df_data)
