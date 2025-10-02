@@ -44,25 +44,23 @@ class LiquorDashboardTester:
             return False
 
     def create_sample_excel_file(self):
-        """Create a sample Excel file for testing"""
+        """Create a sample Excel file for testing with proper index numbers and structure"""
         sample_data = {
+            'Index': [101, 205, 350, 412, 578],  # Non-sequential index numbers to test original index preservation
             'Brand Name': [
-                'Brand A', 'Brand B', 'Brand C', 'Brand D', 'Brand E'
+                'Premium Whiskey Gold', 'Classic Vodka Silver', 'Royal Rum Deluxe', 
+                'Elite Gin Supreme', 'Heritage Brandy Reserve'
             ],
-            'Rate': [500, 750, 1000, 600, 800],
-            'Monthly Sale (25 Aug - 19 Sep)': [100, 150, 80, 120, 90],
-            'Monthly Sale value (a)': [50000, 112500, 80000, 72000, 72000],
-            'Avg Daily SALE (b)': [4.0, 6.0, 3.2, 4.8, 3.6],
-            'Stock avlb for days (c)': [45, 30, 90, 25, 60],
-            'Stock Value before collection 19 Sep 25 (d)': [180000, 200000, 300000, 150000, 250000],
-            'Stock value Today (29 Sep) ( e)': [200000, 180000, 350000, 140000, 280000],
-            'Stock ratio (e/a)': [4.0, 1.6, 4.375, 1.94, 3.89],
-            # Add some daily sales columns
-            '25 Aug': [5, 8, 3, 6, 4],
-            '26 Aug': [4, 7, 4, 5, 3],
-            '27 Aug': [6, 9, 2, 7, 5],
-            '28 Aug': [3, 6, 5, 4, 2],
-            '29 Aug': [5, 8, 3, 6, 4]
+            'Wholesale Rate': [450, 675, 900, 540, 720],
+            'Selling Rate': [500, 750, 1000, 600, 800],
+            # Daily stock data to simulate real liquor inventory tracking
+            '25-Aug': [120, 180, 95, 140, 110],  # Initial stock
+            '26-Aug': [115, 175, 92, 135, 106],  # Some sales
+            '27-Aug': [110, 170, 90, 130, 102],  # More sales
+            '28-Aug': [105, 165, 87, 125, 98],   # Continued sales
+            '29-Aug': [100, 160, 85, 120, 95],   # Current stock
+            '30-Aug': [95, 155, 82, 115, 91],    # More recent data
+            '31-Aug': [90, 150, 80, 110, 88],    # Latest stock levels
         }
         
         df = pd.DataFrame(sample_data)
