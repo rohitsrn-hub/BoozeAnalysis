@@ -221,6 +221,129 @@ class LiquorDashboardTester:
             self.log_test("Analytics - No Data Handling", False, str(e))
             return False
 
+    def test_charts_endpoint(self):
+        """Test charts data endpoint"""
+        try:
+            response = requests.get(f"{self.api_url}/charts")
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                required_fields = [
+                    'volume_leaders', 'velocity_leaders', 'revenue_leaders', 'revenue_proportion'
+                ]
+                
+                missing_fields = [field for field in required_fields if field not in data]
+                if missing_fields:
+                    success = False
+                    details = f"Missing fields: {missing_fields}"
+                else:
+                    # Check if each chart has data
+                    chart_counts = {
+                        'volume_leaders': len(data.get('volume_leaders', [])),
+                        'velocity_leaders': len(data.get('velocity_leaders', [])),
+                        'revenue_leaders': len(data.get('revenue_leaders', [])),
+                        'revenue_proportion': len(data.get('revenue_proportion', []))
+                    }
+                    details = f"Chart data counts: {chart_counts}"
+                    
+                    # Validate structure of volume leaders
+                    if data.get('volume_leaders') and len(data['volume_leaders']) > 0:
+                        first_volume = data['volume_leaders'][0]
+                        required_volume_fields = ['name', 'value', 'stock_value']
+                        missing_volume_fields = [field for field in required_volume_fields if field not in first_volume]
+                        if missing_volume_fields:
+                            success = False
+                            details += f", Missing volume leader fields: {missing_volume_fields}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Charts Data Endpoint", success, details)
+            return success, response.json() if success else {}
+            
+        except Exception as e:
+            self.log_test("Charts Data Endpoint", False, str(e))
+            return False, {}
+
+    def test_demand_recommendations_endpoint(self):
+        """Test demand recommendations endpoint"""
+        try:
+            response = requests.get(f"{self.api_url}/demand-recommendations")
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                if isinstance(data, list):
+                    details = f"Retrieved {len(data)} recommendations"
+                    
+                    # Check structure of recommendations if any exist
+                    if len(data) > 0:
+                        first_rec = data[0]
+                        required_fields = [
+                            'brand_name', 'current_stock_bottles', 'avg_monthly_sales',
+                            'recommended_bottles', 'days_of_stock', 'urgency_level', 'bottle_rate'
+                        ]
+                        missing_fields = [field for field in required_fields if field not in first_rec]
+                        if missing_fields:
+                            success = False
+                            details += f", Missing recommendation fields: {missing_fields}"
+                        else:
+                            # Check urgency levels
+                            urgency_levels = [rec.get('urgency_level') for rec in data]
+                            valid_urgencies = ['HIGH', 'MEDIUM', 'LOW', 'NONE']
+                            invalid_urgencies = [u for u in urgency_levels if u not in valid_urgencies]
+                            if invalid_urgencies:
+                                success = False
+                                details += f", Invalid urgency levels: {set(invalid_urgencies)}"
+                            else:
+                                urgency_counts = {level: urgency_levels.count(level) for level in valid_urgencies if urgency_levels.count(level) > 0}
+                                details += f", Urgency distribution: {urgency_counts}"
+                else:
+                    success = False
+                    details = "Response is not a list"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Demand Recommendations Endpoint", success, details)
+            return success, response.json() if success else []
+            
+        except Exception as e:
+            self.log_test("Demand Recommendations Endpoint", False, str(e))
+            return False, []
+
+    def test_export_demand_list_endpoint(self):
+        """Test Excel export endpoint"""
+        try:
+            response = requests.get(f"{self.api_url}/export-demand-list")
+            success = response.status_code == 200
+            
+            if success:
+                # Check if response is Excel file
+                content_type = response.headers.get('content-type', '')
+                is_excel = 'spreadsheet' in content_type or 'excel' in content_type
+                
+                if is_excel:
+                    details = f"Excel file exported, size: {len(response.content)} bytes"
+                    
+                    # Check content-disposition header for filename
+                    content_disposition = response.headers.get('content-disposition', '')
+                    if 'attachment' in content_disposition and 'filename' in content_disposition:
+                        details += ", proper download headers set"
+                    else:
+                        details += ", missing proper download headers"
+                else:
+                    success = False
+                    details = f"Wrong content type: {content_type}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Excel Export Endpoint", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Excel Export Endpoint", False, str(e))
+            return False
+
     def test_cors_headers(self):
         """Test CORS headers"""
         try:
