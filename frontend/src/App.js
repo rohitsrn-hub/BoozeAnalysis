@@ -22,6 +22,7 @@ function App() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [chartsData, setChartsData] = useState(null);
   const [demandData, setDemandData] = useState(null);
+  const [calculationData, setCalculationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [overstockMultiplier, setOverstockMultiplier] = useState(3.0);
   const [uploadProgress, setUploadProgress] = useState(0);
