@@ -737,11 +737,11 @@ async def get_calculation_details():
                 'index': record.get('index_number', record.get('product_id', 'N/A')),
                 'brand_name': record['brand_name'],
                 'calculated_wholesale_rate': record.get('wholesale_rate', 0),
-                'selling_rate': record.get('selling_rate', record['rate']),
+                'selling_rate': record.get('selling_rate', record.get('rate', 0)),
                 'calculated_avg_monthly_sale': record.get('monthly_sale_value', 0),
                 'calculated_current_stock_value': current_stock_value,
                 'calculated_multiplier_value': round(multiplier_value, 3),
-                # Additional useful fields for verification
+                # Additional useful fields for verification - use actual stored values
                 'D1_date': record.get('D1_date', 'N/A'),
                 'D1_stock': record.get('D1_stock', 0),
                 'DL_date': record.get('DL_date', 'N/A'), 
