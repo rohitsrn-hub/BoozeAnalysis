@@ -942,7 +942,7 @@ async def export_demand_list():
             header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
             
             # Style the header row
-            for col in range(1, 7):  # 6 columns now
+            for col in range(1, 8):  # 7 columns now
                 cell = worksheet.cell(row=1, column=col)
                 cell.font = header_font
                 cell.fill = header_fill
@@ -959,7 +959,7 @@ async def export_demand_list():
                 right=Side(border_style="thin", color="366092")
             )
             
-            for col in range(1, 7):  # 6 columns
+            for col in range(1, 8):  # 7 columns now
                 cell = worksheet.cell(row=total_row + 1, column=col)  # +1 because of header
                 cell.font = total_font
                 cell.fill = total_fill
