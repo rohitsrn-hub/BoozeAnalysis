@@ -29,21 +29,32 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
-  // Fetch analytics data
+  // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API}/analytics?overstock_multiplier=${multiplier}`);
-      setAnalyticsData(response.data);
+      
+      // Fetch analytics data
+      const analyticsResponse = await axios.get(`${API}/analytics?overstock_multiplier=${multiplier}`);
+      setAnalyticsData(analyticsResponse.data);
+      
+      // Fetch charts data
+      const chartsResponse = await axios.get(`${API}/charts`);
+      setChartsData(chartsResponse.data);
+      
+      // Fetch demand recommendations
+      const demandResponse = await axios.get(`${API}/demand-recommendations`);
+      setDemandData(demandResponse.data);
+      
       setHasData(true);
       toast.success("Analytics updated successfully");
     } catch (error) {
-      console.error("Error fetching analytics:", error);
+      console.error("Error fetching data:", error);
       if (error.response?.status === 404) {
         setHasData(false);
         toast.error("No data found. Please upload liquor data first.");
       } else {
-        toast.error("Failed to fetch analytics data");
+        toast.error("Failed to fetch data");
       }
     } finally {
       setLoading(false);
