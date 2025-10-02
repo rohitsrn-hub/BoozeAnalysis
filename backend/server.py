@@ -697,7 +697,18 @@ async def get_calculation_details():
             calculation_details.append(detail)
         
         # Sort by index number
-        calculation_details.sort(key=lambda x: int(str(x['index']).replace('ID_', '')) if str(x['index']).replace('ID_', '').isdigit() else 999)
+        # Sort by index number, handling various formats
+        def sort_key(x):
+            idx_str = str(x['index'])
+            try:
+                # Try to extract number from index
+                import re
+                match = re.search(r'\d+', idx_str)
+                return int(match.group()) if match else 999
+            except:
+                return 999
+        
+        calculation_details.sort(key=sort_key)
         
         return calculation_details
         
