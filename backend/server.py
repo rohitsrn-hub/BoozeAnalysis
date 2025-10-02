@@ -55,21 +55,6 @@ class AnalyticsResponse(BaseModel):
     overstocked_items: List[Dict[str, Any]]
     sales_trends: Dict[str, Any]
 
-class ChartsResponse(BaseModel):
-    volume_leaders: List[Dict[str, Any]]
-    velocity_leaders: List[Dict[str, Any]]
-    revenue_leaders: List[Dict[str, Any]]
-    revenue_proportion: List[Dict[str, Any]]
-
-class DemandRecommendation(BaseModel):
-    brand_name: str
-    current_stock_bottles: int
-    avg_monthly_sales: float
-    recommended_bottles: int
-    days_of_stock: float
-    urgency_level: str
-    bottle_rate: float
-
 # Helper functions
 def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
     """Parse Excel file and return structured data"""
