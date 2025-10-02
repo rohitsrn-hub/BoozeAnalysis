@@ -568,28 +568,197 @@ function App() {
                   <CardContent>
                     <div className="space-y-4">
                       {Object.entries(analyticsData.sales_trends).length > 0 ? (
-                        <div className="grid gap-4">
-                          {Object.entries(analyticsData.sales_trends)
-                            .slice(-10) // Show last 10 days
-                            .map(([date, sales]) => (
-                              <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center space-x-3">
-                                  <Calendar className="h-4 w-4 text-gray-500" />
-                                  <span className="font-medium text-gray-900">{date}</span>
+                        <>
+                          <div className="h-80 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={Object.entries(analyticsData.sales_trends)
+                                  .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                                  .map(([date, sales]) => ({
+                                    date: date,
+                                    sales: sales
+                                  }))
+                                }
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis 
+                                  dataKey="date" 
+                                  angle={-45}
+                                  textAnchor="end"
+                                  height={80}
+                                />
+                                <YAxis />
+                                <Tooltip 
+                                  formatter={(value) => [formatNumber(value), "Units Sold"]}
+                                  labelFormatter={(label) => `Date: ${label}`}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="sales" 
+                                  stroke="#3B82F6" 
+                                  strokeWidth={3}
+                                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          
+                          <div className="grid gap-4 mt-6">
+                            <h4 className="font-medium text-gray-900">Daily Sales Summary</h4>
+                            {Object.entries(analyticsData.sales_trends)
+                              .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                              .slice(-7)
+                              .map(([date, sales]) => (
+                                <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center space-x-3">
+                                    <Calendar className="h-4 w-4 text-gray-500" />
+                                    <span className="font-medium text-gray-900">{date}</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales)}</div>
+                                    <div className="text-xs text-gray-500">units sold</div>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales)}</div>
-                                  <div className="text-xs text-gray-500">units sold</div>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
+                              ))}
+                          </div>
+                        </>
                       ) : (
                         <p className="text-gray-500 text-center py-8">No sales trend data available</p>
                       )}
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Performance Charts Tab */}
+              <TabsContent value="performance-charts" className="space-y-6">
+                {chartsData && (
+                  <div className="grid gap-6">
+                    {/* Volume Leaders Chart */}
+                    <Card data-testid="volume-leaders-chart">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <BarChart3 className="h-5 w-5 text-blue-600" />
+                          <span>Volume Leaders</span>
+                        </CardTitle>
+                        <CardDescription>Top brands by quantity sold</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-80 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartsData.volume_leaders}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="name" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={100}
+                                interval={0}
+                              />
+                              <YAxis />
+                              <Tooltip formatter={(value) => [formatNumber(value), "Quantity Sold"]} />
+                              <Bar dataKey="value" fill="#3B82F6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Revenue Leaders Chart */}
+                    <Card data-testid="revenue-leaders-chart">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <DollarSign className="h-5 w-5 text-green-600" />
+                          <span>Revenue Leaders</span>
+                        </CardTitle>
+                        <CardDescription>Top brands by sales revenue</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-80 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartsData.revenue_leaders}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="name" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={100}
+                                interval={0}
+                              />
+                              <YAxis />
+                              <Tooltip formatter={(value) => [formatCurrency(value), "Revenue"]} />
+                              <Bar dataKey="value" fill="#10B981" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Velocity Leaders and Revenue Proportion */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <Card data-testid="velocity-leaders-chart">
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <Zap className="h-5 w-5 text-yellow-600" />
+                            <span>Fastest Moving</span>
+                          </CardTitle>
+                          <CardDescription>Brands with highest sales velocity</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {chartsData.velocity_leaders.slice(0, 5).map((brand, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                                <div>
+                                  <div className="font-medium text-gray-900">{brand.name}</div>
+                                  <div className="text-sm text-gray-600">{brand.days_of_stock.toFixed(1)} days stock</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-semibold text-yellow-600">
+                                    {brand.velocity}x
+                                  </div>
+                                  <div className="text-xs text-gray-500">velocity</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card data-testid="revenue-proportion-chart">
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <Crown className="h-5 w-5 text-purple-600" />
+                            <span>Revenue Share</span>
+                          </CardTitle>
+                          <CardDescription>Contribution to total sales</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={chartsData.revenue_proportion.slice(0, 6)}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={40}
+                                  outerRadius={80}
+                                  paddingAngle={5}
+                                  dataKey="percentage"
+                                  label={({ name, percentage }) => `${name}: ${percentage}%`}
+                                >
+                                  {chartsData.revenue_proportion.slice(0, 6).map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(value) => [`${value}%`, "Revenue Share"]} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               {/* Overstocking Tab */}
