@@ -107,6 +107,147 @@ function App() {
     return new Intl.NumberFormat("en-IN").format(number);
   };
 
+  // Onboarding content
+  const onboardingSteps = [
+    {
+      title: "Welcome to Liquor Sales Analytics! 🎯",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600 leading-relaxed">
+            This dashboard helps you analyze your liquor sales patterns and identify overstocking issues. 
+            Let's take a quick tour to get you started!
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">What you can do:</h4>
+            <ul className="text-blue-800 space-y-1 text-sm">
+              <li>• Upload Excel/CSV files with sales data</li>
+              <li>• Track daily sales trends across all brands</li>
+              <li>• Identify overstocked items automatically</li>
+              <li>• Compare brand performance rankings</li>
+              <li>• Configure overstock thresholds (3x rule by default)</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 1: Upload Your Data 📊",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Start by uploading your liquor sales Excel file. The system supports .xlsx, .xls, and .csv formats.
+          </p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-green-900 mb-2">Required columns in your file:</h4>
+            <ul className="text-green-800 space-y-1 text-sm">
+              <li>• <strong>Brand Name</strong> - Name of the liquor brand</li>
+              <li>• <strong>Rate</strong> - Price per unit</li>
+              <li>• <strong>Date columns</strong> - Daily sales quantities (e.g., 25-Aug-25, 26-Aug-25)</li>
+              <li>• <strong>Monthly Sale value (a)</strong> - Total monthly sales value</li>
+              <li>• <strong>Stock value Today</strong> - Current stock value</li>
+            </ul>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Click the "Upload Data" button in the top-right corner</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 2: Configure Overstock Settings ⚙️",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Set your overstock multiplier to define what constitutes overstocking. The default is 3x monthly average.
+          </p>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <h4 className="font-semibold text-orange-900 mb-2">How it works:</h4>
+            <div className="text-orange-800 space-y-2 text-sm">
+              <p>• <strong>3x multiplier</strong>: Items with stock &gt; 3× monthly sales = overstocked</p>
+              <p>• <strong>2x multiplier</strong>: Items with stock &gt; 2× monthly sales = overstocked</p>
+              <p>• Lower multipliers = more brands flagged as overstocked</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Adjust the multiplier in the header and click "Update"</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 3: Analyze Your Data 📈",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Explore three main sections to analyze your liquor business:
+          </p>
+          <div className="grid gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+                <strong className="text-blue-900">Sales Trends</strong>
+              </div>
+              <p className="text-blue-800 text-sm">View daily sales performance across all brands over time</p>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-orange-600" />
+                <strong className="text-orange-900">Overstocking Alerts</strong>
+              </div>
+              <p className="text-orange-800 text-sm">Identify brands with excessive stock and calculate overstock values</p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <BarChart3 className="w-4 h-4 text-green-600" />
+                <strong className="text-green-900">Brand Performance</strong>
+              </div>
+              <p className="text-green-800 text-sm">Compare top-performing brands by sales value and stock ratios</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Ready to Get Started! 🚀",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            You're all set! Here's a quick checklist to get the most out of your dashboard:
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Upload your Excel file with liquor sales data</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Review key metrics in the top dashboard cards</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Check overstocking alerts to optimize inventory</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Analyze brand performance to focus on winners</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Adjust overstock multiplier as needed</span>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4 mt-6">
+            <p className="text-indigo-800 text-center font-medium">
+              💡 Pro Tip: Start with the default 3x multiplier and adjust based on your business needs!
+            </p>
+          </div>
+        </div>
+      )
+    }
+  ];
+
   // Initialize
   useEffect(() => {
     fetchAnalytics();
