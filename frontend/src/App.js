@@ -23,6 +23,8 @@ function App() {
   const [overstockMultiplier, setOverstockMultiplier] = useState(3.0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [hasData, setHasData] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Fetch analytics data
   const fetchAnalytics = async (multiplier = 3.0) => {
