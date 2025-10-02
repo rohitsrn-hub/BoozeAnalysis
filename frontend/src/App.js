@@ -1041,6 +1041,163 @@ function App() {
                 )}
               </TabsContent>
 
+              {/* Calculation Verification Tab */}
+              <TabsContent value="calculations" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Calculation Verification</h2>
+                    <p className="text-gray-600">Compare dashboard calculations with your manual calculations</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (calculationData && calculationData.length > 0) {
+                        // Export calculation data as CSV for easy comparison
+                        const csvContent = [
+                          // Header row
+                          'Index,Brand Name,Calculated Wholesale Rate,Selling Rate,Calculated Avg Monthly Sale,Calculated Current Stock Value,Calculated Multiplier Value,D1 Date,D1 Stock,DL Date,DL Stock,Total Sales Qty,Avg Daily Sales,Days Analyzed,Stock Available Days',
+                          // Data rows
+                          ...calculationData.map(row => [
+                            row.index,
+                            `"${row.brand_name}"`,
+                            row.calculated_wholesale_rate,
+                            row.selling_rate,
+                            row.calculated_avg_monthly_sale.toFixed(2),
+                            row.calculated_current_stock_value.toFixed(2),
+                            row.calculated_multiplier_value,
+                            row.D1_date,
+                            row.D1_stock,
+                            row.DL_date,
+                            row.DL_stock,
+                            row.total_sales_qty.toFixed(2),
+                            row.avg_daily_sales_qty.toFixed(3),
+                            row.days_analyzed,
+                            row.stock_available_days.toFixed(1)
+                          ].join(','))
+                        ].join('\n');
+                        
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `calculation_verification_${new Date().toISOString().split('T')[0]}.csv`;
+                        link.click();
+                        window.URL.revokeObjectURL(url);
+                        toast.success("Calculation data exported to CSV!");
+                      }
+                    }}
+                    variant="outline"
+                    disabled={!calculationData || calculationData.length === 0}
+                    data-testid="export-calculations-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </Button>
+                </div>
+
+                {calculationData && calculationData.length > 0 ? (
+                  <Card data-testid="calculation-table">
+                    <CardHeader>
+                      <CardTitle>Detailed Calculations for All Brands</CardTitle>
+                      <CardDescription>
+                        Verify these calculations against your manual Excel calculations. 
+                        Multiplier Value = Current Stock Value ÷ Monthly Sales Value
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-gray-50">
+                              <th className="text-left p-3 font-semibold">Index</th>
+                              <th className="text-left p-3 font-semibold">Brand Name</th>
+                              <th className="text-left p-3 font-semibold">Wholesale Rate</th>
+                              <th className="text-left p-3 font-semibold">Selling Rate</th>
+                              <th className="text-left p-3 font-semibold">Monthly Sale Value</th>
+                              <th className="text-left p-3 font-semibold">Current Stock Value</th>
+                              <th className="text-left p-3 font-semibold">Multiplier Value</th>
+                              <th className="text-left p-3 font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {calculationData.map((row, index) => (
+                              <tr key={index} className="border-b hover:bg-gray-50" data-testid={`calc-row-${index}`}>
+                                <td className="p-3 font-medium">{row.index}</td>
+                                <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
+                                <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
+                                <td className="p-3">{formatCurrency(row.selling_rate)}</td>
+                                <td className="p-3 font-medium text-blue-600">
+                                  {formatCurrency(row.calculated_avg_monthly_sale)}
+                                </td>
+                                <td className="p-3 font-medium text-green-600">
+                                  {formatCurrency(row.calculated_current_stock_value)}
+                                </td>
+                                <td className="p-3 font-bold text-purple-600">{row.calculated_multiplier_value}</td>
+                                <td className="p-3">
+                                  {row.calculated_multiplier_value > overstockMultiplier ? (
+                                    <Badge variant="destructive">Overstocked</Badge>
+                                  ) : row.calculated_multiplier_value > overstockMultiplier * 0.7 ? (
+                                    <Badge className="bg-yellow-500 text-white">Warning</Badge>
+                                  ) : (
+                                    <Badge className="bg-green-500 text-white">Healthy</Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Calculation Details Breakdown */}
+                      <div className="mt-8 grid gap-4">
+                        <h4 className="text-lg font-semibold text-gray-900">Calculation Formula Breakdown</h4>
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                          <div className="p-4 bg-blue-50 rounded-lg">
+                            <h5 className="font-semibold text-blue-900 mb-2">Monthly Sales Calculation</h5>
+                            <ol className="text-blue-800 space-y-1">
+                              <li>1. Total Sales = D1 Stock - DL Stock</li>
+                              <li>2. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
+                              <li>3. Monthly Sales Qty = Average Daily Sales × 24</li>
+                              <li>4. Monthly Sales Value = Monthly Sales Qty × Selling Rate</li>
+                            </ol>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg">
+                            <h5 className="font-semibold text-purple-900 mb-2">Overstocking Analysis</h5>
+                            <ol className="text-purple-800 space-y-1">
+                              <li>1. Current Stock Value = DL Stock × Selling Rate</li>
+                              <li>2. Multiplier Value = Stock Value ÷ Monthly Sales Value</li>
+                              <li>3. Overstocked if Multiplier > {overstockMultiplier}x</li>
+                              <li>4. Warning if Multiplier > {(overstockMultiplier * 0.7).toFixed(1)}x</li>
+                            </ol>
+                          </div>
+                        </div>
+
+                        {/* Detailed calculation for first brand as example */}
+                        {calculationData.length > 0 && (
+                          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                            <h5 className="font-semibold text-gray-900 mb-2">Example Calculation ({calculationData[0].brand_name}):</h5>
+                            <div className="text-sm text-gray-700 space-y-1">
+                              <p>• D1 Stock ({calculationData[0].D1_date}): {calculationData[0].D1_stock} units</p>
+                              <p>• DL Stock ({calculationData[0].DL_date}): {calculationData[0].DL_stock} units</p>
+                              <p>• Total Sales: {calculationData[0].D1_stock} - {calculationData[0].DL_stock} = {calculationData[0].total_sales_qty} units</p>
+                              <p>• Days Analyzed: {calculationData[0].days_analyzed} days</p>
+                              <p>• Average Daily Sales: {calculationData[0].total_sales_qty} ÷ {calculationData[0].days_analyzed} = {calculationData[0].avg_daily_sales_qty.toFixed(3)} units/day</p>
+                              <p>• Monthly Sales: {calculationData[0].avg_daily_sales_qty.toFixed(3)} × 24 = {formatCurrency(calculationData[0].calculated_avg_monthly_sale)}</p>
+                              <p>• Multiplier: {formatCurrency(calculationData[0].calculated_current_stock_value)} ÷ {formatCurrency(calculationData[0].calculated_avg_monthly_sale)} = <strong>{calculationData[0].calculated_multiplier_value}</strong></p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="text-center py-12">
+                    <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Calculation Data</h3>
+                    <p className="text-gray-600">Upload liquor data to see detailed calculations</p>
+                  </div>
+                )}
+              </TabsContent>
+
             </Tabs>
           </div>
         ) : null}
