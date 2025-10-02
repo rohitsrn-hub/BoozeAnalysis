@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-10-02T08:57:42.076063",
-  "total_tests": 17,
+  "timestamp": "2025-10-02T08:58:35.729995",
+  "total_tests": 18,
   "passed_tests": 17,
-  "success_rate": 100.0,
+  "success_rate": 94.44444444444444,
   "test_results": [
     {
       "test": "API Root Endpoint",
@@ -78,6 +78,11 @@
       "test": "Enhanced Excel Export - Three Key Improvements",
       "success": true,
       "details": "\u2713 Uses original brand index numbers; \u2713 Projected Monthly Sale column has valid data; \u2713 Total row present with correct format; \u2713 Total row calculations are accurate; \u2713 All Excel brands match recommendation data"
+    },
+    {
+      "test": "Excel Export Edge Cases",
+      "success": false,
+      "details": "\u2713 Returns Excel with existing recommendations; \u2713 Correct Excel MIME type; \u2713 Proper filename format with date; \u2713 Columns in correct order; Wholesale Rate is not numeric; \u2713 Projected Monthly Sale is numeric"
     },
     {
       "test": "Analytics - No Data Handling",
