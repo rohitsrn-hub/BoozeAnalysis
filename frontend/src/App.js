@@ -91,7 +91,26 @@ function App() {
       
     } catch (error) {
       console.error("Error uploading file:", error);
-      toast.error(error.response?.data?.detail || "Failed to upload file");
+      
+      // Better error handling for file upload
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      // Show helpful error messages
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else if (errorMessage.includes("Insufficient numerical data")) {
+        toast.error("File format incorrect. Please check the data structure in your Excel file");
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
       setUploadProgress(0);
