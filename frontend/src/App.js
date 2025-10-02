@@ -272,6 +272,84 @@ function App() {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Help Guide */}
+              <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-white hover:bg-gray-50"
+                    data-testid="help-guide-btn"
+                  >
+                    <HelpCircle className="w-4 h-4 mr-2" />
+                    Help Guide
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center space-x-2">
+                      <Play className="w-5 h-5 text-indigo-600" />
+                      <span>{onboardingSteps[onboardingStep].title}</span>
+                    </DialogTitle>
+                    <DialogDescription>
+                      Step {onboardingStep + 1} of {onboardingSteps.length}
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="mt-6">
+                    {onboardingSteps[onboardingStep].content}
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-8">
+                    <div className="flex space-x-1">
+                      {onboardingSteps.map((_, index) => (
+                        <div
+                          key={index}
+                          className={`w-2 h-2 rounded-full transition-colors ${
+                            index <= onboardingStep ? 'bg-indigo-600' : 'bg-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      {onboardingStep > 0 && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setOnboardingStep(onboardingStep - 1)}
+                          size="sm"
+                        >
+                          Previous
+                        </Button>
+                      )}
+                      
+                      {onboardingStep < onboardingSteps.length - 1 ? (
+                        <Button
+                          onClick={() => setOnboardingStep(onboardingStep + 1)}
+                          size="sm"
+                          className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          Next
+                          <ArrowRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => {
+                            setShowOnboarding(false);
+                            setOnboardingStep(0);
+                          }}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Get Started!
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               {/* Overstock Multiplier Configuration */}
               <div className="flex items-center space-x-2">
                 <Label htmlFor="multiplier" className="text-sm font-medium text-gray-700">
