@@ -103,7 +103,7 @@ This creates 5 brands with their respective rates and quantities.
 ## ✅ **Testing the Upload**
 
 To verify upload is working:
-1. Visit: https://booze-dashboard.preview.emergentagent.com
+1. Visit: https://liquor-dashboard.preview.emergentagent.com
 2. Click "Upload Data"
 3. Upload a properly formatted Excel file
 4. Look for green "Analytics updated successfully" message
@@ -117,4 +117,4 @@ If upload still doesn't work:
 3. Ensure stable internet connection
 4. Try refreshing the page and uploading again
 
-**Dashboard URL**: https://booze-dashboard.preview.emergentagent.com
+**Dashboard URL**: https://liquor-dashboard.preview.emergentagent.com

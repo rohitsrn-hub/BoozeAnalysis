@@ -4,7 +4,7 @@
 
 ### Option 1: Web Application (Current Setup)
 Your dashboard is currently running as a **web application** on the Emergent platform at:
-**URL:** https://booze-dashboard.preview.emergentagent.com
+**URL:** https://liquor-dashboard.preview.emergentagent.com
 
 - ✅ **No Installation Required** - Access from any device with a web browser
 - ✅ **Always Up-to-Date** - Automatic updates and maintenance
@@ -66,7 +66,7 @@ Currently, this is a **web application**, not a desktop executable. However, we 
 ### Quick Start Guide
 
 1. **Access the Dashboard**
-   - Open https://booze-dashboard.preview.emergentagent.com in your browser
+   - Open https://liquor-dashboard.preview.emergentagent.com in your browser
    - Click "Help Guide" for interactive onboarding
 
 2. **Upload Your Data**
