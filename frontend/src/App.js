@@ -829,47 +829,6 @@ function App() {
                 </Card>
               </TabsContent>
 
-              {/* Brand Performance Tab */}
-              <TabsContent value="brand-performance" className="space-y-6">
-                <Card data-testid="brand-performance-card">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <BarChart3 className="h-5 w-5 text-indigo-600" />
-                      <span>Top Performing Brands</span>
-                    </CardTitle>
-                    <CardDescription>Ranked by monthly sales value</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {analyticsData.top_selling_brands.map((brand, index) => (
-                        <div 
-                          key={index} 
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                          data-testid={`top-brand-${index}`}
-                        >
-                          <div className="flex items-center space-x-4">
-                            <div className="flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-600 font-bold text-sm rounded-full">
-                              {index + 1}
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-gray-900">{brand.brand_name}</h4>
-                              <p className="text-sm text-gray-600">Stock Ratio: {brand.stock_ratio.toFixed(2)}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-semibold text-indigo-600">
-                              {formatCurrency(brand.monthly_sale_value)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Stock: {formatCurrency(brand.stock_value_today)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
             </Tabs>
           </div>
         ) : null}
