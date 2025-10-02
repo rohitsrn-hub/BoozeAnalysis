@@ -1175,21 +1175,45 @@ function App() {
                           </div>
                         </div>
 
-                        {/* Detailed calculation for first brand as example */}
-                        {calculationData.length > 0 && (
-                          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                            <h5 className="font-semibold text-gray-900 mb-2">Example Calculation ({calculationData[0].brand_name}):</h5>
-                            <div className="text-sm text-gray-700 space-y-1">
-                              <p>• D1 Stock ({calculationData[0].D1_date}): {calculationData[0].D1_stock} units</p>
-                              <p>• DL Stock ({calculationData[0].DL_date}): {calculationData[0].DL_stock} units</p>
-                              <p>• Total Sales: {calculationData[0].D1_stock} - {calculationData[0].DL_stock} = {calculationData[0].total_sales_qty} units</p>
-                              <p>• Days Analyzed: {calculationData[0].days_analyzed} days</p>
-                              <p>• Average Daily Sales: {calculationData[0].total_sales_qty} ÷ {calculationData[0].days_analyzed} = {calculationData[0].avg_daily_sales_qty.toFixed(3)} units/day</p>
-                              <p>• Monthly Sales: {calculationData[0].avg_daily_sales_qty.toFixed(3)} × 24 = {formatCurrency(calculationData[0].calculated_avg_monthly_sale)}</p>
-                              <p>• Multiplier: {formatCurrency(calculationData[0].calculated_current_stock_value)} ÷ {formatCurrency(calculationData[0].calculated_avg_monthly_sale)} = <strong>{calculationData[0].calculated_multiplier_value}</strong></p>
+                        {/* Detailed calculation for Black Dog Centenary as example */}
+                        {calculationData.length > 0 && (() => {
+                          // Find Black Dog Centenary in the data
+                          const blackDogExample = calculationData.find(item => 
+                            item.brand_name.toLowerCase().includes('black dog') && 
+                            item.brand_name.toLowerCase().includes('centenary')
+                          ) || calculationData[0]; // Fallback to first item if Black Dog Centenary not found
+                          
+                          return (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Example Calculation ({blackDogExample.brand_name})
+                                {blackDogExample !== calculationData[0] && (
+                                  <span className="ml-2 text-sm text-green-600 font-normal">✓ Found Black Dog Centenary</span>
+                                )}:
+                              </h5>
+                              <div className="text-sm text-gray-700 space-y-1">
+                                <p><strong>Index:</strong> {blackDogExample.index}</p>
+                                <p>• <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
+                                <p>• <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
+                                <p>• <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
+                                <p>• <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
+                                <p>• <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} ÷ {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
+                                <p>• <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
+                                <p>• <strong>Current Stock Value:</strong> {blackDogExample.DL_stock} × ₹{blackDogExample.selling_rate} = <span className="text-green-600 font-medium">{formatCurrency(blackDogExample.calculated_current_stock_value)}</span></p>
+                                <p>• <strong>Multiplier:</strong> {formatCurrency(blackDogExample.calculated_current_stock_value)} ÷ {formatCurrency(blackDogExample.calculated_avg_monthly_sale)} = <strong className="text-purple-600 text-lg">{blackDogExample.calculated_multiplier_value}</strong></p>
+                                <p>• <strong>Stock Status:</strong> 
+                                  {blackDogExample.calculated_multiplier_value > 3 ? (
+                                    <span className="text-red-600 font-medium"> Overstocked (>{overstockMultiplier}x)</span>
+                                  ) : blackDogExample.calculated_multiplier_value > 2.1 ? (
+                                    <span className="text-yellow-600 font-medium"> Warning (>2.1x)</span>
+                                  ) : (
+                                    <span className="text-green-600 font-medium"> Healthy Stock Level</span>
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
