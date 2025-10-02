@@ -47,6 +47,10 @@ function App() {
       const demandResponse = await axios.get(`${API}/demand-recommendations`);
       setDemandData(demandResponse.data);
       
+      // Fetch calculation details
+      const calculationResponse = await axios.get(`${API}/calculation-details`);
+      setCalculationData(calculationResponse.data);
+      
       setHasData(true);
       toast.success("Analytics updated successfully");
     } catch (error) {
