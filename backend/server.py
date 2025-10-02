@@ -326,6 +326,216 @@ async def get_all_brands():
         logging.error(f"Error fetching brands: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching brands: {str(e)}")
 
+@api_router.get("/charts", response_model=ChartsResponse)
+async def get_charts_data():
+    """Get data for performance charts and visualizations"""
+    try:
+        liquor_records = await db.liquor_data.find().to_list(1000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        # Convert to dict format for calculations
+        data_dicts = [
+            {
+                'brand_name': record['brand_name'],
+                'rate': record['rate'],
+                'current_stock_qty': record.get('current_stock_qty', 0),
+                'monthly_sale_value': record['monthly_sale_value'],
+                'stock_value_today': record['stock_value_today'],
+                'stock_available_days': record['stock_available_days'],
+                'stock_ratio': record['stock_ratio']
+            }
+            for record in liquor_records
+        ]
+        
+        # Calculate total sales for proportion
+        total_sales = sum(item['monthly_sale_value'] for item in data_dicts)
+        
+        # Volume Leaders (by current stock quantity)
+        volume_leaders = sorted(data_dicts, key=lambda x: x['current_stock_qty'], reverse=True)[:10]
+        volume_chart = [
+            {
+                'name': item['brand_name'],
+                'value': item['current_stock_qty'],
+                'stock_value': item['stock_value_today']
+            }
+            for item in volume_leaders if item['current_stock_qty'] > 0
+        ]
+        
+        # Velocity Leaders (by stock turnover rate)
+        velocity_leaders = [item for item in data_dicts if item['stock_available_days'] > 0]
+        velocity_leaders = sorted(velocity_leaders, key=lambda x: x['stock_available_days'])[:10]
+        velocity_chart = [
+            {
+                'name': item['brand_name'],
+                'velocity': round(30 / item['stock_available_days'], 2) if item['stock_available_days'] > 0 else 0,
+                'days_of_stock': item['stock_available_days'],
+                'sales_value': item['monthly_sale_value']
+            }
+            for item in velocity_leaders
+        ]
+        
+        # Revenue Leaders (by estimated sales value)
+        revenue_leaders = sorted(data_dicts, key=lambda x: x['monthly_sale_value'], reverse=True)[:10]
+        revenue_chart = [
+            {
+                'name': item['brand_name'],
+                'value': item['monthly_sale_value'],
+                'stock_value': item['stock_value_today'],
+                'stock_ratio': item['stock_ratio']
+            }
+            for item in revenue_leaders
+        ]
+        
+        # Revenue Proportion (percentage of total estimated sales)
+        revenue_proportion = [
+            {
+                'name': item['brand_name'],
+                'value': item['monthly_sale_value'],
+                'percentage': round((item['monthly_sale_value'] / total_sales) * 100, 2) if total_sales > 0 else 0,
+                'stock_value': item['stock_value_today']
+            }
+            for item in revenue_leaders if item['monthly_sale_value'] > 0
+        ]
+        
+        return ChartsResponse(
+            volume_leaders=volume_chart,
+            velocity_leaders=velocity_chart,
+            revenue_leaders=revenue_chart,
+            revenue_proportion=revenue_proportion
+        )
+        
+    except Exception as e:
+        logging.error(f"Error getting charts data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting charts data: {str(e)}")
+
+@api_router.get("/demand-recommendations")
+async def get_demand_recommendations():
+    """Get smart demand recommendations with wholesale rates and quantities"""
+    try:
+        liquor_records = await db.liquor_data.find().to_list(1000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        recommendations = []
+        
+        for record in liquor_records:
+            brand_name = record['brand_name']
+            selling_rate = record['rate']
+            wholesale_rate = selling_rate * 0.9  # 10% lower than selling rate
+            current_stock_qty = record.get('current_stock_qty', 0)
+            monthly_sale_value = record['monthly_sale_value']
+            stock_days = record['stock_available_days']
+            
+            # Calculate recommended quantity based on sales velocity and stock position
+            if monthly_sale_value > 0 and selling_rate > 0:
+                # Estimate monthly quantity sold
+                estimated_monthly_qty = max(1, int(monthly_sale_value / selling_rate))
+                
+                # Target: maintain 45-60 days of stock
+                target_qty = int(estimated_monthly_qty * 1.5)  # 45 days worth
+                
+                # Calculate recommended order quantity
+                recommended_qty = max(0, target_qty - current_stock_qty)
+                
+                # Determine urgency level based on days of stock remaining
+                if stock_days < 15:
+                    urgency = "HIGH"
+                elif stock_days < 30:
+                    urgency = "MEDIUM"
+                elif stock_days < 45:
+                    urgency = "LOW"
+                else:
+                    urgency = "NONE"
+                
+                # Only include items that need restocking
+                if urgency != "NONE" or recommended_qty > 0:
+                    recommendations.append(DemandRecommendation(
+                        brand_name=brand_name,
+                        selling_rate=selling_rate,
+                        wholesale_rate=round(wholesale_rate, 2),
+                        current_stock_qty=current_stock_qty,
+                        recommended_qty=recommended_qty,
+                        urgency_level=urgency
+                    ))
+        
+        # Sort by urgency (HIGH -> MEDIUM -> LOW) and then by recommended quantity
+        urgency_order = {"HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        recommendations.sort(key=lambda x: (urgency_order.get(x.urgency_level, 4), -x.recommended_qty))
+        
+        return recommendations
+        
+    except Exception as e:
+        logging.error(f"Error generating demand recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+
+@api_router.get("/export-demand-list")
+async def export_demand_list():
+    """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Quantity in Stock, Quantity to be Demanded"""
+    try:
+        # Get recommendations
+        recommendations_data = await get_demand_recommendations()
+        
+        if not recommendations_data:
+            raise HTTPException(status_code=404, detail="No recommendations to export")
+        
+        # Convert to updated DataFrame format
+        df_data = []
+        for index, rec in enumerate(recommendations_data, 1):
+            df_data.append({
+                'Index': index,
+                'Brand Name': rec.brand_name,
+                'Wholesale Rate': rec.wholesale_rate,
+                'Quantity held in Stock': rec.current_stock_qty,
+                'Quantity to be Demanded': rec.recommended_qty
+            })
+        
+        df = pd.DataFrame(df_data)
+        
+        # Create Excel file in memory
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Demand Forecast', index=False)
+            
+            # Get workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['Demand Forecast']
+            
+            # Auto-adjust column widths
+            column_widths = {'A': 10, 'B': 40, 'C': 18, 'D': 22, 'E': 25}
+            for column_letter, width in column_widths.items():
+                worksheet.column_dimensions[column_letter].width = width
+            
+            # Style headers
+            from openpyxl.styles import Font, PatternFill, Alignment
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            
+            for col in range(1, 6):  # 5 columns
+                cell = worksheet.cell(row=1, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+        
+        output.seek(0)
+        
+        from fastapi.responses import Response
+        
+        return Response(
+            content=output.getvalue(),
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={
+                'Content-Disposition': f'attachment; filename=liquor_demand_forecast_{datetime.now().strftime("%Y%m%d")}.xlsx'
+            }
+        )
+        
+    except Exception as e:
+        logging.error(f"Error exporting demand list: {e}")
+        raise HTTPException(status_code=500, detail=f"Error exporting demand list: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
