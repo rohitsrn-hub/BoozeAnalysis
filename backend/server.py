@@ -164,11 +164,19 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             if not brand_name or brand_name.lower() in ['nan', 'none', '']:
                 continue
             
-            # Get index
+            # Get index - preserve original index from Excel file
             index_num = idx + 1
             if index_col and pd.notna(row[index_col]):
                 try:
-                    index_num = int(row[index_col])
+                    # Try to extract integer from the index value
+                    index_val = str(row[index_col]).strip()
+                    # Handle cases where index might have extra characters
+                    import re
+                    numeric_match = re.search(r'\d+', index_val)
+                    if numeric_match:
+                        index_num = int(numeric_match.group())
+                    else:
+                        index_num = int(float(row[index_col]))
                 except:
                     index_num = idx + 1
             
