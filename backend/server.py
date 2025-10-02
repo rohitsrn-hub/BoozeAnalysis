@@ -907,7 +907,7 @@ async def export_demand_list():
             'Index': 'TOTAL',
             'Brand Name': f'({len(recommendations_data)} brands)',
             'Wholesale Rate': f'Cost: {round(total_wholesale_cost, 2)}',
-            'Projected Monthly Sale': round(total_projected_monthly_sale, 2),
+            'Projected Monthly Sale (Qty)': int(round(total_projected_monthly_sale, 0)),
             'Quantity held in Stock': total_quantity_in_stock,
             'Quantity to be Demanded': total_quantity_demanded
         })
