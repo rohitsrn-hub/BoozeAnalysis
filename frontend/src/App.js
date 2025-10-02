@@ -93,37 +93,6 @@ function App() {
     }
   };
 
-  // Handle demand list export
-  const handleExportDemandList = async () => {
-    try {
-      const response = await axios.get(`${API}/export-demand-list`, {
-        responseType: 'blob',
-      });
-      
-      // Create blob link to download
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Get filename from response headers or use default
-      const contentDisposition = response.headers['content-disposition'];
-      const filename = contentDisposition 
-        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
-        : `liquor_demand_recommendations_${new Date().toISOString().split('T')[0]}.xlsx`;
-      
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("Demand list exported successfully!");
-    } catch (error) {
-      console.error("Error exporting demand list:", error);
-      toast.error("Failed to export demand list");
-    }
-  };
-
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
