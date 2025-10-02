@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-10-02T08:58:35.729995",
+  "timestamp": "2025-10-02T08:59:03.243286",
   "total_tests": 18,
-  "passed_tests": 17,
-  "success_rate": 94.44444444444444,
+  "passed_tests": 18,
+  "success_rate": 100.0,
   "test_results": [
     {
       "test": "API Root Endpoint",
@@ -72,7 +72,7 @@
     {
       "test": "Enhanced Excel Export Validation",
       "success": true,
-      "details": "Excel file exported, size: 5420 bytes, proper download headers set, All 6 required columns present, Total row present, Uses original brand indexes (not serial numbers), Total calculation errors - Stock: 288 vs 288, Demand: 62 vs 62, Monthly Sale: 173485.72 vs 173485.71, 3 data rows + 1 total row"
+      "details": "Excel file exported, size: 5419 bytes, proper download headers set, All 6 required columns present, Total row present, Uses original brand indexes (not serial numbers), Total calculation errors - Stock: 288 vs 288, Demand: 62 vs 62, Monthly Sale: 173485.72 vs 173485.71, 3 data rows + 1 total row"
     },
     {
       "test": "Enhanced Excel Export - Three Key Improvements",
@@ -81,8 +81,8 @@
     },
     {
       "test": "Excel Export Edge Cases",
-      "success": false,
-      "details": "\u2713 Returns Excel with existing recommendations; \u2713 Correct Excel MIME type; \u2713 Proper filename format with date; \u2713 Columns in correct order; Wholesale Rate is not numeric; \u2713 Projected Monthly Sale is numeric"
+      "success": true,
+      "details": "\u2713 Returns Excel with existing recommendations; \u2713 Correct Excel MIME type; \u2713 Proper filename format with date; \u2713 Columns in correct order; \u2713 Wholesale Rate data is numeric; \u2713 Projected Monthly Sale is numeric"
     },
     {
       "test": "Analytics - No Data Handling",
