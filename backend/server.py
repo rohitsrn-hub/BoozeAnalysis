@@ -405,7 +405,7 @@ async def get_charts_data():
 
 @api_router.get("/demand-recommendations")
 async def get_demand_recommendations():
-    """Get smart demand recommendations for next month"""
+    """Get smart demand recommendations for next month with bottle quantities"""
     try:
         liquor_records = await db.liquor_data.find().to_list(1000)
         
@@ -416,23 +416,32 @@ async def get_demand_recommendations():
         
         for record in liquor_records:
             brand_name = record['brand_name']
-            current_stock = record['stock_value_today']
+            current_stock_value = record['stock_value_today']
             monthly_sales = record['monthly_sale_value']
-            avg_daily_sale = record['avg_daily_sale']
             stock_days = record['stock_available_days']
+            bottle_rate = record['rate']  # Price per bottle
+            
+            # Calculate current stock in bottles
+            current_stock_bottles = int(current_stock_value / bottle_rate) if bottle_rate > 0 else 0
             
             # Calculate recommended quantity based on sales velocity and stock position
-            if monthly_sales > 0:
-                # Target: maintain 45-60 days of stock (1.5-2 months)
+            if monthly_sales > 0 and bottle_rate > 0:
+                # Target: maintain 45 days of stock (1.5 months)
                 target_stock_days = 45
                 
-                # Calculate recommended stock value
-                recommended_stock_value = (monthly_sales / 30) * target_stock_days
+                # Calculate daily sales value
+                daily_sales_value = monthly_sales / 30
                 
-                # Calculate how much to order
-                recommended_quantity = max(0, recommended_stock_value - current_stock)
+                # Calculate target stock value needed
+                target_stock_value = daily_sales_value * target_stock_days
                 
-                # Determine urgency level
+                # Calculate target stock in bottles
+                target_stock_bottles = int(target_stock_value / bottle_rate)
+                
+                # Calculate how many bottles to order
+                recommended_bottles = max(0, target_stock_bottles - current_stock_bottles)
+                
+                # Determine urgency level based on days of stock remaining
                 if stock_days < 15:
                     urgency = "HIGH"
                 elif stock_days < 30:
@@ -442,19 +451,21 @@ async def get_demand_recommendations():
                 else:
                     urgency = "NONE"
                 
-                if urgency != "NONE" or recommended_quantity > 0:
+                # Only include items that need restocking or are running low
+                if urgency != "NONE" or recommended_bottles > 0:
                     recommendations.append(DemandRecommendation(
                         brand_name=brand_name,
-                        current_stock=current_stock,
+                        current_stock_bottles=current_stock_bottles,
                         avg_monthly_sales=monthly_sales,
-                        recommended_quantity=recommended_quantity,
+                        recommended_bottles=recommended_bottles,
                         days_of_stock=stock_days,
-                        urgency_level=urgency
+                        urgency_level=urgency,
+                        bottle_rate=bottle_rate
                     ))
         
-        # Sort by urgency (HIGH -> MEDIUM -> LOW) and then by recommended quantity
+        # Sort by urgency (HIGH -> MEDIUM -> LOW) and then by recommended bottles
         urgency_order = {"HIGH": 1, "MEDIUM": 2, "LOW": 3}
-        recommendations.sort(key=lambda x: (urgency_order.get(x.urgency_level, 4), -x.recommended_quantity))
+        recommendations.sort(key=lambda x: (urgency_order.get(x.urgency_level, 4), -x.recommended_bottles))
         
         return recommendations
         
