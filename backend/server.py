@@ -194,31 +194,41 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
         if brand_stock_data:
             all_brand_stock_data[brand_name] = brand_stock_data
     
-    # Find D1: Look for the date when ANY brand shows stock increase
+    # Find D1: Look for the EARLIEST date when ANY brand shows stock increase
     sorted_dates = sorted(date_columns)
+    print(f"Scanning dates in order: {sorted_dates}")
+    
     for i in range(1, len(sorted_dates)):
         prev_date = sorted_dates[i-1] 
         curr_date = sorted_dates[i]
         
-        # Check if any brand shows stock increase on curr_date
+        print(f"Checking date {curr_date} for stock increases...")
+        
+        # Check if ANY brand shows stock increase on curr_date
+        found_increase = False
         for brand_name, stock_data in all_brand_stock_data.items():
             if prev_date in stock_data and curr_date in stock_data:
                 prev_stock = stock_data[prev_date]
                 curr_stock = stock_data[curr_date]
                 
-                # Stock increase indicates new arrival (threshold: any increase)
+                print(f"  {brand_name}: {prev_stock} -> {curr_stock}")
+                
+                # Stock increase indicates restocking (any increase > 0)
                 if curr_stock > prev_stock:
                     global_D1_date = curr_date
-                    print(f"Found global D1: {curr_date} (Brand: {brand_name}, Stock: {prev_stock} -> {curr_stock})")
+                    print(f"*** FOUND GLOBAL D1: {curr_date} ***")
+                    print(f"    Restocking detected in: {brand_name}")
+                    print(f"    Stock change: {prev_stock} -> {curr_stock} (+{curr_stock - prev_stock})")
+                    found_increase = True
                     break
         
-        if global_D1_date:
+        if found_increase:
             break
     
-    # If no stock increase found, use first date
+    # If no stock increase found anywhere, use first date as fallback
     if not global_D1_date:
         global_D1_date = sorted_dates[0]
-        print(f"No stock increase found, using first date as D1: {global_D1_date}")
+        print(f"*** NO RESTOCKING FOUND - Using first date as D1: {global_D1_date} ***")
     
     print(f"Global D1 determined: {global_D1_date}")
     
