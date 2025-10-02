@@ -564,6 +564,9 @@ class LiquorDashboardTester:
             self.test_charts_endpoint()
             self.test_demand_recommendations_endpoint()
             self.test_export_demand_list_endpoint()
+            
+            # Test enhanced Excel export functionality in detail
+            self.test_enhanced_excel_export_detailed()
         else:
             print("⚠️  Skipping analytics tests due to upload failure")
         
