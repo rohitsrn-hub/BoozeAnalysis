@@ -891,7 +891,7 @@ async def export_demand_list():
             total_wholesale_cost += wholesale_cost_for_demand
             total_quantity_in_stock += rec.current_stock_qty
             total_quantity_demanded += rec.recommended_qty
-            total_projected_monthly_sale += projected_monthly_sale
+            total_projected_monthly_sale += projected_monthly_sale_qty
             
             df_data.append({
                 'Index': original_index,
