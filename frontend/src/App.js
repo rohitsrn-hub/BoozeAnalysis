@@ -546,11 +546,13 @@ function App() {
             </div>
 
             {/* Main Dashboard Tabs */}
-            <Tabs defaultValue="sales-trends" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs defaultValue="performance-charts" className="w-full">
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="performance-charts" data-testid="performance-charts-tab">Performance Charts</TabsTrigger>
                 <TabsTrigger value="sales-trends" data-testid="sales-trends-tab">Sales Trends</TabsTrigger>
                 <TabsTrigger value="overstocking" data-testid="overstocking-tab">Overstocking Alerts</TabsTrigger>
-                <TabsTrigger value="brand-performance" data-testid="brand-performance-tab">Brand Performance</TabsTrigger>
+                <TabsTrigger value="brand-performance" data-testid="brand-performance-tab">Top Brands</TabsTrigger>
+                <TabsTrigger value="recommendations" data-testid="recommendations-tab">Demand Forecast</TabsTrigger>
               </TabsList>
 
               {/* Sales Trends Tab */}
