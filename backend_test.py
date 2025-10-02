@@ -656,6 +656,9 @@ class LiquorDashboardTester:
             
             # Test enhanced Excel export functionality in detail
             self.test_enhanced_excel_export_detailed()
+            
+            # Test edge cases for Excel export
+            self.test_excel_export_edge_cases()
         else:
             print("⚠️  Skipping analytics tests due to upload failure")
         
