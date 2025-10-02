@@ -141,6 +141,9 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
     # Sort date columns chronologically
     date_columns.sort()
     
+    print(f"Detected columns - Brand: {brand_col}, Index: {index_col}, Wholesale: {wholesale_rate_col}, Selling: {selling_rate_col}")
+    print(f"Date columns found: {date_columns}")
+    
     if not brand_col:
         raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in the file")
     
