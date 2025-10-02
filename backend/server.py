@@ -276,6 +276,7 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
     if not liquor_data:
         raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
     
+    print(f"Successfully parsed {len(liquor_data)} out of {len(df)} potential brands")
     logging.info(f"Successfully parsed {len(liquor_data)} liquor brands with proper stock analysis")
     return liquor_data
 
