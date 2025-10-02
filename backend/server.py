@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 import pandas as pd
 import io
 import json
-from io import BytesIO
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
