@@ -511,6 +511,95 @@ class LiquorDashboardTester:
             self.log_test("Enhanced Excel Export - Three Key Improvements", False, str(e))
             return False
 
+    def test_excel_export_edge_cases(self):
+        """Test edge cases for Excel export functionality"""
+        try:
+            success = True
+            issues = []
+            
+            # Test 1: Export when no recommendations exist (clear data first)
+            # This is tricky since we can't easily clear data, but we can test current state
+            export_response = requests.get(f"{self.api_url}/export-demand-list")
+            
+            if export_response.status_code == 404:
+                issues.append("✓ Correctly handles no recommendations case with 404")
+            elif export_response.status_code == 200:
+                # Check if it's an empty Excel or has data
+                excel_df = pd.read_excel(io.BytesIO(export_response.content))
+                if len(excel_df) == 0:
+                    issues.append("✓ Returns empty Excel when no recommendations")
+                else:
+                    issues.append("✓ Returns Excel with existing recommendations")
+            else:
+                issues.append(f"Unexpected status {export_response.status_code} for export")
+                success = False
+            
+            # Test 2: File format validation
+            if export_response.status_code == 200:
+                content_type = export_response.headers.get('content-type', '')
+                if 'spreadsheet' in content_type or 'excel' in content_type:
+                    issues.append("✓ Correct Excel MIME type")
+                else:
+                    issues.append(f"Wrong MIME type: {content_type}")
+                    success = False
+                
+                # Test filename in headers
+                content_disposition = export_response.headers.get('content-disposition', '')
+                if 'liquor_demand_forecast_' in content_disposition and '.xlsx' in content_disposition:
+                    issues.append("✓ Proper filename format with date")
+                else:
+                    issues.append("Missing or incorrect filename format")
+                    success = False
+            
+            # Test 3: Excel file structure validation
+            if export_response.status_code == 200:
+                try:
+                    excel_df = pd.read_excel(io.BytesIO(export_response.content))
+                    
+                    # Check column order
+                    expected_order = [
+                        'Index', 'Brand Name', 'Wholesale Rate', 
+                        'Projected Monthly Sale', 'Quantity held in Stock', 
+                        'Quantity to be Demanded'
+                    ]
+                    
+                    actual_columns = excel_df.columns.tolist()
+                    if actual_columns == expected_order:
+                        issues.append("✓ Columns in correct order")
+                    else:
+                        issues.append(f"Column order mismatch: {actual_columns}")
+                        success = False
+                    
+                    # Check data types
+                    if len(excel_df) > 1:  # Has data
+                        data_rows = excel_df.iloc[:-1]  # Exclude total row
+                        
+                        # Wholesale Rate should be numeric
+                        if pd.api.types.is_numeric_dtype(data_rows['Wholesale Rate']):
+                            issues.append("✓ Wholesale Rate is numeric")
+                        else:
+                            issues.append("Wholesale Rate is not numeric")
+                            success = False
+                        
+                        # Projected Monthly Sale should be numeric
+                        if pd.api.types.is_numeric_dtype(data_rows['Projected Monthly Sale']):
+                            issues.append("✓ Projected Monthly Sale is numeric")
+                        else:
+                            issues.append("Projected Monthly Sale is not numeric")
+                            success = False
+                    
+                except Exception as parse_error:
+                    issues.append(f"Excel parsing failed: {str(parse_error)}")
+                    success = False
+            
+            details = "; ".join(issues)
+            self.log_test("Excel Export Edge Cases", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Excel Export Edge Cases", False, str(e))
+            return False
+
     def test_cors_headers(self):
         """Test CORS headers"""
         try:
