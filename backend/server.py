@@ -71,99 +71,196 @@ class DemandRecommendation(BaseModel):
 
 # Helper functions
 def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
-    """Parse Excel file and return structured data for the new format"""
+    """Parse Excel file and return structured data - supports both tabular and list formats"""
     try:
-        # Try to read as Excel first
+        # Try to read as Excel with headers first (tabular format)
         try:
-            df = pd.read_excel(io.BytesIO(file_content), header=None)
+            df = pd.read_excel(io.BytesIO(file_content))
+            
+            # Check if it looks like a tabular format (has typical column names)
+            if len(df.columns) >= 3 and any(col.lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+                return parse_tabular_format(df)
+            else:
+                # Try headerless format
+                df_headerless = pd.read_excel(io.BytesIO(file_content), header=None)
+                return parse_list_format(df_headerless)
+                
         except Exception:
             # If Excel fails, try CSV
             try:
-                df = pd.read_csv(io.BytesIO(file_content), header=None)
+                df = pd.read_csv(io.BytesIO(file_content))
+                if len(df.columns) >= 3 and any(col.lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+                    return parse_tabular_format(df)
+                else:
+                    df_headerless = pd.read_csv(io.BytesIO(file_content), header=None)
+                    return parse_list_format(df_headerless)
             except Exception as csv_error:
                 raise HTTPException(
                     status_code=400, 
                     detail=f"Unable to parse file. Please ensure it's a valid Excel or CSV file. Error: {str(csv_error)}"
                 )
         
-        if df.empty:
-            raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
-        
-        # Parse the new format: brand names in first part, then numerical data
-        all_data = df.values.flatten()
-        all_data = [str(x).strip() for x in all_data if pd.notna(x) and str(x).strip()]
-        
-        # Separate brand names from numerical data
-        brand_names = []
-        numerical_data = []
-        
-        for item in all_data:
-            try:
-                # Try to convert to float - if successful, it's numerical data
-                float(item)
-                numerical_data.append(item)
-            except (ValueError, TypeError):
-                # If conversion fails, it's a brand name
-                if item and not item.replace('.', '').isdigit():
-                    brand_names.append(item)
-        
-        if not brand_names:
-            raise HTTPException(status_code=400, detail="No brand names found in the file")
-        
-        # Allow some flexibility in the data structure
-        if len(numerical_data) < len(brand_names) * 2:  # At least ID and Rate for each brand
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Insufficient numerical data. Expected at least {len(brand_names) * 2} values (ID, Rate for each brand), found {len(numerical_data)}"
-            )
-        
-        liquor_data = []
-        
-        # Parse numerical data in groups of 3 (ID, Rate, Quantity)
-        # Handle case where last item might be missing quantity
-        for i in range(len(brand_names)):
-            try:
-                if i * 3 < len(numerical_data):
-                    product_id = numerical_data[i * 3] if i * 3 < len(numerical_data) else f"AUTO_{i}"
-                    rate = float(numerical_data[i * 3 + 1]) if i * 3 + 1 < len(numerical_data) else 100.0
-                    quantity = int(float(numerical_data[i * 3 + 2])) if i * 3 + 2 < len(numerical_data) else 0
-                    
-                    # Create synthetic monthly sales based on current stock (for demo purposes)
-                    # In real scenario, this would come from historical data
-                    estimated_monthly_sales = max(1, quantity // 4) * rate  # Rough estimate
-                    
-                    brand_data = {
-                        'brand_name': brand_names[i],
-                        'product_id': product_id,
-                        'rate': rate,
-                        'current_stock_qty': quantity,
-                        'stock_value_today': rate * quantity,
-                        'monthly_sale_value': estimated_monthly_sales,
-                        'stock_available_days': max(1, quantity // max(1, quantity // 30)) if quantity > 0 else 0,
-                        'stock_ratio': (rate * quantity) / max(1, estimated_monthly_sales),
-                        # For compatibility with existing code
-                        'daily_sales': {},
-                        'monthly_sale_qty': max(1, quantity // 4),
-                        'avg_daily_sale': estimated_monthly_sales / 30,
-                        'stock_value_before': rate * quantity * 1.1,  # Slightly higher before
-                    }
-                    
-                    liquor_data.append(brand_data)
-                    
-            except Exception as e:
-                logging.warning(f"Error parsing data for {brand_names[i] if i < len(brand_names) else 'Unknown'}: {e}")
-                continue
-        
-        if not liquor_data:
-            raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
-        
-        return liquor_data
-    
     except HTTPException:
-        # Re-raise HTTPExceptions as-is
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
+
+def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Parse tabular Excel format with columns"""
+    if df.empty:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
+    
+    # Clean column names
+    df.columns = df.columns.str.strip()
+    
+    # Find key columns (case insensitive)
+    brand_col = None
+    rate_col = None
+    quantity_cols = []
+    
+    for col in df.columns:
+        col_lower = col.lower().strip()
+        if 'brand' in col_lower or 'name' in col_lower:
+            brand_col = col
+        elif 'rate' in col_lower or 'price' in col_lower:
+            rate_col = col
+        elif any(date_part in col_lower for date_part in ['aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul']) and 'sale' not in col_lower and 'value' not in col_lower:
+            quantity_cols.append(col)
+    
+    if not brand_col:
+        raise HTTPException(status_code=400, detail="Could not find brand name column in the file")
+    
+    # Filter out header rows and empty data
+    df = df[df[brand_col].notna()]
+    df = df[~df[brand_col].astype(str).str.contains('total|sum', na=False, case=False)]
+    df = df[~df[brand_col].astype(str).str.contains('^(brand|name|rate|price)$', na=False, case=False)]
+    
+    if df.empty:
+        raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
+    
+    liquor_data = []
+    
+    for idx, row in df.iterrows():
+        try:
+            brand_name = str(row[brand_col]).strip()
+            if not brand_name or brand_name.lower() in ['nan', 'none', '']:
+                continue
+                
+            # Get rate
+            rate = 0.0
+            if rate_col and pd.notna(row[rate_col]):
+                try:
+                    rate = float(row[rate_col])
+                except:
+                    rate = 100.0  # Default rate
+            
+            # Calculate total quantity from date columns
+            total_quantity = 0
+            daily_sales = {}
+            for col in quantity_cols:
+                if pd.notna(row[col]):
+                    try:
+                        qty = int(float(row[col]))
+                        total_quantity += qty
+                        daily_sales[col] = qty
+                    except:
+                        daily_sales[col] = 0
+            
+            # Calculate estimated monthly sales
+            if total_quantity > 0 and rate > 0:
+                estimated_monthly_sales = total_quantity * rate * 0.8  # Assume 80% of stock is monthly sales
+            else:
+                estimated_monthly_sales = max(1, total_quantity) * max(rate, 100.0) * 0.2
+            
+            brand_data = {
+                'brand_name': brand_name,
+                'product_id': f"ID_{idx}",
+                'rate': rate,
+                'current_stock_qty': total_quantity,
+                'stock_value_today': rate * total_quantity,
+                'monthly_sale_value': estimated_monthly_sales,
+                'stock_available_days': max(1, total_quantity // max(1, estimated_monthly_sales / rate * 30)) if estimated_monthly_sales > 0 else 30,
+                'stock_ratio': (rate * total_quantity) / max(1, estimated_monthly_sales) if estimated_monthly_sales > 0 else 1,
+                'daily_sales': daily_sales,
+                'monthly_sale_qty': max(1, int(estimated_monthly_sales / max(rate, 1))),
+                'avg_daily_sale': estimated_monthly_sales / 30,
+                'stock_value_before': rate * total_quantity * 1.1,
+            }
+            
+            liquor_data.append(brand_data)
+            
+        except Exception as e:
+            logging.warning(f"Error parsing row {idx}: {e}")
+            continue
+    
+    if not liquor_data:
+        raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
+    
+    return liquor_data
+
+def parse_list_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Parse simple list format (brand names followed by numerical data)"""
+    if df.empty:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
+    
+    # Flatten all data and separate text from numbers
+    all_data = df.values.flatten()
+    all_data = [str(x).strip() for x in all_data if pd.notna(x) and str(x).strip()]
+    
+    brand_names = []
+    numerical_data = []
+    
+    for item in all_data:
+        try:
+            float(item)
+            numerical_data.append(item)
+        except (ValueError, TypeError):
+            if item and not item.replace('.', '').isdigit():
+                brand_names.append(item)
+    
+    if not brand_names:
+        raise HTTPException(status_code=400, detail="No brand names found in the file")
+    
+    if len(numerical_data) < len(brand_names) * 2:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient numerical data. Expected at least {len(brand_names) * 2} values, found {len(numerical_data)}"
+        )
+    
+    liquor_data = []
+    
+    # Parse in groups of 3 (ID, Rate, Quantity)
+    for i in range(len(brand_names)):
+        try:
+            if i * 3 < len(numerical_data):
+                product_id = numerical_data[i * 3] if i * 3 < len(numerical_data) else f"AUTO_{i}"
+                rate = float(numerical_data[i * 3 + 1]) if i * 3 + 1 < len(numerical_data) else 100.0
+                quantity = int(float(numerical_data[i * 3 + 2])) if i * 3 + 2 < len(numerical_data) else 0
+                
+                estimated_monthly_sales = max(1, quantity // 4) * rate
+                
+                brand_data = {
+                    'brand_name': brand_names[i],
+                    'product_id': product_id,
+                    'rate': rate,
+                    'current_stock_qty': quantity,
+                    'stock_value_today': rate * quantity,
+                    'monthly_sale_value': estimated_monthly_sales,
+                    'stock_available_days': max(1, quantity // max(1, quantity // 30)) if quantity > 0 else 0,
+                    'stock_ratio': (rate * quantity) / max(1, estimated_monthly_sales),
+                    'daily_sales': {},
+                    'monthly_sale_qty': max(1, quantity // 4),
+                    'avg_daily_sale': estimated_monthly_sales / 30,
+                    'stock_value_before': rate * quantity * 1.1,
+                }
+                
+                liquor_data.append(brand_data)
+                
+        except Exception as e:
+            logging.warning(f"Error parsing data for {brand_names[i] if i < len(brand_names) else 'Unknown'}: {e}")
+            continue
+    
+    return liquor_data
 
 def calculate_overstocking(data: List[Dict], multiplier: float = 3.0) -> List[Dict]:
     """Calculate overstocking based on configurable multiplier"""
