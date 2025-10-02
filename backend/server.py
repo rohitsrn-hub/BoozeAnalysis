@@ -147,9 +147,11 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
     if not date_columns:
         raise HTTPException(status_code=400, detail="Could not find date columns for daily stock data")
     
-    # Filter valid data rows
+    # Filter out only obvious header rows, be more lenient
     df = df[df[brand_col].notna()]
-    df = df[~df[brand_col].astype(str).str.contains('total|sum|brand name', na=False, case=False)]
+    df = df[~df[brand_col].astype(str).str.contains('total|sum|^brand name$|^name$|^brand$', na=False, case=False)]
+    
+    print(f"After filtering, found {len(df)} potential brand rows")  # Debug info
     
     if df.empty:
         raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
