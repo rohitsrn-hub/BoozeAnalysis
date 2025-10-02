@@ -475,7 +475,7 @@ async def get_demand_recommendations():
 
 @api_router.get("/export-demand-list")
 async def export_demand_list():
-    """Export demand recommendations as Excel file"""
+    """Export demand recommendations as simplified Excel file with only Index, Brand Name, and Demand Quantity"""
     try:
         # Get recommendations
         recommendations_data = await get_demand_recommendations()
@@ -483,17 +483,13 @@ async def export_demand_list():
         if not recommendations_data:
             raise HTTPException(status_code=404, detail="No recommendations to export")
         
-        # Convert to DataFrame
+        # Convert to simplified DataFrame with only 3 columns
         df_data = []
-        for rec in recommendations_data:
+        for index, rec in enumerate(recommendations_data, 1):
             df_data.append({
+                'Index': index,
                 'Brand Name': rec.brand_name,
-                'Current Stock Value (₹)': f"{rec.current_stock:,.2f}",
-                'Monthly Sales Avg (₹)': f"{rec.avg_monthly_sales:,.2f}",
-                'Recommended Order Value (₹)': f"{rec.recommended_quantity:,.2f}",
-                'Days of Stock Remaining': f"{rec.days_of_stock:.1f}",
-                'Urgency Level': rec.urgency_level,
-                'Notes': f"Target: 45 days stock | Current: {rec.days_of_stock:.1f} days"
+                'Demand Quantity': rec.recommended_bottles
             })
         
         df = pd.DataFrame(df_data)
@@ -501,24 +497,27 @@ async def export_demand_list():
         # Create Excel file in memory
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Demand Recommendations', index=False)
+            df.to_excel(writer, sheet_name='Demand List', index=False)
             
             # Get workbook and worksheet
             workbook = writer.book
-            worksheet = writer.sheets['Demand Recommendations']
+            worksheet = writer.sheets['Demand List']
             
             # Auto-adjust column widths
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+            column_widths = {'A': 10, 'B': 40, 'C': 15}  # Index, Brand Name, Demand Quantity
+            for column_letter, width in column_widths.items():
+                worksheet.column_dimensions[column_letter].width = width
+            
+            # Style headers
+            from openpyxl.styles import Font, PatternFill, Alignment
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            
+            for col in range(1, 4):  # 3 columns
+                cell = worksheet.cell(row=1, column=col)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
         
         output.seek(0)
         
@@ -528,7 +527,7 @@ async def export_demand_list():
             content=output.getvalue(),
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={
-                'Content-Disposition': f'attachment; filename=liquor_demand_recommendations_{datetime.now().strftime("%Y%m%d")}.xlsx'
+                'Content-Disposition': f'attachment; filename=liquor_demand_list_{datetime.now().strftime("%Y%m%d")}.xlsx'
             }
         )
         
