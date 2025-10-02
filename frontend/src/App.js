@@ -1125,6 +1125,8 @@ function App() {
                               <tr key={index} className="border-b hover:bg-gray-50" data-testid={`calc-row-${index}`}>
                                 <td className="p-3 font-medium">{row.index}</td>
                                 <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
+                                <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
+                                <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
                                 <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
                                 <td className="p-3">{formatCurrency(row.selling_rate)}</td>
                                 <td className="p-3 font-medium text-blue-600">
