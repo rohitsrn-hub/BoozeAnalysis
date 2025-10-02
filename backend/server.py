@@ -205,19 +205,43 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             elif selling_rate == 0 and wholesale_rate > 0:
                 selling_rate = wholesale_rate / 0.9
             
-            # Get daily stock data
+            # Get daily stock data with enhanced debugging
             daily_stock_data = {}
             valid_stock_values = []
             
+            print(f"Processing {brand_name} - Available date columns: {date_columns}")
+            
             for date_col in date_columns:
-                if pd.notna(row[date_col]):
-                    try:
-                        stock_qty = float(row[date_col])
+                try:
+                    raw_value = row[date_col]
+                    print(f"  {date_col}: raw_value = {raw_value}, type = {type(raw_value)}, notna = {pd.notna(raw_value)}")
+                    
+                    if pd.notna(raw_value) and str(raw_value).strip() != '':
+                        # Try multiple conversion methods
+                        stock_qty = 0
+                        try:
+                            stock_qty = float(raw_value)
+                        except (ValueError, TypeError):
+                            try:
+                                # Handle string numbers
+                                stock_qty = float(str(raw_value).replace(',', ''))
+                            except:
+                                stock_qty = 0
+                        
                         daily_stock_data[date_col] = stock_qty
-                        if stock_qty > 0:
+                        print(f"    Converted to: {stock_qty}")
+                        
+                        if stock_qty >= 0:  # Include zero values too
                             valid_stock_values.append((date_col, stock_qty))
-                    except:
+                    else:
                         daily_stock_data[date_col] = 0
+                        print(f"    Skipped (empty/NaN)")
+                        
+                except Exception as e:
+                    daily_stock_data[date_col] = 0
+                    print(f"    Error processing {date_col}: {e}")
+            
+            print(f"  Final valid_stock_values: {valid_stock_values}")
             
             if not valid_stock_values:
                 continue  # Skip if no valid stock data
