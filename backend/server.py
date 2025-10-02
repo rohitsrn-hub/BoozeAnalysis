@@ -110,10 +110,11 @@ def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
         if not brand_names:
             raise HTTPException(status_code=400, detail="No brand names found in the file")
         
-        if len(numerical_data) < len(brand_names) * 3:
+        # Allow some flexibility in the data structure
+        if len(numerical_data) < len(brand_names) * 2:  # At least ID and Rate for each brand
             raise HTTPException(
                 status_code=400, 
-                detail=f"Insufficient numerical data. Expected {len(brand_names) * 3} values (ID, Rate, Quantity for each brand), found {len(numerical_data)}"
+                detail=f"Insufficient numerical data. Expected at least {len(brand_names) * 2} values (ID, Rate for each brand), found {len(numerical_data)}"
             )
         
         liquor_data = []
