@@ -130,7 +130,7 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             selling_rate_col = col
         elif 'rate' in col_lower and not wholesale_rate_col and not selling_rate_col:
             selling_rate_col = col  # Default to selling rate if only one rate column
-        elif 'index' in col_lower or col_lower == 'sl' or col_lower == 'sr':
+        elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col) <= 10:
             index_col = col
         else:
             # Check if column represents a date (contains date patterns)
