@@ -852,7 +852,7 @@ async def get_calculation_details():
 
 @api_router.get("/export-demand-list")
 async def export_demand_list():
-    """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Projected Monthly Sale, Quantity in Stock, Quantity to be Demanded"""
+    """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Projected Monthly Sale, Quantity in Stock, Quantity to be Demanded, Number of Cases to be Demanded"""
     try:
         # Get recommendations
         recommendations_data = await get_demand_recommendations()
