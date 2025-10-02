@@ -425,9 +425,18 @@ function App() {
               <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
               <p className="text-gray-600 mb-4">Upload your liquor sales Excel file to start analyzing data</p>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-500 mb-4">
                 <p>Supported formats: .xlsx, .xls, .csv</p>
               </div>
+              <Button
+                onClick={() => setShowOnboarding(true)}
+                variant="outline"
+                className="mt-2"
+                data-testid="get-started-btn"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Get Started Guide
+              </Button>
             </div>
           </div>
         ) : loading && !analyticsData ? (
