@@ -1,0 +1,73 @@
+{
+  "timestamp": "2025-10-02T02:15:04.939492",
+  "total_tests": 13,
+  "passed_tests": 12,
+  "success_rate": 92.3076923076923,
+  "test_results": [
+    {
+      "test": "API Root Endpoint",
+      "success": true,
+      "details": "Status: 200, Message: Liquor Sales Analysis Dashboard API"
+    },
+    {
+      "test": "File Upload - Valid Excel",
+      "success": true,
+      "details": "Uploaded 5 records"
+    },
+    {
+      "test": "File Upload - Invalid File Type",
+      "success": false,
+      "details": "Status: 500"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=3.0)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 3"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=2.0)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 3"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=2.5)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 3"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=3.0)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 3"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=4.0)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 1"
+    },
+    {
+      "test": "Analytics Endpoint (multiplier=5.0)",
+      "success": true,
+      "details": "Total brands: 5, Overstocked: 0"
+    },
+    {
+      "test": "Multiplier Logic Validation",
+      "success": true,
+      "details": "Tested multipliers: [2.0, 2.5, 3.0, 4.0, 5.0]"
+    },
+    {
+      "test": "Brands Endpoint",
+      "success": true,
+      "details": "Retrieved 5 brands"
+    },
+    {
+      "test": "Analytics - No Data Handling",
+      "success": true,
+      "details": "Returns existing data"
+    },
+    {
+      "test": "CORS Configuration",
+      "success": true,
+      "details": "CORS preflight request successful, Missing CORS headers: ['Access-Control-Allow-Origin', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers']"
+    }
+  ]
+}
