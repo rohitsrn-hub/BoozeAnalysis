@@ -722,22 +722,61 @@ function App() {
                   <CardContent>
                     <div className="space-y-4">
                       {analyticsData && Object.entries(analyticsData.sales_trends).length > 0 ? (
-                        <div className="grid gap-4">
-                          {Object.entries(analyticsData.sales_trends)
-                            .slice(-10)
-                            .map(([date, sales]) => (
-                              <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div className="flex items-center space-x-3">
-                                  <Calendar className="h-4 w-4 text-gray-500" />
-                                  <span className="font-medium text-gray-900">{date}</span>
+                        <>
+                          <div className="h-80 w-full mb-6">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={Object.entries(analyticsData.sales_trends)
+                                  .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                                  .map(([date, sales]) => ({
+                                    date: date.length > 10 ? date.substring(0, 10) : date,
+                                    sales: sales || 0,
+                                    displayDate: date
+                                  }))
+                                }
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis 
+                                  dataKey="date" 
+                                  angle={-45}
+                                  textAnchor="end"
+                                  height={80}
+                                />
+                                <YAxis />
+                                <Tooltip 
+                                  formatter={(value) => [formatNumber(value || 0), "Daily Stock"]}
+                                  labelFormatter={(label) => `Date: ${label}`}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="sales" 
+                                  stroke="#3B82F6" 
+                                  strokeWidth={3}
+                                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          
+                          <div className="grid gap-4">
+                            <h4 className="font-medium text-gray-900">Recent Stock Trends</h4>
+                            {Object.entries(analyticsData.sales_trends)
+                              .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                              .slice(-7)
+                              .map(([date, sales]) => (
+                                <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center space-x-3">
+                                    <Calendar className="h-4 w-4 text-gray-500" />
+                                    <span className="font-medium text-gray-900">{date}</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales || 0)}</div>
+                                    <div className="text-xs text-gray-500">total stock units</div>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales)}</div>
-                                  <div className="text-xs text-gray-500">estimated performance</div>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
+                              ))}
+                          </div>
+                        </>
                       ) : (
                         <div className="text-center py-8">
                           <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
