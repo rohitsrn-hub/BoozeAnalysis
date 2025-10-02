@@ -335,11 +335,18 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             
             print(f"  Using Global D1: {D1_date} = {D1_stock}, Individual DL: {DL_date} = {DL_stock}")
             
-            # Calculate total sales between D1 and DL
+            # Calculate total sales between global D1 and individual DL
             total_sales_qty = max(0, D1_stock - DL_stock)  # Stock reduction = sales
             
-            # Calculate number of days between D1 and DL
-            days_between = max(1, len(sorted_stock_values) - 1)
+            # Calculate number of days between global D1 and individual DL  
+            try:
+                from datetime import datetime
+                # Try to parse dates to calculate actual days
+                d1_idx = date_columns.index(D1_date) if D1_date in date_columns else 0
+                dl_idx = date_columns.index(DL_date) if DL_date in date_columns else len(date_columns) - 1
+                days_between = max(1, dl_idx - d1_idx + 1)
+            except:
+                days_between = max(1, len(sorted_stock_values) - 1)
             
             # Calculate average daily sales
             avg_daily_sales_qty = total_sales_qty / days_between if days_between > 0 else 0
