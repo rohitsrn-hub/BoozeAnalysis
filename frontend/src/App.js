@@ -434,7 +434,7 @@ function App() {
               <div className="relative">
                 <Button 
                   variant="default" 
-                  className="bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
+                  className="bg-indigo-600 hover:bg-indigo-700 cursor-pointer transition-all duration-200"
                   disabled={loading}
                   data-testid="upload-btn"
                   onClick={() => {
@@ -445,7 +445,7 @@ function App() {
                   }}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload Data
+                  {loading ? 'Processing...' : 'Upload Data'}
                 </Button>
                 <Input
                   id="file-upload"
