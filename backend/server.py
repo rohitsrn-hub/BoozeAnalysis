@@ -881,10 +881,10 @@ async def export_demand_list():
             if brand_record:
                 # Use the original index from the brand record
                 original_index = brand_record.get('index_number', 'N/A')
-                projected_monthly_sale = brand_record.get('monthly_sale_value', 0)
+                projected_monthly_sale_qty = brand_record.get('monthly_sales_qty', brand_record.get('monthly_sale_qty', 0))
             else:
                 original_index = 'N/A'
-                projected_monthly_sale = 0
+                projected_monthly_sale_qty = 0
             
             # Calculate totals for the summary row
             wholesale_cost_for_demand = rec.wholesale_rate * rec.recommended_qty
