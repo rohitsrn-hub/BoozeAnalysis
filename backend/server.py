@@ -530,14 +530,14 @@ async def get_charts_data():
         total_sales = sum(item['monthly_sale_value'] for item in data_dicts)
         
         # Volume Leaders (by current stock quantity)
-        volume_leaders = sorted(data_dicts, key=lambda x: x['current_stock_qty'], reverse=True)[:10]
+        volume_leaders = sorted(data_dicts, key=lambda x: x.get('current_stock_qty', 0), reverse=True)[:10]
         volume_chart = [
             {
-                'name': item['brand_name'],
-                'value': item['current_stock_qty'],
+                'name': item['brand_name'][:20],  # Truncate long names
+                'value': item.get('current_stock_qty', 0),
                 'stock_value': item['stock_value_today']
             }
-            for item in volume_leaders if item['current_stock_qty'] > 0
+            for item in volume_leaders if item.get('current_stock_qty', 0) > 0
         ]
         
         # Velocity Leaders (by stock turnover rate)
