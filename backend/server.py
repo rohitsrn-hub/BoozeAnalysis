@@ -269,7 +269,8 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             liquor_data.append(brand_data)
             
         except Exception as e:
-            logging.warning(f"Error parsing row {idx} ({brand_name}): {e}")
+            logging.error(f"Error parsing row {idx} ({brand_name}): {e}")
+            print(f"Failed to parse brand: {brand_name}, Error: {e}")  # Debug info
             continue
     
     if not liquor_data:
