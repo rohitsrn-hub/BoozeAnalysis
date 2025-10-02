@@ -646,6 +646,53 @@ async def get_demand_recommendations():
         logging.error(f"Error generating demand recommendations: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
 
+@api_router.get("/calculation-details")
+async def get_calculation_details():
+    """Get detailed calculations for all brands for verification"""
+    try:
+        liquor_records = await db.liquor_data.find().to_list(1000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        calculation_details = []
+        
+        for record in liquor_records:
+            # Calculate multiplier value (current stock value / monthly sales value)
+            current_stock_value = record.get('stock_value_today', 0)
+            monthly_sales_value = record.get('monthly_sale_value', 0)
+            multiplier_value = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+            
+            detail = {
+                'index': record.get('index_number', record.get('product_id', 'N/A')),
+                'brand_name': record['brand_name'],
+                'calculated_wholesale_rate': record.get('wholesale_rate', 0),
+                'selling_rate': record.get('selling_rate', record['rate']),
+                'calculated_avg_monthly_sale': record.get('monthly_sale_value', 0),
+                'calculated_current_stock_value': current_stock_value,
+                'calculated_multiplier_value': round(multiplier_value, 3),
+                # Additional useful fields for verification
+                'D1_date': record.get('D1_date', 'N/A'),
+                'D1_stock': record.get('D1_stock', 0),
+                'DL_date': record.get('DL_date', 'N/A'), 
+                'DL_stock': record.get('DL_stock', 0),
+                'total_sales_qty': record.get('total_sales_qty', 0),
+                'avg_daily_sales_qty': record.get('avg_daily_sales_qty', 0),
+                'days_analyzed': record.get('days_analyzed', 0),
+                'stock_available_days': record.get('stock_available_days', 0)
+            }
+            
+            calculation_details.append(detail)
+        
+        # Sort by index number
+        calculation_details.sort(key=lambda x: int(str(x['index']).replace('ID_', '')) if str(x['index']).replace('ID_', '').isdigit() else 999)
+        
+        return calculation_details
+        
+    except Exception as e:
+        logging.error(f"Error getting calculation details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting calculation details: {str(e)}")
+
 @api_router.get("/export-demand-list")
 async def export_demand_list():
     """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Quantity in Stock, Quantity to be Demanded"""
