@@ -340,8 +340,14 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
                     else:
                         break
             
-            # DL: Last date with stock data for this brand
-            DL_date, DL_stock = sorted_stock_values[-1]
+            # DL: Use the last date in the entire dataset (should be 29-Sep for your data)
+            global_DL_date = sorted_dates[-1]  # Last date across all data
+            DL_date = global_DL_date
+            DL_stock = daily_stock_data.get(global_DL_date, 0)
+            
+            # If brand has no data on the global last date, use their last available data
+            if DL_stock == 0:
+                DL_date, DL_stock = sorted_stock_values[-1]
             
             print(f"  Using Global D1: {D1_date} = {D1_stock}, Individual DL: {DL_date} = {DL_stock}")
             
