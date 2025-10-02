@@ -574,11 +574,17 @@ class LiquorDashboardTester:
                     if len(excel_df) > 1:  # Has data
                         data_rows = excel_df.iloc[:-1]  # Exclude total row
                         
-                        # Wholesale Rate should be numeric
-                        if pd.api.types.is_numeric_dtype(data_rows['Wholesale Rate']):
-                            issues.append("✓ Wholesale Rate is numeric")
-                        else:
-                            issues.append("Wholesale Rate is not numeric")
+                        # Wholesale Rate should be numeric for data rows (excluding total row)
+                        try:
+                            # Try to convert data rows to numeric (excluding total row)
+                            numeric_wholesale = pd.to_numeric(data_rows['Wholesale Rate'], errors='coerce')
+                            if not numeric_wholesale.isna().any():
+                                issues.append("✓ Wholesale Rate data is numeric")
+                            else:
+                                issues.append("Some Wholesale Rate values are not numeric")
+                                success = False
+                        except:
+                            issues.append("Wholesale Rate validation failed")
                             success = False
                         
                         # Projected Monthly Sale should be numeric
