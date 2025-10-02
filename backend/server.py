@@ -119,11 +119,12 @@ def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
         liquor_data = []
         
         # Parse numerical data in groups of 3 (ID, Rate, Quantity)
+        # Handle case where last item might be missing quantity
         for i in range(len(brand_names)):
             try:
-                if i * 3 + 2 < len(numerical_data):
-                    product_id = numerical_data[i * 3]
-                    rate = float(numerical_data[i * 3 + 1])
+                if i * 3 < len(numerical_data):
+                    product_id = numerical_data[i * 3] if i * 3 < len(numerical_data) else f"AUTO_{i}"
+                    rate = float(numerical_data[i * 3 + 1]) if i * 3 + 1 < len(numerical_data) else 100.0
                     quantity = int(float(numerical_data[i * 3 + 2])) if i * 3 + 2 < len(numerical_data) else 0
                     
                     # Create synthetic monthly sales based on current stock (for demo purposes)
