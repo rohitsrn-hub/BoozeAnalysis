@@ -415,6 +415,102 @@ class LiquorDashboardTester:
             self.log_test("Enhanced Excel Export Validation", False, str(e))
             return False
 
+    def test_enhanced_excel_export_detailed(self):
+        """Detailed test for the three key Excel export enhancements"""
+        try:
+            # First get the demand recommendations to compare
+            rec_response = requests.get(f"{self.api_url}/demand-recommendations")
+            if rec_response.status_code != 200:
+                self.log_test("Enhanced Excel Export - Prerequisites", False, "Cannot get recommendations for comparison")
+                return False
+            
+            recommendations = rec_response.json()
+            
+            # Get the Excel export
+            export_response = requests.get(f"{self.api_url}/export-demand-list")
+            if export_response.status_code != 200:
+                self.log_test("Enhanced Excel Export - Prerequisites", False, f"Export failed with status {export_response.status_code}")
+                return False
+            
+            # Parse Excel
+            excel_df = pd.read_excel(io.BytesIO(export_response.content))
+            
+            success = True
+            issues = []
+            
+            # Test 1: Correct brand index numbers (not serial numbers)
+            if len(excel_df) > 1:  # Has data + total row
+                data_rows = excel_df.iloc[:-1]  # Exclude total row
+                index_values = data_rows['Index'].tolist()
+                
+                # Check if indexes are sequential 1,2,3... (which would be wrong)
+                is_sequential = all(str(index_values[i]) == str(i+1) for i in range(len(index_values)))
+                if is_sequential:
+                    issues.append("Using serial numbers instead of original brand indexes")
+                    success = False
+                else:
+                    issues.append("✓ Uses original brand index numbers")
+            
+            # Test 2: Projected Monthly Sale column exists and has data
+            if 'Projected Monthly Sale' in excel_df.columns:
+                monthly_sales = excel_df['Projected Monthly Sale'].iloc[:-1]  # Exclude total row
+                if monthly_sales.sum() > 0:
+                    issues.append("✓ Projected Monthly Sale column has valid data")
+                else:
+                    issues.append("Projected Monthly Sale column exists but has no data")
+                    success = False
+            else:
+                issues.append("Missing Projected Monthly Sale column")
+                success = False
+            
+            # Test 3: Total row validation
+            if len(excel_df) > 0:
+                last_row = excel_df.iloc[-1]
+                if str(last_row['Index']).upper() == 'TOTAL':
+                    issues.append("✓ Total row present with correct format")
+                    
+                    # Validate total calculations
+                    data_rows = excel_df.iloc[:-1]
+                    expected_stock_total = data_rows['Quantity held in Stock'].sum()
+                    expected_demand_total = data_rows['Quantity to be Demanded'].sum()
+                    
+                    actual_stock_total = last_row['Quantity held in Stock']
+                    actual_demand_total = last_row['Quantity to be Demanded']
+                    
+                    if (abs(expected_stock_total - actual_stock_total) < 0.01 and
+                        abs(expected_demand_total - actual_demand_total) < 0.01):
+                        issues.append("✓ Total row calculations are accurate")
+                    else:
+                        issues.append(f"Total row calculation errors: Stock {expected_stock_total} vs {actual_stock_total}, Demand {expected_demand_total} vs {actual_demand_total}")
+                        success = False
+                else:
+                    issues.append("Total row missing or incorrectly formatted")
+                    success = False
+            
+            # Test 4: Data integrity - compare with recommendations API
+            if len(recommendations) > 0 and len(excel_df) > 1:
+                rec_brands = {rec['brand_name']: rec for rec in recommendations}
+                excel_brands = data_rows['Brand Name'].tolist()
+                
+                matching_brands = 0
+                for brand in excel_brands:
+                    if brand in rec_brands:
+                        matching_brands += 1
+                
+                if matching_brands == len(excel_brands):
+                    issues.append("✓ All Excel brands match recommendation data")
+                else:
+                    issues.append(f"Brand mismatch: {matching_brands}/{len(excel_brands)} brands match")
+                    success = False
+            
+            details = "; ".join(issues)
+            self.log_test("Enhanced Excel Export - Three Key Improvements", success, details)
+            return success
+            
+        except Exception as e:
+            self.log_test("Enhanced Excel Export - Three Key Improvements", False, str(e))
+            return False
+
     def test_cors_headers(self):
         """Test CORS headers"""
         try:
