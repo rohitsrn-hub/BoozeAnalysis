@@ -280,8 +280,8 @@ class LiquorDashboardTester:
                     if len(data) > 0:
                         first_rec = data[0]
                         required_fields = [
-                            'brand_name', 'current_stock_bottles', 'avg_monthly_sales',
-                            'recommended_bottles', 'days_of_stock', 'urgency_level', 'bottle_rate'
+                            'brand_name', 'selling_rate', 'wholesale_rate',
+                            'current_stock_qty', 'recommended_qty', 'urgency_level'
                         ]
                         missing_fields = [field for field in required_fields if field not in first_rec]
                         if missing_fields:
@@ -298,6 +298,17 @@ class LiquorDashboardTester:
                             else:
                                 urgency_counts = {level: urgency_levels.count(level) for level in valid_urgencies if urgency_levels.count(level) > 0}
                                 details += f", Urgency distribution: {urgency_counts}"
+                                
+                            # Validate wholesale rates are reasonable (should be less than selling rates)
+                            rate_issues = []
+                            for rec in data[:5]:  # Check first 5 recommendations
+                                if rec.get('wholesale_rate', 0) > rec.get('selling_rate', 0):
+                                    rate_issues.append(rec['brand_name'])
+                            
+                            if rate_issues:
+                                details += f", Rate validation issues for: {rate_issues}"
+                            else:
+                                details += ", Wholesale rates properly calculated"
                 else:
                     success = False
                     details = "Response is not a list"
