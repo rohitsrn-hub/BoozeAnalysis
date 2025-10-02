@@ -1110,6 +1110,8 @@ function App() {
                             <tr className="border-b bg-gray-50">
                               <th className="text-left p-3 font-semibold">Index</th>
                               <th className="text-left p-3 font-semibold">Brand Name</th>
+                              <th className="text-left p-3 font-semibold">D1 Stock</th>
+                              <th className="text-left p-3 font-semibold">DL Stock</th>
                               <th className="text-left p-3 font-semibold">Wholesale Rate</th>
                               <th className="text-left p-3 font-semibold">Selling Rate</th>
                               <th className="text-left p-3 font-semibold">Monthly Sale Value</th>
