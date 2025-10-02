@@ -931,8 +931,8 @@ async def export_demand_list():
             workbook = writer.book
             worksheet = writer.sheets['Demand Forecast']
             
-            # Auto-adjust column widths for the new 6-column format
-            column_widths = {'A': 10, 'B': 35, 'C': 18, 'D': 20, 'E': 22, 'F': 25}
+            # Auto-adjust column widths for the new 7-column format
+            column_widths = {'A': 10, 'B': 30, 'C': 16, 'D': 18, 'E': 18, 'F': 20, 'G': 22}
             for column_letter, width in column_widths.items():
                 worksheet.column_dimensions[column_letter].width = width
             
