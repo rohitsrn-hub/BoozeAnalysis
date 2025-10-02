@@ -64,11 +64,12 @@ class ChartsResponse(BaseModel):
 
 class DemandRecommendation(BaseModel):
     brand_name: str
-    current_stock: float
+    current_stock_bottles: int
     avg_monthly_sales: float
-    recommended_quantity: float
+    recommended_bottles: int
     days_of_stock: float
     urgency_level: str
+    bottle_rate: float
 
 # Helper functions
 def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
