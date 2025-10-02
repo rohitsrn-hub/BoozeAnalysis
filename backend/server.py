@@ -853,7 +853,7 @@ async def get_calculation_details():
 
 @api_router.get("/export-demand-list")
 async def export_demand_list():
-    """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Quantity in Stock, Quantity to be Demanded"""
+    """Export demand recommendations with updated format: Index, Brand Name, Wholesale Rate, Projected Monthly Sale, Quantity in Stock, Quantity to be Demanded"""
     try:
         # Get recommendations
         recommendations_data = await get_demand_recommendations()
@@ -861,16 +861,56 @@ async def export_demand_list():
         if not recommendations_data:
             raise HTTPException(status_code=404, detail="No recommendations to export")
         
-        # Convert to updated DataFrame format
+        # Get all liquor records to match with recommendations for correct index and monthly sale data
+        liquor_records = await db.liquor_data.find().to_list(1000)
+        
+        # Create a lookup dictionary for brand data by brand name
+        brand_lookup = {record['brand_name']: record for record in liquor_records}
+        
+        # Convert to updated DataFrame format with correct indexes and monthly sales
         df_data = []
-        for index, rec in enumerate(recommendations_data, 1):
+        total_wholesale_cost = 0
+        total_quantity_in_stock = 0
+        total_quantity_demanded = 0
+        total_projected_monthly_sale = 0
+        
+        for rec in recommendations_data:
+            # Get the original brand record to find the correct index and monthly sales
+            brand_record = brand_lookup.get(rec.brand_name)
+            
+            if brand_record:
+                # Use the original index from the brand record
+                original_index = brand_record.get('index_number', 'N/A')
+                projected_monthly_sale = brand_record.get('monthly_sale_value', 0)
+            else:
+                original_index = 'N/A'
+                projected_monthly_sale = 0
+            
+            # Calculate totals for the summary row
+            wholesale_cost_for_demand = rec.wholesale_rate * rec.recommended_qty
+            total_wholesale_cost += wholesale_cost_for_demand
+            total_quantity_in_stock += rec.current_stock_qty
+            total_quantity_demanded += rec.recommended_qty
+            total_projected_monthly_sale += projected_monthly_sale
+            
             df_data.append({
-                'Index': index,
+                'Index': original_index,
                 'Brand Name': rec.brand_name,
                 'Wholesale Rate': rec.wholesale_rate,
+                'Projected Monthly Sale': round(projected_monthly_sale, 2),
                 'Quantity held in Stock': rec.current_stock_qty,
                 'Quantity to be Demanded': rec.recommended_qty
             })
+        
+        # Add total row
+        df_data.append({
+            'Index': 'TOTAL',
+            'Brand Name': f'({len(recommendations_data)} brands)',
+            'Wholesale Rate': f'Cost: {round(total_wholesale_cost, 2)}',
+            'Projected Monthly Sale': round(total_projected_monthly_sale, 2),
+            'Quantity held in Stock': total_quantity_in_stock,
+            'Quantity to be Demanded': total_quantity_demanded
+        })
         
         df = pd.DataFrame(df_data)
         
@@ -884,20 +924,39 @@ async def export_demand_list():
             workbook = writer.book
             worksheet = writer.sheets['Demand Forecast']
             
-            # Auto-adjust column widths
-            column_widths = {'A': 10, 'B': 40, 'C': 18, 'D': 22, 'E': 25}
+            # Auto-adjust column widths for the new 6-column format
+            column_widths = {'A': 10, 'B': 35, 'C': 18, 'D': 20, 'E': 22, 'F': 25}
             for column_letter, width in column_widths.items():
                 worksheet.column_dimensions[column_letter].width = width
             
             # Style headers
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
             header_font = Font(bold=True, color="FFFFFF")
             header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
             
-            for col in range(1, 6):  # 5 columns
+            # Style the header row
+            for col in range(1, 7):  # 6 columns now
                 cell = worksheet.cell(row=1, column=col)
                 cell.font = header_font
                 cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+            
+            # Style the total row (last row)
+            total_row = len(df_data)
+            total_font = Font(bold=True)
+            total_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
+            border = Border(
+                top=Side(border_style="thick", color="366092"),
+                bottom=Side(border_style="thick", color="366092"),
+                left=Side(border_style="thin", color="366092"),
+                right=Side(border_style="thin", color="366092")
+            )
+            
+            for col in range(1, 7):  # 6 columns
+                cell = worksheet.cell(row=total_row + 1, column=col)  # +1 because of header
+                cell.font = total_font
+                cell.fill = total_fill
+                cell.border = border
                 cell.alignment = Alignment(horizontal="center")
         
         output.seek(0)
