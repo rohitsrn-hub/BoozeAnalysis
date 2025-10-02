@@ -106,34 +106,50 @@ def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
         raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
 
 def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    """Parse tabular Excel format with columns"""
+    """Parse liquor stock data with proper daily stock analysis"""
     if df.empty:
         raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
     
     # Clean column names
     df.columns = df.columns.str.strip()
     
-    # Find key columns (case insensitive)
+    # Find key columns
     brand_col = None
-    rate_col = None
-    quantity_cols = []
+    wholesale_rate_col = None
+    selling_rate_col = None
+    index_col = None
+    date_columns = []
     
     for col in df.columns:
         col_lower = col.lower().strip()
-        if 'brand' in col_lower or 'name' in col_lower:
+        if 'brand' in col_lower and 'name' in col_lower:
             brand_col = col
-        elif 'rate' in col_lower or 'price' in col_lower:
-            rate_col = col
-        elif any(date_part in col_lower for date_part in ['aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul']) and 'sale' not in col_lower and 'value' not in col_lower:
-            quantity_cols.append(col)
+        elif 'wholesale' in col_lower and 'rate' in col_lower:
+            wholesale_rate_col = col
+        elif ('selling' in col_lower or 'retail' in col_lower) and 'rate' in col_lower:
+            selling_rate_col = col
+        elif 'rate' in col_lower and not wholesale_rate_col and not selling_rate_col:
+            selling_rate_col = col  # Default to selling rate if only one rate column
+        elif 'index' in col_lower or col_lower == 'sl' or col_lower == 'sr':
+            index_col = col
+        else:
+            # Check if column represents a date (contains date patterns)
+            if any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                # Sort dates chronologically
+                date_columns.append(col)
+    
+    # Sort date columns chronologically
+    date_columns.sort()
     
     if not brand_col:
-        raise HTTPException(status_code=400, detail="Could not find brand name column in the file")
+        raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in the file")
     
-    # Filter out header rows and empty data
+    if not date_columns:
+        raise HTTPException(status_code=400, detail="Could not find date columns for daily stock data")
+    
+    # Filter valid data rows
     df = df[df[brand_col].notna()]
-    df = df[~df[brand_col].astype(str).str.contains('total|sum', na=False, case=False)]
-    df = df[~df[brand_col].astype(str).str.contains('^(brand|name|rate|price)$', na=False, case=False)]
+    df = df[~df[brand_col].astype(str).str.contains('total|sum|brand name', na=False, case=False)]
     
     if df.empty:
         raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
@@ -145,57 +161,119 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             brand_name = str(row[brand_col]).strip()
             if not brand_name or brand_name.lower() in ['nan', 'none', '']:
                 continue
-                
-            # Get rate
-            rate = 0.0
-            if rate_col and pd.notna(row[rate_col]):
+            
+            # Get index
+            index_num = idx + 1
+            if index_col and pd.notna(row[index_col]):
                 try:
-                    rate = float(row[rate_col])
+                    index_num = int(row[index_col])
                 except:
-                    rate = 100.0  # Default rate
+                    index_num = idx + 1
             
-            # Calculate total quantity from date columns
-            total_quantity = 0
-            daily_sales = {}
-            for col in quantity_cols:
-                if pd.notna(row[col]):
+            # Get rates
+            wholesale_rate = 0.0
+            selling_rate = 0.0
+            
+            if wholesale_rate_col and pd.notna(row[wholesale_rate_col]):
+                try:
+                    wholesale_rate = float(row[wholesale_rate_col])
+                except:
+                    pass
+            
+            if selling_rate_col and pd.notna(row[selling_rate_col]):
+                try:
+                    selling_rate = float(row[selling_rate_col])
+                except:
+                    pass
+            
+            # If wholesale rate not provided, calculate as 90% of selling rate
+            if wholesale_rate == 0 and selling_rate > 0:
+                wholesale_rate = selling_rate * 0.9
+            elif selling_rate == 0 and wholesale_rate > 0:
+                selling_rate = wholesale_rate / 0.9
+            
+            # Get daily stock data
+            daily_stock_data = {}
+            valid_stock_values = []
+            
+            for date_col in date_columns:
+                if pd.notna(row[date_col]):
                     try:
-                        qty = int(float(row[col]))
-                        total_quantity += qty
-                        daily_sales[col] = qty
+                        stock_qty = float(row[date_col])
+                        daily_stock_data[date_col] = stock_qty
+                        if stock_qty > 0:
+                            valid_stock_values.append((date_col, stock_qty))
                     except:
-                        daily_sales[col] = 0
+                        daily_stock_data[date_col] = 0
             
-            # Calculate estimated monthly sales
-            if total_quantity > 0 and rate > 0:
-                estimated_monthly_sales = total_quantity * rate * 0.8  # Assume 80% of stock is monthly sales
-            else:
-                estimated_monthly_sales = max(1, total_quantity) * max(rate, 100.0) * 0.2
+            if not valid_stock_values:
+                continue  # Skip if no valid stock data
+            
+            # Find D1 (first significant stock position) and DL (last stock position)
+            # D1: First date with meaningful stock (not the minimum, but first significant value)
+            # DL: Last date with stock data
+            
+            D1_date, D1_stock = valid_stock_values[0]  # First valid stock entry
+            DL_date, DL_stock = valid_stock_values[-1]  # Last valid stock entry
+            
+            # Calculate total sales between D1 and DL
+            total_sales_qty = max(0, D1_stock - DL_stock)  # Stock reduction = sales
+            
+            # Calculate number of days between D1 and DL
+            days_between = max(1, len(valid_stock_values) - 1)
+            
+            # Calculate average daily sales
+            avg_daily_sales_qty = total_sales_qty / days_between if days_between > 0 else 0
+            
+            # Calculate monthly sales (24 days as requested)
+            monthly_sales_qty = avg_daily_sales_qty * 24
+            monthly_sales_value = monthly_sales_qty * selling_rate
+            
+            # Current stock value (on DL date)
+            current_stock_value = DL_stock * selling_rate
+            
+            # Calculate stock ratio (stock value / monthly sales value)
+            stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+            
+            # Stock availability in days
+            stock_available_days = (DL_stock / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
             
             brand_data = {
                 'brand_name': brand_name,
-                'product_id': f"ID_{idx}",
-                'rate': rate,
-                'current_stock_qty': total_quantity,
-                'stock_value_today': rate * total_quantity,
-                'monthly_sale_value': estimated_monthly_sales,
-                'stock_available_days': max(1, total_quantity // max(1, estimated_monthly_sales / rate * 30)) if estimated_monthly_sales > 0 else 30,
-                'stock_ratio': (rate * total_quantity) / max(1, estimated_monthly_sales) if estimated_monthly_sales > 0 else 1,
-                'daily_sales': daily_sales,
-                'monthly_sale_qty': max(1, int(estimated_monthly_sales / max(rate, 1))),
-                'avg_daily_sale': estimated_monthly_sales / 30,
-                'stock_value_before': rate * total_quantity * 1.1,
+                'product_id': f"ID_{index_num}",
+                'index_number': index_num,
+                'wholesale_rate': wholesale_rate,
+                'selling_rate': selling_rate,
+                'rate': selling_rate,  # For compatibility
+                'D1_date': D1_date,
+                'D1_stock': D1_stock,
+                'DL_date': DL_date,
+                'DL_stock': DL_stock,
+                'current_stock_qty': int(DL_stock),
+                'total_sales_qty': total_sales_qty,
+                'avg_daily_sales_qty': avg_daily_sales_qty,
+                'monthly_sales_qty': monthly_sales_qty,
+                'monthly_sale_value': monthly_sales_value,
+                'monthly_sale_qty': int(monthly_sales_qty),  # For compatibility
+                'stock_value_today': current_stock_value,
+                'stock_ratio': stock_ratio,
+                'stock_available_days': min(999, stock_available_days),
+                'avg_daily_sale': monthly_sales_value / 30,  # For compatibility
+                'stock_value_before': D1_stock * selling_rate,
+                'daily_sales': daily_stock_data,
+                'days_analyzed': days_between,
             }
             
             liquor_data.append(brand_data)
             
         except Exception as e:
-            logging.warning(f"Error parsing row {idx}: {e}")
+            logging.warning(f"Error parsing row {idx} ({brand_name}): {e}")
             continue
     
     if not liquor_data:
         raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
     
+    logging.info(f"Successfully parsed {len(liquor_data)} liquor brands with proper stock analysis")
     return liquor_data
 
 def parse_list_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
