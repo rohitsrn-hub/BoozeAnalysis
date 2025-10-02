@@ -171,6 +171,58 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
     if df.empty:
         raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
     
+    # STEP 1: Find global D1 date (when stock increased for ANY brand)
+    global_D1_date = None
+    print(f"Finding global D1 date across all brands...")
+    
+    # Collect all stock data across all brands first
+    all_brand_stock_data = {}
+    for idx, row in df.iterrows():
+        brand_name = str(row[brand_col]).strip()
+        if not brand_name or brand_name.lower() in ['nan', 'none', '']:
+            continue
+            
+        brand_stock_data = {}
+        for date_col in date_columns:
+            if pd.notna(row[date_col]):
+                try:
+                    stock_qty = float(row[date_col])
+                    brand_stock_data[date_col] = stock_qty
+                except:
+                    brand_stock_data[date_col] = 0
+        
+        if brand_stock_data:
+            all_brand_stock_data[brand_name] = brand_stock_data
+    
+    # Find D1: Look for the date when ANY brand shows stock increase
+    sorted_dates = sorted(date_columns)
+    for i in range(1, len(sorted_dates)):
+        prev_date = sorted_dates[i-1] 
+        curr_date = sorted_dates[i]
+        
+        # Check if any brand shows stock increase on curr_date
+        for brand_name, stock_data in all_brand_stock_data.items():
+            if prev_date in stock_data and curr_date in stock_data:
+                prev_stock = stock_data[prev_date]
+                curr_stock = stock_data[curr_date]
+                
+                # Stock increase indicates new arrival (threshold: any increase)
+                if curr_stock > prev_stock:
+                    global_D1_date = curr_date
+                    print(f"Found global D1: {curr_date} (Brand: {brand_name}, Stock: {prev_stock} -> {curr_stock})")
+                    break
+        
+        if global_D1_date:
+            break
+    
+    # If no stock increase found, use first date
+    if not global_D1_date:
+        global_D1_date = sorted_dates[0]
+        print(f"No stock increase found, using first date as D1: {global_D1_date}")
+    
+    print(f"Global D1 determined: {global_D1_date}")
+    
+    # STEP 2: Process each brand with the global D1
     liquor_data = []
     
     for idx, row in df.iterrows():
