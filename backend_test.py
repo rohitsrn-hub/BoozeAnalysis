@@ -312,7 +312,7 @@ class LiquorDashboardTester:
             return False, []
 
     def test_export_demand_list_endpoint(self):
-        """Test Excel export endpoint"""
+        """Test Excel export endpoint with enhanced validation"""
         try:
             response = requests.get(f"{self.api_url}/export-demand-list")
             success = response.status_code == 200
@@ -331,17 +331,79 @@ class LiquorDashboardTester:
                         details += ", proper download headers set"
                     else:
                         details += ", missing proper download headers"
+                        
+                    # Parse Excel content to validate structure
+                    try:
+                        excel_df = pd.read_excel(io.BytesIO(response.content))
+                        
+                        # Check required columns
+                        expected_columns = [
+                            'Index', 'Brand Name', 'Wholesale Rate', 
+                            'Projected Monthly Sale', 'Quantity held in Stock', 
+                            'Quantity to be Demanded'
+                        ]
+                        
+                        missing_columns = [col for col in expected_columns if col not in excel_df.columns]
+                        if missing_columns:
+                            success = False
+                            details += f", Missing columns: {missing_columns}"
+                        else:
+                            details += f", All 6 required columns present"
+                            
+                            # Check if there's data
+                            if len(excel_df) > 0:
+                                # Check for total row (should be last row with 'TOTAL' in Index column)
+                                last_row = excel_df.iloc[-1]
+                                if str(last_row['Index']).upper() == 'TOTAL':
+                                    details += ", Total row present"
+                                    
+                                    # Validate total row calculations
+                                    data_rows = excel_df.iloc[:-1]  # All rows except total
+                                    
+                                    # Check if index numbers are not just serial numbers (1,2,3...)
+                                    index_values = data_rows['Index'].tolist()
+                                    is_sequential = all(index_values[i] == i+1 for i in range(len(index_values)))
+                                    if not is_sequential:
+                                        details += ", Uses original brand indexes (not serial numbers)"
+                                    else:
+                                        details += ", WARNING: May be using serial numbers instead of original indexes"
+                                    
+                                    # Validate total calculations
+                                    expected_total_stock = data_rows['Quantity held in Stock'].sum()
+                                    expected_total_demand = data_rows['Quantity to be Demanded'].sum()
+                                    expected_total_monthly_sale = data_rows['Projected Monthly Sale'].sum()
+                                    
+                                    actual_total_stock = last_row['Quantity held in Stock']
+                                    actual_total_demand = last_row['Quantity to be Demanded']
+                                    actual_total_monthly_sale = last_row['Projected Monthly Sale']
+                                    
+                                    if (abs(expected_total_stock - actual_total_stock) < 0.01 and
+                                        abs(expected_total_demand - actual_total_demand) < 0.01 and
+                                        abs(expected_total_monthly_sale - actual_total_monthly_sale) < 0.01):
+                                        details += ", Total calculations correct"
+                                    else:
+                                        details += f", Total calculation errors - Stock: {expected_total_stock} vs {actual_total_stock}, Demand: {expected_total_demand} vs {actual_total_demand}, Monthly Sale: {expected_total_monthly_sale} vs {actual_total_monthly_sale}"
+                                else:
+                                    details += ", WARNING: No total row found"
+                                    
+                                details += f", {len(excel_df)-1} data rows + 1 total row"
+                            else:
+                                details += ", No data in Excel file"
+                                
+                    except Exception as parse_error:
+                        details += f", Excel parsing error: {str(parse_error)}"
+                        
                 else:
                     success = False
                     details = f"Wrong content type: {content_type}"
             else:
                 details = f"Status: {response.status_code}, Response: {response.text[:200]}"
             
-            self.log_test("Excel Export Endpoint", success, details)
+            self.log_test("Enhanced Excel Export Validation", success, details)
             return success
             
         except Exception as e:
-            self.log_test("Excel Export Endpoint", False, str(e))
+            self.log_test("Enhanced Excel Export Validation", False, str(e))
             return False
 
     def test_cors_headers(self):
