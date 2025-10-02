@@ -771,14 +771,14 @@ async def get_demand_recommendations():
                 else:
                     urgency = "NONE"
                 
-                # Only include items that need restocking
-                if urgency != "NONE" or recommended_qty > 5:  # Only recommend if qty > 5
+                # Only include items that need restocking (when recommended_qty > 0)
+                if recommended_qty > 0:
                     recommendations.append(DemandRecommendation(
                         brand_name=brand_name,
                         selling_rate=selling_rate,
                         wholesale_rate=round(wholesale_rate, 2),
                         current_stock_qty=current_stock_qty,
-                        recommended_qty=min(recommended_qty, current_stock_qty * 2),  # Cap at 2x current stock
+                        recommended_qty=recommended_qty,  # Use the calculated recommendation without artificial cap
                         urgency_level=urgency
                     ))
         
