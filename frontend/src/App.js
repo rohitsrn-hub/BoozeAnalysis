@@ -432,17 +432,21 @@ function App() {
 
               {/* File Upload */}
               <div className="relative">
-                <Label htmlFor="file-upload" className="cursor-pointer">
-                  <Button 
-                    variant="default" 
-                    className="bg-indigo-600 hover:bg-indigo-700"
-                    disabled={loading}
-                    data-testid="upload-btn"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Data
-                  </Button>
-                </Label>
+                <Button 
+                  variant="default" 
+                  className="bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
+                  disabled={loading}
+                  data-testid="upload-btn"
+                  onClick={() => {
+                    const fileInput = document.getElementById('file-upload');
+                    if (fileInput) {
+                      fileInput.click();
+                    }
+                  }}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Data
+                </Button>
                 <Input
                   id="file-upload"
                   type="file"
