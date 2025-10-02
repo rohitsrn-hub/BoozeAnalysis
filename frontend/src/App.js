@@ -641,154 +641,46 @@ function App() {
                 </Card>
               </TabsContent>
 
-              {/* Recommendations Tab */}
-              <TabsContent value="recommendations" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Smart Demand Recommendations</h2>
-                    <p className="text-gray-600">AI-powered insights for optimal inventory management</p>
-                  </div>
-                  <Button
-                    onClick={handleExportDemandList}
-                    className="bg-green-600 hover:bg-green-700"
-                    data-testid="export-demand-btn"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Excel
-                  </Button>
-                </div>
-
-                {demandData && demandData.length > 0 ? (
-                  <div className="space-y-4">
-                    {/* Urgency Level Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="border-red-200 bg-red-50">
-                        <CardContent className="p-4">
-                          <div className="flex items-center space-x-2">
-                            <AlertTriangle className="h-5 w-5 text-red-600" />
+              {/* Brand Performance Tab */}
+              <TabsContent value="brand-performance" className="space-y-6">
+                <Card data-testid="brand-performance-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+                      <span>Top Performing Brands</span>
+                    </CardTitle>
+                    <CardDescription>Ranked by monthly sales value</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {analyticsData.top_selling_brands.map((brand, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                          data-testid={`top-brand-${index}`}
+                        >
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-600 font-bold text-sm rounded-full">
+                              {index + 1}
+                            </div>
                             <div>
-                              <div className="text-2xl font-bold text-red-600">
-                                {demandData.filter(item => item.urgency_level === 'HIGH').length}
-                              </div>
-                              <div className="text-sm text-red-800">High Priority</div>
+                              <h4 className="font-semibold text-gray-900">{brand.brand_name}</h4>
+                              <p className="text-sm text-gray-600">Stock Ratio: {brand.stock_ratio.toFixed(2)}</p>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="border-yellow-200 bg-yellow-50">
-                        <CardContent className="p-4">
-                          <div className="flex items-center space-x-2">
-                            <Package className="h-5 w-5 text-yellow-600" />
-                            <div>
-                              <div className="text-2xl font-bold text-yellow-600">
-                                {demandData.filter(item => item.urgency_level === 'MEDIUM').length}
-                              </div>
-                              <div className="text-sm text-yellow-800">Medium Priority</div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-indigo-600">
+                              {formatCurrency(brand.monthly_sale_value)}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Stock: {formatCurrency(brand.stock_value_today)}
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                      
-                      <Card className="border-blue-200 bg-blue-50">
-                        <CardContent className="p-4">
-                          <div className="flex items-center space-x-2">
-                            <Target className="h-5 w-5 text-blue-600" />
-                            <div>
-                              <div className="text-2xl font-bold text-blue-600">
-                                {demandData.filter(item => item.urgency_level === 'LOW').length}
-                              </div>
-                              <div className="text-sm text-blue-800">Low Priority</div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* Recommendations List */}
-                    <Card data-testid="recommendations-list">
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2">
-                          <Target className="h-5 w-5 text-indigo-600" />
-                          <span>Recommended Orders</span>
-                        </CardTitle>
-                        <CardDescription>
-                          Optimized ordering recommendations based on sales velocity and current stock levels
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          {demandData.map((rec, index) => {
-                            const urgencyColors = {
-                              HIGH: 'border-red-200 bg-red-50',
-                              MEDIUM: 'border-yellow-200 bg-yellow-50',
-                              LOW: 'border-blue-200 bg-blue-50'
-                            };
-                            
-                            const urgencyBadgeColors = {
-                              HIGH: 'bg-red-600 text-white',
-                              MEDIUM: 'bg-yellow-600 text-white',
-                              LOW: 'bg-blue-600 text-white'
-                            };
-
-                            return (
-                              <div 
-                                key={index} 
-                                className={`p-4 rounded-lg border ${urgencyColors[rec.urgency_level]}`}
-                                data-testid={`recommendation-${index}`}
-                              >
-                                <div className="flex justify-between items-start mb-3">
-                                  <div>
-                                    <h4 className="font-semibold text-gray-900">{rec.brand_name}</h4>
-                                    <p className="text-sm text-gray-600">
-                                      {rec.days_of_stock.toFixed(1)} days of stock remaining
-                                    </p>
-                                  </div>
-                                  <Badge className={urgencyBadgeColors[rec.urgency_level]}>
-                                    {rec.urgency_level} PRIORITY
-                                  </Badge>
-                                </div>
-                                
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                  <div>
-                                    <span className="text-gray-600">Current Stock:</span>
-                                    <div className="font-medium">{rec.current_stock_bottles} bottles</div>
-                                    <div className="text-xs text-gray-500">
-                                      {formatCurrency(rec.current_stock_bottles * rec.bottle_rate)}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Monthly Avg Sales:</span>
-                                    <div className="font-medium">{formatCurrency(rec.avg_monthly_sales)}</div>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Recommended Order:</span>
-                                    <div className="font-medium text-indigo-600 text-lg">
-                                      {rec.recommended_bottles} bottles
-                                    </div>
-                                    <div className="text-xs text-gray-500">
-                                      {formatCurrency(rec.recommended_bottles * rec.bottle_rate)}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Rate per bottle:</span>
-                                    <div className="font-medium">{formatCurrency(rec.bottle_rate)}</div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
                         </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recommendations Available</h3>
-                    <p className="text-gray-600">Upload sales data to generate smart demand recommendations</p>
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
