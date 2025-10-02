@@ -1,8 +1,8 @@
 {
-  "timestamp": "2025-10-02T02:15:04.939492",
-  "total_tests": 13,
-  "passed_tests": 12,
-  "success_rate": 92.3076923076923,
+  "timestamp": "2025-10-02T03:25:58.765005",
+  "total_tests": 16,
+  "passed_tests": 16,
+  "success_rate": 100.0,
   "test_results": [
     {
       "test": "API Root Endpoint",
@@ -16,8 +16,8 @@
     },
     {
       "test": "File Upload - Invalid File Type",
-      "success": false,
-      "details": "Status: 500"
+      "success": true,
+      "details": "Status: 400 - Correctly rejected invalid file type"
     },
     {
       "test": "Analytics Endpoint (multiplier=3.0)",
@@ -58,6 +58,21 @@
       "test": "Brands Endpoint",
       "success": true,
       "details": "Retrieved 5 brands"
+    },
+    {
+      "test": "Charts Data Endpoint",
+      "success": true,
+      "details": "Chart data counts: {'volume_leaders': 5, 'velocity_leaders': 5, 'revenue_leaders': 5, 'revenue_proportion': 5}"
+    },
+    {
+      "test": "Demand Recommendations Endpoint",
+      "success": true,
+      "details": "Retrieved 2 recommendations, Urgency distribution: {'MEDIUM': 1, 'LOW': 1}"
+    },
+    {
+      "test": "Excel Export Endpoint",
+      "success": true,
+      "details": "Excel file exported, size: 5076 bytes, proper download headers set"
     },
     {
       "test": "Analytics - No Data Handling",
