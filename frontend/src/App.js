@@ -974,7 +974,10 @@ function App() {
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                   <div>
                                     <span className="text-gray-600">Current Stock:</span>
-                                    <div className="font-medium">{formatCurrency(rec.current_stock)}</div>
+                                    <div className="font-medium">{rec.current_stock_bottles} bottles</div>
+                                    <div className="text-xs text-gray-500">
+                                      {formatCurrency(rec.current_stock_bottles * rec.bottle_rate)}
+                                    </div>
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Monthly Avg Sales:</span>
@@ -982,13 +985,16 @@ function App() {
                                   </div>
                                   <div>
                                     <span className="text-gray-600">Recommended Order:</span>
-                                    <div className="font-medium text-indigo-600">
-                                      {formatCurrency(rec.recommended_quantity)}
+                                    <div className="font-medium text-indigo-600 text-lg">
+                                      {rec.recommended_bottles} bottles
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {formatCurrency(rec.recommended_bottles * rec.bottle_rate)}
                                     </div>
                                   </div>
                                   <div>
-                                    <span className="text-gray-600">Target:</span>
-                                    <div className="font-medium">45 days stock</div>
+                                    <span className="text-gray-600">Rate per bottle:</span>
+                                    <div className="font-medium">{formatCurrency(rec.bottle_rate)}</div>
                                   </div>
                                 </div>
                               </div>
