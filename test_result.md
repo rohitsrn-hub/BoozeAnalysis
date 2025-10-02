@@ -22,7 +22,7 @@
 ##     file: "file_path.py"
 ##     stuck_count: 0
 ##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##         -working: true  # or false or "NA"
 ##         -agent: "main"  # or "testing" or "user"
@@ -35,7 +35,7 @@
 ##     file: "file_path.js"
 ##     stuck_count: 0
 ##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
+##     needs_retesting: true
 ##     status_history:
 ##         -working: true  # or false or "NA"
 ##         -agent: "main"  # or "testing" or "user"
@@ -111,7 +111,7 @@ backend:
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         -working: false
         -agent: "main"
@@ -130,7 +130,7 @@ frontend:
     file: "/app/frontend/src/App.js"
     stuck_count: 0
     priority: "low"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         -working: true
         -agent: "main"
