@@ -600,41 +600,39 @@ async def get_demand_recommendations():
         
         for record in liquor_records:
             brand_name = record['brand_name']
-            selling_rate = record['rate']
-            wholesale_rate = selling_rate * 0.9  # 10% lower than selling rate
+            selling_rate = record.get('selling_rate', record['rate'])
+            wholesale_rate = record.get('wholesale_rate', selling_rate * 0.9)
             current_stock_qty = record.get('current_stock_qty', 0)
-            monthly_sale_value = record['monthly_sale_value']
+            avg_daily_sales_qty = record.get('avg_daily_sales_qty', 0)
             stock_days = record['stock_available_days']
             
-            # Calculate recommended quantity based on sales velocity and stock position
-            if monthly_sale_value > 0 and selling_rate > 0:
-                # Estimate monthly quantity sold
-                estimated_monthly_qty = max(1, int(monthly_sale_value / selling_rate))
-                
-                # Target: maintain 45-60 days of stock
-                target_qty = int(estimated_monthly_qty * 1.5)  # 45 days worth
+            # Calculate recommended quantity based on actual sales data
+            if avg_daily_sales_qty > 0:
+                # Target: maintain 30-45 days of stock based on actual daily sales
+                target_days = 30  # Target stock for 30 days
+                target_qty = int(avg_daily_sales_qty * target_days)
                 
                 # Calculate recommended order quantity
                 recommended_qty = max(0, target_qty - current_stock_qty)
                 
                 # Determine urgency level based on days of stock remaining
-                if stock_days < 15:
+                if stock_days < 10:
                     urgency = "HIGH"
-                elif stock_days < 30:
+                elif stock_days < 20:
                     urgency = "MEDIUM"
-                elif stock_days < 45:
+                elif stock_days < 30:
                     urgency = "LOW"
                 else:
                     urgency = "NONE"
                 
                 # Only include items that need restocking
-                if urgency != "NONE" or recommended_qty > 0:
+                if urgency != "NONE" or recommended_qty > 5:  # Only recommend if qty > 5
                     recommendations.append(DemandRecommendation(
                         brand_name=brand_name,
                         selling_rate=selling_rate,
                         wholesale_rate=round(wholesale_rate, 2),
                         current_stock_qty=current_stock_qty,
-                        recommended_qty=recommended_qty,
+                        recommended_qty=min(recommended_qty, current_stock_qty * 2),  # Cap at 2x current stock
                         urgency_level=urgency
                     ))
         
