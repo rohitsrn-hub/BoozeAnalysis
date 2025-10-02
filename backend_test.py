@@ -392,6 +392,11 @@ class LiquorDashboardTester:
             self.test_analytics_endpoint()
             self.test_analytics_different_multipliers()
             self.test_brands_endpoint()
+            
+            # Test new chart features
+            self.test_charts_endpoint()
+            self.test_demand_recommendations_endpoint()
+            self.test_export_demand_list_endpoint()
         else:
             print("⚠️  Skipping analytics tests due to upload failure")
         
