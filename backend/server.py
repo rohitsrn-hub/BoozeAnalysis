@@ -273,7 +273,7 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             total_sales_qty = max(0, D1_stock - DL_stock)  # Stock reduction = sales
             
             # Calculate number of days between D1 and DL
-            days_between = max(1, len(valid_stock_values) - 1)
+            days_between = max(1, len(sorted_stock_values) - 1)
             
             # Calculate average daily sales
             avg_daily_sales_qty = total_sales_qty / days_between if days_between > 0 else 0
@@ -290,6 +290,9 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             
             # Stock availability in days
             stock_available_days = (DL_stock / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+            
+            print(f"  Calculations: Total sales={total_sales_qty}, Days={days_between}, Avg daily={avg_daily_sales_qty:.2f}")
+            print(f"  Monthly sales value={monthly_sales_value:.2f}, Stock ratio={stock_ratio:.2f}")
             
             brand_data = {
                 'brand_name': brand_name,
