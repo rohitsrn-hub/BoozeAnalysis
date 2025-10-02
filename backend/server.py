@@ -872,6 +872,7 @@ async def export_demand_list():
         total_quantity_in_stock = 0
         total_quantity_demanded = 0
         total_projected_monthly_sale = 0
+        total_cases_demanded = 0
         
         for rec in recommendations_data:
             # Get the original brand record to find the correct index and monthly sales
@@ -885,12 +886,17 @@ async def export_demand_list():
                 original_index = 'N/A'
                 projected_monthly_sale_qty = 0
             
+            # Calculate number of cases needed (1 case = 12 units, round up to get whole cases)
+            import math
+            cases_demanded = math.ceil(rec.recommended_qty / 12) if rec.recommended_qty > 0 else 0
+            
             # Calculate totals for the summary row
             wholesale_cost_for_demand = rec.wholesale_rate * rec.recommended_qty
             total_wholesale_cost += wholesale_cost_for_demand
             total_quantity_in_stock += rec.current_stock_qty
             total_quantity_demanded += rec.recommended_qty
             total_projected_monthly_sale += projected_monthly_sale_qty
+            total_cases_demanded += cases_demanded
             
             df_data.append({
                 'Index': original_index,
@@ -898,7 +904,8 @@ async def export_demand_list():
                 'Wholesale Rate': rec.wholesale_rate,
                 'Projected Monthly Sale (Qty)': int(round(projected_monthly_sale_qty, 0)),
                 'Quantity held in Stock': rec.current_stock_qty,
-                'Quantity to be Demanded': rec.recommended_qty
+                'Quantity to be Demanded': rec.recommended_qty,
+                'Number of Cases to be Demanded': cases_demanded
             })
         
         # Add total row
