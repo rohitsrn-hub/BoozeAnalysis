@@ -243,27 +243,27 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             brand_data = {
                 'brand_name': brand_name,
                 'product_id': f"ID_{index_num}",
-                'index_number': index_num,
-                'wholesale_rate': wholesale_rate,
-                'selling_rate': selling_rate,
-                'rate': selling_rate,  # For compatibility
-                'D1_date': D1_date,
-                'D1_stock': D1_stock,
-                'DL_date': DL_date,
-                'DL_stock': DL_stock,
-                'current_stock_qty': int(DL_stock),
-                'total_sales_qty': total_sales_qty,
-                'avg_daily_sales_qty': avg_daily_sales_qty,
-                'monthly_sales_qty': monthly_sales_qty,
-                'monthly_sale_value': monthly_sales_value,
-                'monthly_sale_qty': int(monthly_sales_qty),  # For compatibility
-                'stock_value_today': current_stock_value,
-                'stock_ratio': stock_ratio,
-                'stock_available_days': min(999, stock_available_days),
-                'avg_daily_sale': monthly_sales_value / 30,  # For compatibility
-                'stock_value_before': D1_stock * selling_rate,
+                'index_number': int(index_num),
+                'wholesale_rate': float(wholesale_rate),
+                'selling_rate': float(selling_rate),
+                'rate': float(selling_rate),  # For compatibility
+                'D1_date': str(D1_date),
+                'D1_stock': float(D1_stock),
+                'DL_date': str(DL_date),
+                'DL_stock': float(DL_stock),
+                'current_stock_qty': int(max(0, DL_stock)),
+                'total_sales_qty': float(total_sales_qty),
+                'avg_daily_sales_qty': float(avg_daily_sales_qty),
+                'monthly_sales_qty': float(monthly_sales_qty),
+                'monthly_sale_value': float(monthly_sales_value),
+                'monthly_sale_qty': int(max(0, monthly_sales_qty)),  # For compatibility
+                'stock_value_today': float(current_stock_value),
+                'stock_ratio': float(stock_ratio),
+                'stock_available_days': float(min(999, max(0, stock_available_days))),
+                'avg_daily_sale': float(monthly_sales_value / 30),  # For compatibility
+                'stock_value_before': float(D1_stock * selling_rate),
                 'daily_sales': daily_stock_data,
-                'days_analyzed': days_between,
+                'days_analyzed': int(max(1, days_between)),
             }
             
             liquor_data.append(brand_data)
