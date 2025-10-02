@@ -244,14 +244,30 @@ def parse_tabular_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
             print(f"  Final valid_stock_values: {valid_stock_values}")
             
             if not valid_stock_values:
+                print(f"  WARNING: No valid stock data found for {brand_name}")
                 continue  # Skip if no valid stock data
             
-            # Find D1 (first significant stock position) and DL (last stock position)
-            # D1: First date with meaningful stock (not the minimum, but first significant value)
+            # Find D1 and DL more intelligently
+            # D1: Look for first date with stock increase or first meaningful stock
             # DL: Last date with stock data
             
-            D1_date, D1_stock = valid_stock_values[0]  # First valid stock entry
-            DL_date, DL_stock = valid_stock_values[-1]  # Last valid stock entry
+            # Sort by date order (chronologically)
+            sorted_stock_values = sorted(valid_stock_values, key=lambda x: x[0])
+            
+            # Find D1: Look for stock increase pattern or use first entry
+            D1_date, D1_stock = sorted_stock_values[0]
+            DL_date, DL_stock = sorted_stock_values[-1]
+            
+            # Alternative D1 detection: find where stock increased significantly
+            for i in range(1, len(sorted_stock_values)):
+                prev_stock = sorted_stock_values[i-1][1]
+                curr_stock = sorted_stock_values[i][1]
+                if curr_stock > prev_stock * 1.1:  # 10% increase indicates new stock arrival
+                    D1_date, D1_stock = sorted_stock_values[i]
+                    print(f"  Found stock increase at {D1_date}: {prev_stock} -> {curr_stock}")
+                    break
+            
+            print(f"  D1: {D1_date} = {D1_stock}, DL: {DL_date} = {DL_stock}")
             
             # Calculate total sales between D1 and DL
             total_sales_qty = max(0, D1_stock - DL_stock)  # Stock reduction = sales
