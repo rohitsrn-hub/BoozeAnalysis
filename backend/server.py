@@ -59,7 +59,28 @@ class AnalyticsResponse(BaseModel):
 def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
     """Parse Excel file and return structured data"""
     try:
-        df = pd.read_excel(io.BytesIO(file_content))
+        # Try to read as Excel first
+        try:
+            df = pd.read_excel(io.BytesIO(file_content))
+        except Exception:
+            # If Excel fails, try CSV
+            try:
+                df = pd.read_csv(io.BytesIO(file_content))
+            except Exception as csv_error:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Unable to parse file. Please ensure it's a valid Excel or CSV file. Error: {str(csv_error)}"
+                )
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
+        
+        # Check if required columns exist
+        if 'Brand Name' not in df.columns:
+            raise HTTPException(
+                status_code=400, 
+                detail="Required column 'Brand Name' not found in the file. Please ensure your file has the correct structure."
+            )
         
         # Clean column names
         df.columns = df.columns.str.strip()
@@ -67,6 +88,9 @@ def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
         # Filter out summary rows (like 'Total')
         df = df[df['Brand Name'].notna()]
         df = df[~df['Brand Name'].str.contains('Total', na=False, case=False)]
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="No valid brand data found in the file after filtering")
         
         liquor_data = []
         
@@ -102,10 +126,16 @@ def parse_excel_data(file_content: bytes) -> List[Dict[str, Any]]:
                 logging.warning(f"Error parsing row for {row.get('Brand Name', 'Unknown')}: {e}")
                 continue
         
+        if not liquor_data:
+            raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
+        
         return liquor_data
     
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error parsing Excel file: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
 
 def calculate_overstocking(data: List[Dict], multiplier: float = 3.0) -> List[Dict]:
     """Calculate overstocking based on configurable multiplier"""
