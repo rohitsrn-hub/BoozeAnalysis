@@ -101,3 +101,48 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "I want you to refine the demand forecast excel sheet format. It should capture the index number of the brand name correctly, presently it is showing only serial numbers. it shud show the projected monthly sale also and give a total row as well"
+
+backend:
+  - task: "Enhanced demand forecast Excel export format"
+    implemented: true
+    working: false  # needs testing
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "Updated /export-demand-list endpoint to: 1) Use correct brand index numbers from original data instead of serial numbers, 2) Added 'Projected Monthly Sale' column, 3) Added total summary row with styling. Implementation complete but needs testing."
+
+frontend:
+  - task: "No frontend changes required for Excel export enhancement"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "No frontend changes needed - export function already works correctly, just backend export format enhanced."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Enhanced demand forecast Excel export format"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Enhanced the demand forecast Excel export to fix three key issues: 1) Now uses correct brand index numbers from original data instead of serial numbers, 2) Added projected monthly sale column, 3) Added formatted total row. The export now includes 6 columns: Index, Brand Name, Wholesale Rate, Projected Monthly Sale, Quantity in Stock, Quantity to be Demanded. Ready for backend testing."
