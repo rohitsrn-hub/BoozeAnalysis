@@ -9,7 +9,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Upload, TrendingUp, AlertTriangle, BarChart3, Package, DollarSign, Calendar, FileSpreadsheet } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Upload, TrendingUp, AlertTriangle, BarChart3, Package, DollarSign, Calendar, FileSpreadsheet, HelpCircle, Play, CheckCircle, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 
