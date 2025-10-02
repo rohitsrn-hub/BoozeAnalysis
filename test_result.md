@@ -119,6 +119,9 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "COMPREHENSIVE TESTING COMPLETED - All 3 key enhancements working perfectly: ✅ Uses original brand index numbers (101, 412, 578) not serial numbers (1,2,3), ✅ Projected Monthly Sale column present with valid data (173,485.72 total), ✅ Properly formatted total row with accurate calculations (Stock: 288, Demand: 62). Excel file structure validated: 6 columns in correct order, proper MIME type, download headers, and data integrity confirmed. All 18 backend tests passed (100% success rate)."
+        -working: false
+        -agent: "main"
+        -comment: "UPDATED DEMAND CALCULATION: Fixed 'Quantity to be Demanded' logic per user feedback. Now correctly calculates: Monthly Sales Quantity - Current Stock Quantity = Quantity to be Demanded (for next 30 days based on monthly sales pattern). Changed from daily*30 approach to direct monthly sales pattern. Also updated to show Projected Monthly Sale in quantity units instead of monetary value. Needs retesting."
 
 frontend:
   - task: "No frontend changes required for Excel export enhancement"
