@@ -1054,22 +1054,22 @@ function App() {
                         // Export calculation data as CSV for easy comparison
                         const csvContent = [
                           // Header row
-                          'Index,Brand Name,Calculated Wholesale Rate,Selling Rate,Calculated Avg Monthly Sale,Calculated Current Stock Value,Calculated Multiplier Value,D1 Date,D1 Stock,DL Date,DL Stock,Total Sales Qty,Avg Daily Sales,Days Analyzed,Stock Available Days',
+                          'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
                           // Data rows
                           ...calculationData.map(row => [
                             row.index,
                             `"${row.brand_name}"`,
+                            row.D1_stock,
+                            row.DL_stock,
+                            row.D1_date,
+                            row.DL_date,
                             row.calculated_wholesale_rate,
                             row.selling_rate,
+                            row.total_sales_qty.toFixed(2),
+                            row.avg_daily_sales_qty.toFixed(3),
                             row.calculated_avg_monthly_sale.toFixed(2),
                             row.calculated_current_stock_value.toFixed(2),
                             row.calculated_multiplier_value,
-                            row.D1_date,
-                            row.D1_stock,
-                            row.DL_date,
-                            row.DL_stock,
-                            row.total_sales_qty.toFixed(2),
-                            row.avg_daily_sales_qty.toFixed(3),
                             row.days_analyzed,
                             row.stock_available_days.toFixed(1)
                           ].join(','))
