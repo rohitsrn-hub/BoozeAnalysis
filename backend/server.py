@@ -753,14 +753,13 @@ async def get_demand_recommendations():
             avg_daily_sales_qty = record.get('avg_daily_sales_qty', 0)
             stock_days = record['stock_available_days']
             
-            # Calculate recommended quantity based on actual sales data
-            if avg_daily_sales_qty > 0:
-                # Target: maintain 30-45 days of stock based on actual daily sales
-                target_days = 30  # Target stock for 30 days
-                target_qty = int(avg_daily_sales_qty * target_days)
-                
-                # Calculate recommended order quantity
-                recommended_qty = max(0, target_qty - current_stock_qty)
+            # Calculate recommended quantity based on monthly sales pattern for next 30 days
+            monthly_sales_qty = record.get('monthly_sales_qty', record.get('monthly_sale_qty', 0))
+            
+            if monthly_sales_qty > 0:
+                # For next 30 days, we need monthly_sales_qty amount
+                # Calculate how much to order = Monthly requirement - Current stock
+                recommended_qty = max(0, monthly_sales_qty - current_stock_qty)
                 
                 # Determine urgency level based on days of stock remaining
                 if stock_days < 10:
