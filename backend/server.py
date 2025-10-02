@@ -41,6 +41,18 @@ class LiquorData(BaseModel):
     stock_value_before: float
     stock_value_today: float
     stock_ratio: float
+    # New fields for enhanced analysis
+    index_number: int = Field(default=0)
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    D1_date: str = Field(default="N/A")
+    D1_stock: float = Field(default=0.0)
+    DL_date: str = Field(default="N/A")
+    DL_stock: float = Field(default=0.0)
+    total_sales_qty: float = Field(default=0.0)
+    avg_daily_sales_qty: float = Field(default=0.0)
+    days_analyzed: int = Field(default=0)
+    current_stock_qty: int = Field(default=0)
     upload_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class OverstockConfig(BaseModel):
