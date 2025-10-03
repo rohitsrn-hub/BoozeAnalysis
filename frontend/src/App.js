@@ -186,6 +186,12 @@ function App() {
         // Handle other errors
         if (typeof detail === 'object') {
           errorMessage = detail.message || errorMessage;
+          
+          // Show additional suggestions if available
+          if (detail.suggestions && Array.isArray(detail.suggestions)) {
+            const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
+            errorMessage += `\n\nSuggestions:\n${suggestions}`;
+          }
         } else {
           errorMessage = detail;
         }
