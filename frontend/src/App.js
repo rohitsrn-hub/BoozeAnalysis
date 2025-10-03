@@ -174,19 +174,12 @@ function App() {
         
         // Handle duplicate date error specially
         if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
-          const duplicateDates = detail.duplicate_dates.join(', ');
-          
-          // Show a more user-friendly popup for duplicate dates
-          toast.error(
-            `❌ Duplicate Date Found!\n\nThe date(s) "${duplicateDates}" already exist in your database.\n\n✅ Solution: Upload data for a new date, or use "Full Monthly Data" to replace all existing data.`,
-            {
-              duration: 8000, // Show for 8 seconds
-              style: {
-                minWidth: '400px',
-                textAlign: 'left'
-              }
-            }
-          );
+          setDuplicateError({
+            duplicateDates: detail.duplicate_dates,
+            filename: detail.filename,
+            suggestion: detail.suggestion
+          });
+          setShowDuplicateDialog(true);
           return; // Exit early for duplicate date error
         }
         
