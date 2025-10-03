@@ -163,7 +163,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     print(f"Date columns BEFORE sorting: {date_columns}")
     
     def parse_date_column(col_name):
-        \"\"\"Parse date from column name to enable proper chronological sorting\"\"\"
+        """Parse date from column name to enable proper chronological sorting"""
         try:
             # Try common date formats in column names
             import re
