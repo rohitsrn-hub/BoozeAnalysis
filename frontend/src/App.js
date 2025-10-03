@@ -177,7 +177,8 @@ function App() {
           setDuplicateError({
             duplicateDates: detail.duplicate_dates,
             filename: detail.filename,
-            suggestion: detail.suggestion
+            suggestion: detail.suggestion,
+            existing_dates_found: detail.existing_dates_found || []
           });
           setShowDuplicateDialog(true);
           return; // Exit early for duplicate date error
