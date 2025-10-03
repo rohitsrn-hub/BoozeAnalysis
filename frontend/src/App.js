@@ -294,6 +294,12 @@ function App() {
     }
   };
 
+  // Handle manual refresh
+  const handleManualRefresh = async () => {
+    toast.info("Refreshing analytics...");
+    await fetchAnalytics(overstockMultiplier);
+  };
+
   // Handle demand forecast export
   const handleExportDemandList = async () => {
     try {
