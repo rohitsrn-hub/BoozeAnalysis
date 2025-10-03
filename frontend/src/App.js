@@ -101,7 +101,7 @@ function App() {
         setHasData(false);
         toast.error("No data found. Please upload liquor data first.");
       } else {
-        toast.error("Failed to fetch data");
+        toast.error(`Failed to fetch data: ${error.message}`);
       }
     } finally {
       setLoading(false);
