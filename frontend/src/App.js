@@ -468,6 +468,7 @@ function App() {
   // Initialize
   useEffect(() => {
     fetchAnalytics();
+    fetchUploadHistory();
   }, []);
 
   return (
