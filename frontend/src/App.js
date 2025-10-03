@@ -1027,7 +1027,7 @@ function App() {
                 <TabsTrigger 
                   value="overstocking" 
                   data-testid="overstocking-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-orange-50 border border-transparent data-[state=active]:border-orange-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 data-[state=active]:border-orange-300"
                 >
                   <AlertTriangle className="w-4 h-4" />
                   <span>Alerts</span>
