@@ -661,6 +661,55 @@ function App() {
                     </div>
                   </DialogContent>
                 </Dialog>
+
+                {/* Duplicate Date Error Dialog */}
+                <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center space-x-2 text-orange-600">
+                        <AlertTriangle className="w-5 h-5" />
+                        <span>Duplicate Date Detected</span>
+                      </DialogTitle>
+                      <DialogDescription>
+                        The uploaded file contains dates that already exist in your database
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    {duplicateError && (
+                      <div className="mt-4 space-y-4">
+                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                          <h4 className="font-semibold text-orange-900 mb-2">📅 Duplicate Dates Found:</h4>
+                          <div className="text-sm text-orange-800">
+                            <div className="font-medium">File: {duplicateError.filename}</div>
+                            <div className="mt-1">Dates: <span className="font-mono bg-white px-1 rounded">{duplicateError.duplicateDates.join(', ')}</span></div>
+                          </div>
+                        </div>
+                        
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <h4 className="font-semibold text-blue-900 mb-2">💡 Solutions:</h4>
+                          <ul className="text-sm text-blue-800 space-y-1">
+                            <li>• Upload data for a <strong>new date</strong> instead</li>
+                            <li>• Use <strong>"Full Monthly Data"</strong> to replace all existing data</li>
+                            <li>• Check your Excel file has the correct date columns</li>
+                          </ul>
+                        </div>
+                        
+                        <div className="flex justify-end space-x-2 pt-4">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowDuplicateDialog(false);
+                              setDuplicateError(null);
+                            }}
+                            data-testid="duplicate-dialog-ok-btn"
+                          >
+                            Got it
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </div>
 
               <div className="flex flex-col lg:flex-row items-end lg:items-center space-y-2 lg:space-y-0 lg:space-x-4">
