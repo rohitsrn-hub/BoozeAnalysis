@@ -159,16 +159,15 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 # Sort dates chronologically
                 date_columns.append(col)
     
-    # Sort date columns chronologically (proper date sorting, not alphabetical)
-    print(f"Date columns BEFORE sorting: {date_columns}")
+    # Filter and sort date columns properly 
+    print(f"Date columns BEFORE filtering: {date_columns}")
     
     def parse_date_column(col_name):
-        """Parse date from column name to enable proper chronological sorting"""
+        """Parse date from column name - return None if invalid"""
         try:
             import re
             from datetime import datetime
             
-            # Clean the column name and look for date pattern
             col_clean = str(col_name).strip()
             
             # Primary pattern: day-month-year (20-Sep-25, 01-Oct-25, etc.)
@@ -176,34 +175,47 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             if match:
                 day, month_name, year_suffix = match.groups()
                 
-                # Handle year - default to 2025 if not specified or if it's just extra numbers
-                if not year_suffix or len(year_suffix) < 2:
+                # Handle year - be strict about valid years
+                if not year_suffix:
                     year = '2025'
-                elif len(year_suffix) == 2:
+                elif len(year_suffix) == 2 and year_suffix.isdigit():
                     year = f"20{year_suffix}"  # 25 -> 2025
+                elif len(year_suffix) == 4 and year_suffix.isdigit():
+                    year = year_suffix
                 else:
-                    year = year_suffix[:4]  # Take first 4 digits
+                    # Invalid year format, skip this column
+                    print(f"Skipping invalid date column: '{col_name}' (bad year: '{year_suffix}')")
+                    return None
                 
                 try:
                     parsed_date = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
-                    print(f"Parsed '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    print(f"Parsed valid date: '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
                     return parsed_date
-                except ValueError:
-                    print(f"Failed to parse date components: day={day}, month={month_name}, year={year}")
-                    pass
-            
-            # If primary pattern fails, try to extract any date-like info
-            print(f"Could not parse date column: '{col_name}' - assigning default")
-            
+                except ValueError as e:
+                    print(f"Skipping unparseable date: '{col_name}' (error: {e})")
+                    return None
+            else:
+                print(f"Skipping non-date column: '{col_name}' (no date pattern found)")
+                return None
+                
         except Exception as e:
             print(f"Exception parsing '{col_name}': {e}")
-        
-        # If all parsing fails, return a very early date to put it at the beginning
-        return datetime(1900, 1, 1)
+            return None
     
-    # Sort by actual date, not alphabetically
-    date_columns.sort(key=parse_date_column)
-    print(f"Date columns AFTER proper date sorting: {date_columns}")
+    # Filter out invalid date columns and sort the valid ones
+    valid_date_columns = []
+    for col in date_columns:
+        parsed_date = parse_date_column(col)
+        if parsed_date is not None:
+            valid_date_columns.append((col, parsed_date))
+    
+    # Sort by parsed date
+    valid_date_columns.sort(key=lambda x: x[1])
+    
+    # Extract just the column names in correct order
+    date_columns = [col for col, date in valid_date_columns]
+    
+    print(f"Valid date columns AFTER filtering and sorting: {date_columns}")
     
     print(f"Detected columns - Brand: {brand_col}, Index: {index_col}, Wholesale: {wholesale_rate_col}, Selling: {selling_rate_col}")
     print(f"Date columns found: {date_columns}")
