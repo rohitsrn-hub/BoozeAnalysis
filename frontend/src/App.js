@@ -1019,7 +1019,7 @@ function App() {
                 <TabsTrigger 
                   value="sales-trends" 
                   data-testid="sales-trends-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-green-50 border border-transparent data-[state=active]:border-green-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 data-[state=active]:border-green-300"
                 >
                   <TrendingUp className="w-4 h-4" />
                   <span>Trends</span>
