@@ -165,15 +165,39 @@ def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> 
                 df_headerless = pd.read_excel(io.BytesIO(file_content), header=None)
                 return parse_list_format(df_headerless)
                 
-        except Exception:
-            # If Excel fails, try CSV
+        except Exception as excel_error:
+            # If Excel fails, try CSV only if it's likely a CSV file (not binary Excel)
             try:
-                df = pd.read_csv(io.BytesIO(file_content))
+                # Try to decode as text first to check if it's a CSV
+                file_content_str = file_content.decode('utf-8')
+                
+                # If decoding succeeds, it might be a CSV file
+                df = pd.read_csv(io.StringIO(file_content_str))
                 if len(df.columns) >= 3 and any(col.lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
                     return parse_tabular_format(df, upload_type)
                 else:
-                    df_headerless = pd.read_csv(io.BytesIO(file_content), header=None)
+                    df_headerless = pd.read_csv(io.StringIO(file_content_str), header=None)
                     return parse_list_format(df_headerless)
+                    
+            except UnicodeDecodeError:
+                # If it can't be decoded as UTF-8, it's likely a binary Excel file with encoding issues
+                # Try different Excel reading approaches
+                try:
+                    # Try reading Excel without specifying engine
+                    df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
+                    return parse_tabular_format(df, upload_type)
+                except:
+                    try:
+                        # Try with xlrd engine for older Excel files
+                        df = pd.read_excel(io.BytesIO(file_content), engine='xlrd')
+                        return parse_tabular_format(df, upload_type)
+                    except:
+                        pass
+                        
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Unable to parse Excel file. The file may be corrupted or in an unsupported format. Original error: {str(excel_error)}"
+                )
             except Exception as csv_error:
                 raise HTTPException(
                     status_code=400, 
