@@ -919,13 +919,14 @@ function App() {
 
             {/* Main Dashboard Tabs */}
             <Tabs defaultValue="performance-charts" className="w-full">
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="performance-charts" data-testid="performance-charts-tab">Performance Charts</TabsTrigger>
                 <TabsTrigger value="sales-trends" data-testid="sales-trends-tab">Sales Trends</TabsTrigger>
                 <TabsTrigger value="overstocking" data-testid="overstocking-tab">Overstocking Alerts</TabsTrigger>
                 <TabsTrigger value="brand-performance" data-testid="brand-performance-tab">Top Brands</TabsTrigger>
                 <TabsTrigger value="recommendations" data-testid="recommendations-tab">Demand Forecast</TabsTrigger>
                 <TabsTrigger value="calculations" data-testid="calculations-tab">Calculation Verification</TabsTrigger>
+                <TabsTrigger value="database-view" data-testid="database-view-tab">Database View</TabsTrigger>
               </TabsList>
 
               {/* Performance Charts Tab */}
