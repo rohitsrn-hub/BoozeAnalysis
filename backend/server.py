@@ -160,7 +160,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 date_columns.append(col)
     
     # Sort date columns chronologically
+    print(f"Date columns BEFORE sorting: {date_columns}")
     date_columns.sort()
+    print(f"Date columns AFTER sorting: {date_columns}")
     
     print(f"Detected columns - Brand: {brand_col}, Index: {index_col}, Wholesale: {wholesale_rate_col}, Selling: {selling_rate_col}")
     print(f"Date columns found: {date_columns}")
