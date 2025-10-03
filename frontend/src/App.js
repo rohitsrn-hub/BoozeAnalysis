@@ -61,6 +61,17 @@ function App() {
       const databaseResponse = await axios.get(`${API}/database-view`);
       setDatabaseView(databaseResponse.data);
       
+      // Extract current D1/DL dates for header display
+      if (databaseResponse.data.summary) {
+        const { unique_d1_dates, unique_dl_dates } = databaseResponse.data.summary;
+        if (unique_d1_dates.length > 0 && unique_dl_dates.length > 0) {
+          setCurrentDateRange({
+            d1_date: unique_d1_dates[0],
+            dl_date: unique_dl_dates[0]
+          });
+        }
+      }
+      
       setHasData(true);
       toast.success("Analytics updated successfully");
     } catch (error) {
