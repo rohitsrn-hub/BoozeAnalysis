@@ -165,37 +165,40 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     def parse_date_column(col_name):
         """Parse date from column name to enable proper chronological sorting"""
         try:
-            # Try common date formats in column names
             import re
             from datetime import datetime
             
-            # Look for patterns like "20-Sep-25", "03-Oct-25", "Sep-20", "Oct-03"
-            date_patterns = [
-                r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})?',  # 20-Sep-25, 03-Oct-25
-                r'(\w{3})[-/](\d{1,2})[-/]?(\d{2,4})?',  # Sep-20, Oct-03
-                r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})',   # 20/09/25, 03/10/25
-            ]
+            # Clean the column name and look for date pattern
+            col_clean = str(col_name).strip()
             
-            for pattern in date_patterns:
-                match = re.search(pattern, col_name, re.IGNORECASE)
-                if match:
-                    groups = match.groups()
-                    
-                    # Handle different formats
-                    if groups[1].isdigit():  # Format: day-month-year
-                        day, month, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
-                        return datetime.strptime(f"{day}-{month}-{year}", "%d-%m-%Y")
-                    else:  # Format: day-monthname or monthname-day
-                        if groups[0].isdigit():  # day-monthname-year
-                            day, month_name, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
-                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
-                        else:  # monthname-day-year
-                            month_name, day, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
-                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
-        except:
-            pass
+            # Primary pattern: day-month-year (20-Sep-25, 01-Oct-25, etc.)
+            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', col_clean, re.IGNORECASE)
+            if match:
+                day, month_name, year_suffix = match.groups()
+                
+                # Handle year - default to 2025 if not specified or if it's just extra numbers
+                if not year_suffix or len(year_suffix) < 2:
+                    year = '2025'
+                elif len(year_suffix) == 2:
+                    year = f"20{year_suffix}"  # 25 -> 2025
+                else:
+                    year = year_suffix[:4]  # Take first 4 digits
+                
+                try:
+                    parsed_date = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                    print(f"Parsed '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError:
+                    print(f"Failed to parse date components: day={day}, month={month_name}, year={year}")
+                    pass
+            
+            # If primary pattern fails, try to extract any date-like info
+            print(f"Could not parse date column: '{col_name}' - assigning default")
+            
+        except Exception as e:
+            print(f"Exception parsing '{col_name}': {e}")
         
-        # If parsing fails, return a default date for this column
+        # If all parsing fails, return a very early date to put it at the beginning
         return datetime(1900, 1, 1)
     
     # Sort by actual date, not alphabetically
