@@ -245,10 +245,51 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
             index_col = col
         else:
-            # Check if column represents a date (contains date patterns)
+            # Check if column represents a date (more flexible detection)
+            is_date_column = False
+            
+            # Method 1: Check for month names (original logic)
             if any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
-                # Sort dates chronologically
+                is_date_column = True
+            
+            # Method 2: Check for date patterns using regex
+            import re
+            date_patterns = [
+                r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',     # 20/09/25, 03-10-25
+                r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}',      # 20-Sep-25, 03-Oct-25  
+                r'\w{3}[-/]\d{1,2}[-/]?\d{0,4}',      # Sep-20-25, Oct-03-25
+                r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',       # 2025-09-20, 2025-10-03
+                r'\d{1,2}\s+\w+\s+\d{2,4}',          # 20 Sep 25, 03 Oct 25
+            ]
+            
+            for pattern in date_patterns:
+                if re.search(pattern, col_str, re.IGNORECASE):
+                    is_date_column = True
+                    break
+            
+            # Method 3: Check for date-like keywords
+            date_keywords = ['date', 'day', 'month', 'year', 'time', 'period']
+            if any(keyword in col_lower for keyword in date_keywords):
+                is_date_column = True
+            
+            # Method 4: If column contains only numbers, it might be dates
+            # Try to parse the first non-empty cell to see if it's a date-like number
+            if not is_date_column and col in df.columns:
+                try:
+                    first_values = df[col].dropna().head(3)
+                    for val in first_values:
+                        val_str = str(val).strip()
+                        # Check if it looks like a date number (e.g., 44520 for Excel date serial)
+                        if val_str.replace('.', '').isdigit() and len(val_str) >= 4:
+                            # Might be Excel date serial number or similar
+                            is_date_column = True
+                            break
+                except:
+                    pass
+            
+            if is_date_column:
                 date_columns.append(col)
+                print(f"✅ Detected date column: '{col}'")
     
     # Filter and sort date columns properly 
     print(f"Date columns BEFORE filtering: {date_columns}")
