@@ -68,7 +68,122 @@ function App() {
     }
   };
 
-  // Handle file upload
+  // Fetch upload history
+  const fetchUploadHistory = async () => {
+    try {
+      const response = await axios.get(`${API}/upload-history`);
+      setUploadHistory(response.data);
+    } catch (error) {
+      console.error("Error fetching upload history:", error);
+      toast.error("Failed to fetch upload history");
+    }
+  };
+
+  // Handle full monthly data upload
+  const handleFullMonthlyUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-full-monthly-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Successfully uploaded full monthly data: ${response.data.total_records} records`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading full monthly data:", error);
+      
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle today's data upload
+  const handleTodaysDataUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-todays-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading today's data:", error);
+      
+      let errorMessage = "Failed to upload today's data";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle file upload (legacy - keeping for backward compatibility)
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
