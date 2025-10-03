@@ -32,6 +32,7 @@ function App() {
   const [showUploadHistory, setShowUploadHistory] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [duplicateError, setDuplicateError] = useState(null);
+  const [databaseView, setDatabaseView] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Fetch all data
