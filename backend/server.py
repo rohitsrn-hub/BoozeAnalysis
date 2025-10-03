@@ -239,16 +239,16 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     # D1: ALWAYS First date column in Excel sheet
     # DL: ALWAYS Last date column in Excel sheet
     
-    sorted_dates = sorted(date_columns)
-    print(f"All sorted dates: {sorted_dates}")
+    if not date_columns:
+        raise HTTPException(status_code=400, detail="No valid date columns found in the Excel file")
     
-    # D1 = First date column (e.g., 20-Sep)
-    global_D1_date = sorted_dates[0]
-    print(f"*** D1 (First Date Column): {global_D1_date} ***")
+    # D1 = First valid date column (e.g., 20-Sep)
+    global_D1_date = date_columns[0]
+    print(f"*** D1 (First Valid Date Column): {global_D1_date} ***")
     
-    # DL = Last date column (e.g., 03-Oct) 
-    global_DL_date = sorted_dates[-1]
-    print(f"*** DL (Last Date Column): {global_DL_date} ***")
+    # DL = Last valid date column (e.g., 03-Oct) 
+    global_DL_date = date_columns[-1]
+    print(f"*** DL (Last Valid Date Column): {global_DL_date} ***")
     
     # STEP 2: Process each brand with the SIMPLE D1 and DL logic
     liquor_data = []
