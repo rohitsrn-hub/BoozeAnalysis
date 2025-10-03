@@ -1168,7 +1168,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
 async def get_upload_history():
     """Get history of all uploaded files"""
     try:
-        upload_records = await db.upload_history.find().sort("upload_timestamp", -1).to_list(100)
+        upload_records = await db.upload_history.find().sort("upload_timestamp", -1).to_list(1000)
         
         return [
             {
