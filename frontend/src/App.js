@@ -1571,6 +1571,197 @@ function App() {
                 )}
               </TabsContent>
 
+              {/* Database View Tab */}
+              <TabsContent value="database-view" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Database View</h2>
+                    <p className="text-gray-600">Complete view of raw database data for debugging and transparency</p>
+                  </div>
+                  {databaseView && databaseView.data && (
+                    <Button
+                      onClick={() => {
+                        // Export database view as JSON
+                        const dataStr = JSON.stringify(databaseView.data, null, 2);
+                        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(dataBlob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `database_export_${new Date().toISOString().split('T')[0]}.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("Database exported as JSON file!");
+                      }}
+                      variant="outline"
+                      data-testid="export-database-btn"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export JSON
+                    </Button>
+                  )}
+                </div>
+
+                {databaseView ? (
+                  <div className="space-y-6">
+                    {/* Database Summary */}
+                    <Card data-testid="database-summary">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Database className="w-5 h-5 text-blue-600" />
+                          <span>Database Summary</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center p-4 bg-blue-50 rounded-lg">
+                            <div className="text-2xl font-bold text-blue-600">{databaseView.total_records}</div>
+                            <div className="text-sm text-blue-800">Total Records</div>
+                          </div>
+                          <div className="text-center p-4 bg-green-50 rounded-lg">
+                            <div className="text-2xl font-bold text-green-600">{databaseView.summary?.unique_d1_dates?.length || 0}</div>
+                            <div className="text-sm text-green-800">D1 Dates</div>
+                          </div>
+                          <div className="text-center p-4 bg-purple-50 rounded-lg">
+                            <div className="text-2xl font-bold text-purple-600">{databaseView.summary?.unique_dl_dates?.length || 0}</div>
+                            <div className="text-sm text-purple-800">DL Dates</div>
+                          </div>
+                          <div className="text-center p-4 bg-orange-50 rounded-lg">
+                            <div className="text-2xl font-bold text-orange-600">{databaseView.summary?.unique_daily_sales_dates?.length || 0}</div>
+                            <div className="text-sm text-orange-800">Daily Sales Dates</div>
+                          </div>
+                        </div>
+
+                        {databaseView.summary && (
+                          <div className="mt-6 grid md:grid-cols-2 gap-6">
+                            <div className="p-4 bg-gray-50 rounded-lg">
+                              <h4 className="font-semibold text-gray-900 mb-2">Date Information</h4>
+                              <div className="text-sm space-y-1">
+                                {databaseView.summary.unique_d1_dates && (
+                                  <div>
+                                    <span className="font-medium text-blue-600">D1 Dates:</span>
+                                    <span className="ml-2">{databaseView.summary.unique_d1_dates.join(', ')}</span>
+                                  </div>
+                                )}
+                                {databaseView.summary.unique_dl_dates && (
+                                  <div>
+                                    <span className="font-medium text-purple-600">DL Dates:</span>
+                                    <span className="ml-2">{databaseView.summary.unique_dl_dates.join(', ')}</span>
+                                  </div>
+                                )}
+                                {databaseView.summary.date_range && (
+                                  <div>
+                                    <span className="font-medium text-gray-600">Date Range:</span>
+                                    <span className="ml-2">{databaseView.summary.date_range}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="p-4 bg-gray-50 rounded-lg">
+                              <h4 className="font-semibold text-gray-900 mb-2">Record Fields</h4>
+                              <div className="text-xs text-gray-600">
+                                {databaseView.summary.sample_record_fields && databaseView.summary.sample_record_fields.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {databaseView.summary.sample_record_fields.map((field, idx) => (
+                                      <span key={idx} className="bg-white px-2 py-1 rounded border text-xs">
+                                        {field}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  "No fields available"
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Raw Data Table */}
+                    {databaseView.data && databaseView.data.length > 0 ? (
+                      <Card data-testid="raw-database-table">
+                        <CardHeader>
+                          <CardTitle>Raw Database Records</CardTitle>
+                          <CardDescription>
+                            Showing all {databaseView.total_records} records from the database
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-gray-50">
+                                  <th className="text-left p-2 font-semibold">Index</th>
+                                  <th className="text-left p-2 font-semibold">Brand Name</th>
+                                  <th className="text-left p-2 font-semibold">D1 Date</th>
+                                  <th className="text-left p-2 font-semibold">D1 Stock</th>
+                                  <th className="text-left p-2 font-semibold">DL Date</th>
+                                  <th className="text-left p-2 font-semibold">DL Stock</th>
+                                  <th className="text-left p-2 font-semibold">Days Analyzed</th>
+                                  <th className="text-left p-2 font-semibold">Selling Rate</th>
+                                  <th className="text-left p-2 font-semibold">Monthly Sale Value</th>
+                                  <th className="text-left p-2 font-semibold">Current Stock Value</th>
+                                  <th className="text-left p-2 font-semibold">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {databaseView.data.map((record, index) => (
+                                  <tr key={index} className="border-b hover:bg-gray-50" data-testid={`db-row-${index}`}>
+                                    <td className="p-2 font-medium">{record.index_number || 'N/A'}</td>
+                                    <td className="p-2 max-w-xs truncate" title={record.brand_name}>{record.brand_name}</td>
+                                    <td className="p-2 text-blue-600 text-xs">{record.D1_date || 'N/A'}</td>
+                                    <td className="p-2 font-medium text-indigo-600">{record.D1_stock || 0}</td>
+                                    <td className="p-2 text-purple-600 text-xs">{record.DL_date || 'N/A'}</td>
+                                    <td className="p-2 font-medium text-orange-600">{record.DL_stock || 0}</td>
+                                    <td className="p-2 font-medium text-green-600">{record.days_analyzed || 'N/A'}</td>
+                                    <td className="p-2">{record.selling_rate ? formatCurrency(record.selling_rate) : 'N/A'}</td>
+                                    <td className="p-2 font-medium text-blue-600">{record.monthly_sale_value ? formatCurrency(record.monthly_sale_value) : 'N/A'}</td>
+                                    <td className="p-2 font-medium text-green-600">{record.stock_value_today ? formatCurrency(record.stock_value_today) : 'N/A'}</td>
+                                    <td className="p-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          // Show detailed record in JSON format
+                                          const detailStr = JSON.stringify(record, null, 2);
+                                          navigator.clipboard.writeText(detailStr);
+                                          toast.success(`${record.brand_name} record copied to clipboard!`);
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        Copy JSON
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {databaseView.data.length > 10 && (
+                            <div className="mt-4 text-center text-sm text-gray-600">
+                              Showing all {databaseView.data.length} records
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Database className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Database Records</h3>
+                        <p className="text-gray-600">Upload liquor data to populate the database</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading database view...</p>
+                  </div>
+                )}
+              </TabsContent>
+
             </Tabs>
           </div>
         ) : null}
