@@ -56,6 +56,10 @@ function App() {
       const calculationResponse = await axios.get(`${API}/calculation-details`);
       setCalculationData(calculationResponse.data);
       
+      // Fetch database view
+      const databaseResponse = await axios.get(`${API}/database-view`);
+      setDatabaseView(databaseResponse.data);
+      
       setHasData(true);
       toast.success("Analytics updated successfully");
     } catch (error) {
