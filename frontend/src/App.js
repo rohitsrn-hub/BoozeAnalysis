@@ -1007,14 +1007,63 @@ function App() {
 
             {/* Main Dashboard Tabs */}
             <Tabs defaultValue="performance-charts" className="w-full">
-              <TabsList className="grid w-full grid-cols-7">
-                <TabsTrigger value="performance-charts" data-testid="performance-charts-tab">Performance Charts</TabsTrigger>
-                <TabsTrigger value="sales-trends" data-testid="sales-trends-tab">Sales Trends</TabsTrigger>
-                <TabsTrigger value="overstocking" data-testid="overstocking-tab">Overstocking Alerts</TabsTrigger>
-                <TabsTrigger value="brand-performance" data-testid="brand-performance-tab">Top Brands</TabsTrigger>
-                <TabsTrigger value="recommendations" data-testid="recommendations-tab">Demand Forecast</TabsTrigger>
-                <TabsTrigger value="calculations" data-testid="calculations-tab">Calculation Verification</TabsTrigger>
-                <TabsTrigger value="database-view" data-testid="database-view-tab">Database View</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-7 gap-2 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-100 rounded-xl shadow-lg">
+                <TabsTrigger 
+                  value="performance-charts" 
+                  data-testid="performance-charts-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-blue-50 border border-transparent data-[state=active]:border-blue-300"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Charts</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="sales-trends" 
+                  data-testid="sales-trends-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-green-50 border border-transparent data-[state=active]:border-green-300"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Trends</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="overstocking" 
+                  data-testid="overstocking-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-orange-50 border border-transparent data-[state=active]:border-orange-300"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Alerts</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="brand-performance" 
+                  data-testid="brand-performance-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-purple-50 border border-transparent data-[state=active]:border-purple-300"
+                >
+                  <Crown className="w-4 h-4" />
+                  <span>Top Brands</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="recommendations" 
+                  data-testid="recommendations-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-indigo-50 border border-transparent data-[state=active]:border-indigo-300"
+                >
+                  <Target className="w-4 h-4" />
+                  <span>Forecast</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="calculations" 
+                  data-testid="calculations-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-teal-50 border border-transparent data-[state=active]:border-teal-300"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Verify</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="database-view" 
+                  data-testid="database-view-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-gray-50 border border-transparent data-[state=active]:border-gray-400"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>Database</span>
+                </TabsTrigger>
               </TabsList>
 
               {/* Performance Charts Tab */}
