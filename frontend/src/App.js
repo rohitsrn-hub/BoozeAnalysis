@@ -23,11 +23,13 @@ function App() {
   const [chartsData, setChartsData] = useState(null);
   const [demandData, setDemandData] = useState(null);
   const [calculationData, setCalculationData] = useState(null);
+  const [uploadHistory, setUploadHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [overstockMultiplier, setOverstockMultiplier] = useState(3.0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [hasData, setHasData] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showUploadHistory, setShowUploadHistory] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Fetch all data
