@@ -1051,7 +1051,7 @@ function App() {
                 <TabsTrigger 
                   value="calculations" 
                   data-testid="calculations-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-teal-50 border border-transparent data-[state=active]:border-teal-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-teal-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-teal-100 text-teal-700 hover:bg-teal-200 border border-teal-200 data-[state=active]:border-teal-300"
                 >
                   <CheckCircle className="w-4 h-4" />
                   <span>Verify</span>
