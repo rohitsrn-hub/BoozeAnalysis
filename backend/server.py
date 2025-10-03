@@ -159,10 +159,48 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 # Sort dates chronologically
                 date_columns.append(col)
     
-    # Sort date columns chronologically
+    # Sort date columns chronologically (proper date sorting, not alphabetical)
     print(f"Date columns BEFORE sorting: {date_columns}")
-    date_columns.sort()
-    print(f"Date columns AFTER sorting: {date_columns}")
+    
+    def parse_date_column(col_name):
+        \"\"\"Parse date from column name to enable proper chronological sorting\"\"\"
+        try:
+            # Try common date formats in column names
+            import re
+            from datetime import datetime
+            
+            # Look for patterns like "20-Sep-25", "03-Oct-25", "Sep-20", "Oct-03"
+            date_patterns = [
+                r'(\\d{1,2})[-/](\\w{3})[-/]?(\\d{2,4})?',  # 20-Sep-25, 03-Oct-25
+                r'(\\w{3})[-/](\\d{1,2})[-/]?(\\d{2,4})?',  # Sep-20, Oct-03
+                r'(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})',   # 20/09/25, 03/10/25
+            ]
+            
+            for pattern in date_patterns:
+                match = re.search(pattern, col_name, re.IGNORECASE)
+                if match:
+                    groups = match.groups()
+                    
+                    # Handle different formats
+                    if groups[1].isdigit():  # Format: day-month-year
+                        day, month, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
+                        return datetime.strptime(f"{day}-{month}-{year}", "%d-%m-%Y")
+                    else:  # Format: day-monthname or monthname-day
+                        if groups[0].isdigit():  # day-monthname-year
+                            day, month_name, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
+                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                        else:  # monthname-day-year
+                            month_name, day, year = groups[0], groups[1], groups[2] if groups[2] else '2025'
+                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+        except:
+            pass
+        
+        # If parsing fails, return a default date for this column
+        return datetime(1900, 1, 1)
+    
+    # Sort by actual date, not alphabetically
+    date_columns.sort(key=parse_date_column)
+    print(f"Date columns AFTER proper date sorting: {date_columns}")
     
     print(f"Detected columns - Brand: {brand_col}, Index: {index_col}, Wholesale: {wholesale_rate_col}, Selling: {selling_rate_col}")
     print(f"Date columns found: {date_columns}")
