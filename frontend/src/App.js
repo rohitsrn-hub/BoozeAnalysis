@@ -426,12 +426,90 @@ function App() {
                 </DialogContent>
               </Dialog>
 
-              {/* Overstock Multiplier Configuration */}
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="multiplier" className="text-sm font-medium text-gray-700">
-                  Overstock Multiplier:
-                </Label>
+                {/* Upload History Button */}
+                <Dialog open={showUploadHistory} onOpenChange={setShowUploadHistory}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="bg-white hover:bg-gray-50 text-xs"
+                      data-testid="upload-history-btn"
+                    >
+                      <History className="w-3 h-3 mr-1" />
+                      History
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center space-x-2">
+                        <History className="w-5 h-5 text-indigo-600" />
+                        <span>Upload History</span>
+                      </DialogTitle>
+                      <DialogDescription>
+                        Track all uploaded Excel files and data changes
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="mt-6">
+                      {uploadHistory.length > 0 ? (
+                        <div className="space-y-4">
+                          {uploadHistory.map((upload, index) => (
+                            <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-3">
+                                  <div className={`p-2 rounded-lg ${
+                                    upload.upload_type === 'full_monthly' 
+                                      ? 'bg-green-100 text-green-600'
+                                      : 'bg-orange-100 text-orange-600'
+                                  }`}>
+                                    {upload.upload_type === 'full_monthly' ? <Database className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">{upload.filename}</h4>
+                                    <p className="text-sm text-gray-600">
+                                      {upload.upload_type === 'full_monthly' ? 'Full Monthly Data' : "Today's Data Update"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
+                                  {upload.records_count} records
+                                </Badge>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
+                                <div>
+                                  <span className="font-medium">Uploaded:</span>
+                                  <div>{formatDate(upload.upload_timestamp)}</div>
+                                </div>
+                                <div>
+                                  <span className="font-medium">File Size:</span>
+                                  <div>{formatFileSize(upload.file_size)}</div>
+                                </div>
+                                <div>
+                                  <span className="font-medium">Uploaded By:</span>
+                                  <div>{upload.uploaded_by}</div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Upload History</h3>
+                          <p className="text-gray-600">Upload your first Excel file to see history</p>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div className="flex flex-col lg:flex-row items-end lg:items-center space-y-2 lg:space-y-0 lg:space-x-4">
+                {/* Overstock Multiplier Configuration */}
                 <div className="flex items-center space-x-2">
+                  <Label htmlFor="multiplier" className="text-xs font-medium text-gray-700">
+                    Overstock Multiplier:
+                  </Label>
                   <Input
                     id="multiplier"
                     type="number"
@@ -440,7 +518,7 @@ function App() {
                     max="10"
                     value={overstockMultiplier}
                     onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
-                    className="w-20"
+                    className="w-16 text-xs"
                     data-testid="overstock-multiplier-input"
                   />
                   <Button
@@ -449,37 +527,66 @@ function App() {
                     variant="outline"
                     disabled={!hasData || loading}
                     data-testid="update-multiplier-btn"
+                    className="text-xs"
                   >
                     Update
                   </Button>
                 </div>
-              </div>
 
-              {/* File Upload */}
-              <div className="relative">
-                <Button 
-                  variant="default" 
-                  className="bg-indigo-600 hover:bg-indigo-700 cursor-pointer transition-all duration-200"
-                  disabled={loading}
-                  data-testid="upload-btn"
-                  onClick={() => {
-                    const fileInput = document.getElementById('file-upload');
-                    if (fileInput) {
-                      fileInput.click();
-                    }
-                  }}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {loading ? 'Processing...' : 'Upload Data'}
-                </Button>
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  data-testid="file-input"
-                />
+                {/* Upload Buttons */}
+                <div className="flex items-center space-x-2">
+                  {/* Full Monthly Data Upload */}
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 cursor-pointer transition-all duration-200 text-xs"
+                    disabled={loading}
+                    data-testid="upload-full-monthly-btn"
+                    onClick={() => {
+                      const fileInput = document.getElementById('full-monthly-upload');
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                  >
+                    <Database className="w-3 h-3 mr-1" />
+                    {loading ? 'Processing...' : 'Full Monthly'}
+                  </Button>
+                  <Input
+                    id="full-monthly-upload"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleFullMonthlyUpload}
+                    className="hidden"
+                    data-testid="full-monthly-file-input"
+                  />
+
+                  {/* Today's Data Upload */}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 cursor-pointer transition-all duration-200 text-xs"
+                    disabled={loading}
+                    data-testid="upload-todays-btn"
+                    onClick={() => {
+                      const fileInput = document.getElementById('todays-data-upload');
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    {loading ? 'Processing...' : "Today's Data"}
+                  </Button>
+                  <Input
+                    id="todays-data-upload"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleTodaysDataUpload}
+                    className="hidden"
+                    data-testid="todays-data-file-input"
+                  />
+                </div>
               </div>
             </div>
           </div>
