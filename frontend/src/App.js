@@ -1011,7 +1011,7 @@ function App() {
                 <TabsTrigger 
                   value="performance-charts" 
                   data-testid="performance-charts-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-blue-50 border border-transparent data-[state=active]:border-blue-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 data-[state=active]:border-blue-300"
                 >
                   <BarChart3 className="w-4 h-4" />
                   <span>Charts</span>
