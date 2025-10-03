@@ -62,35 +62,44 @@ function App() {
       setDatabaseView(databaseResponse.data);
       
       // Extract current D1/DL dates for header display from calculation data
-      if (calculationResponse.data && calculationResponse.data.length > 0) {
-        const firstRecord = calculationResponse.data[0];
-        if (firstRecord.D1_date && firstRecord.DL_date) {
-          // Format dates for display
-          const formatDateForDisplay = (dateStr) => {
-            try {
-              // Handle different date formats
-              if (dateStr.includes('T') || dateStr.includes('00:00:00')) {
-                // It's a full datetime string like "2025-10-04 00:00:00"
-                const date = new Date(dateStr);
-                const day = date.getDate().toString().padStart(2, '0');
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const month = months[date.getMonth()];
-                const year = date.getFullYear().toString().slice(-2);
-                return `${day}-${month}-${year}`;
-              } else {
-                // It's already in format like "20-Sep-25"
-                return dateStr;
+      try {
+        if (calculationResponse.data && calculationResponse.data.length > 0) {
+          const firstRecord = calculationResponse.data[0];
+          if (firstRecord.D1_date && firstRecord.DL_date) {
+            // Format dates for display
+            const formatDateForDisplay = (dateStr) => {
+              try {
+                if (!dateStr) return 'N/A';
+                
+                // Handle different date formats
+                if (dateStr.includes('T') || dateStr.includes('00:00:00')) {
+                  // It's a full datetime string like "2025-10-04 00:00:00"
+                  const date = new Date(dateStr);
+                  if (isNaN(date.getTime())) return dateStr; // Invalid date
+                  
+                  const day = date.getDate().toString().padStart(2, '0');
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  const month = months[date.getMonth()];
+                  const year = date.getFullYear().toString().slice(-2);
+                  return `${day}-${month}-${year}`;
+                } else {
+                  // It's already in format like "20-Sep-25"
+                  return dateStr;
+                }
+              } catch (e) {
+                console.warn('Error formatting date:', dateStr, e);
+                return dateStr; // Return as-is if parsing fails
               }
-            } catch (e) {
-              return dateStr; // Return as-is if parsing fails
-            }
-          };
+            };
 
-          setCurrentDateRange({
-            d1_date: formatDateForDisplay(firstRecord.D1_date),
-            dl_date: formatDateForDisplay(firstRecord.DL_date)
-          });
+            setCurrentDateRange({
+              d1_date: formatDateForDisplay(firstRecord.D1_date),
+              dl_date: formatDateForDisplay(firstRecord.DL_date)
+            });
+          }
         }
+      } catch (e) {
+        console.warn('Error extracting date range:', e);
       }
       
       setHasData(true);
