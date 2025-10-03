@@ -328,18 +328,19 @@ function App() {
   const handleManualRefresh = async () => {
     try {
       setLoading(true);
-      toast.info("Refreshing analytics...");
+      toast.info("Refreshing all data...");
       
       // Call backend refresh endpoint first
       await axios.post(`${API}/refresh-analytics`);
       
-      // Then fetch updated analytics
+      // Then fetch ALL updated data sources
       await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
       
-      toast.success("Analytics refreshed successfully!");
+      toast.success("All data refreshed successfully!");
     } catch (error) {
       console.error("Error refreshing analytics:", error);
-      toast.error("Failed to refresh analytics");
+      toast.error("Failed to refresh data");
     } finally {
       setLoading(false);
     }
