@@ -187,6 +187,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     # DL: ALWAYS Last date column in Excel sheet
     
     sorted_dates = sorted(date_columns)
+    print(f"All sorted dates: {sorted_dates}")
     
     # D1 = First date column (e.g., 20-Sep)
     global_D1_date = sorted_dates[0]
