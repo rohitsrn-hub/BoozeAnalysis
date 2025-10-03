@@ -485,7 +485,7 @@ function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
-                <p className="text-sm text-gray-600">Comprehensive sales analysis and inventory management</p>
+                <p className="text-sm text-gray-600">D1=First Date Column | DL=Last Date Column | CORRECTED Calculations</p>
               </div>
             </div>
             
