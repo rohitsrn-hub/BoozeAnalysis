@@ -150,6 +150,126 @@ async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], fil
         print(f"Warning: Could not validate dates for duplicate checking: {e}")
         # Don't block upload if date validation fails, just log the warning
 
+def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
+    """Parse today's stock data - extract new date column and stock values for appending"""
+    try:
+        # Read the Excel file
+        df = pd.read_excel(io.BytesIO(file_content))
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
+        
+        # Clean column names - handle non-string column names
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+        
+        # Find key columns
+        brand_col = None
+        index_col = None
+        new_date_col = None
+        
+        for col in df.columns:
+            col_str = str(col)
+            col_lower = col_str.lower().strip()
+            
+            if 'brand' in col_lower and 'name' in col_lower:
+                brand_col = col
+            elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
+                index_col = col
+            else:
+                # Check if this is the new date column (should be only one date column in today's data)
+                is_date_column = False
+                
+                # Method 1: Check for month names
+                if any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                    is_date_column = True
+                
+                # Method 2: Check for date patterns
+                import re
+                date_patterns = [
+                    r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',
+                    r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}',
+                    r'\w{3}[-/]\d{1,2}[-/]?\d{0,4}',
+                    r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',
+                ]
+                
+                for pattern in date_patterns:
+                    if re.search(pattern, col_str, re.IGNORECASE):
+                        is_date_column = True
+                        break
+                
+                if is_date_column and new_date_col is None:
+                    new_date_col = col
+                    print(f"✅ Detected today's date column: '{col}'")
+        
+        if not brand_col:
+            raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in today's data file")
+        
+        if not new_date_col:
+            raise HTTPException(status_code=400, detail="Could not find date column in today's data file")
+        
+        print(f"📊 Today's Data Column Detection:")
+        print(f"  - Brand column: {brand_col}")
+        print(f"  - Index column: {index_col}")
+        print(f"  - New date column: {new_date_col}")
+        
+        # Extract data for each brand
+        todays_data = {
+            'new_date_column': str(new_date_col),
+            'brands_data': {}
+        }
+        
+        # Filter out header rows
+        df = df[df[brand_col].notna()]
+        df = df[~df[brand_col].astype(str).str.contains('total|sum|^brand name$|^name$|^brand$', na=False, case=False)]
+        
+        for idx, row in df.iterrows():
+            try:
+                brand_name = str(row[brand_col]).strip()
+                if not brand_name or brand_name.lower() in ['nan', 'none', '']:
+                    continue
+                
+                # Get index number for matching
+                index_num = idx + 1
+                if index_col and pd.notna(row[index_col]):
+                    try:
+                        index_val = str(row[index_col]).strip()
+                        import re
+                        numeric_match = re.search(r'\d+', index_val)
+                        if numeric_match:
+                            index_num = int(numeric_match.group())
+                    except:
+                        pass
+                
+                # Get stock quantity for the new date
+                stock_qty = 0
+                try:
+                    if pd.notna(row[new_date_col]):
+                        stock_qty = float(row[new_date_col])
+                except:
+                    stock_qty = 0
+                
+                todays_data['brands_data'][brand_name] = {
+                    'index_number': index_num,
+                    'stock_qty': stock_qty
+                }
+                
+                print(f"  {brand_name} (Index: {index_num}): {stock_qty} units on {new_date_col}")
+                
+            except Exception as e:
+                print(f"Warning: Error parsing row for {brand_name}: {e}")
+                continue
+        
+        if not todays_data['brands_data']:
+            raise HTTPException(status_code=400, detail="No valid brand data found in today's file")
+        
+        print(f"✅ Successfully parsed today's data for {len(todays_data['brands_data'])} brands")
+        return todays_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error parsing today's data: {str(e)}")
+
 def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> List[Dict[str, Any]]:
     """Parse Excel file and return structured data - supports both tabular and list formats"""
     try:
