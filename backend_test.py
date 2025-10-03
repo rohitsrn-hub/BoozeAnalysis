@@ -172,46 +172,52 @@ class BackendTester:
         # First, get current analytics to see DL dates
         success, analytics_data, error = self.test_endpoint("GET", "/database-view", 200)
         
-        if success and isinstance(analytics_data, list) and len(analytics_data) > 0:
-            # Check if we have DL_date fields
-            sample_record = analytics_data[0]
-            dl_date = sample_record.get('DL_date')
-            
-            if dl_date:
-                self.log_test(
-                    "DL Date Verification", 
-                    "PASS", 
-                    f"DL dates are present in analytics",
-                    f"Sample DL_date: {dl_date}"
-                )
+        if success and isinstance(analytics_data, dict):
+            # database-view returns {"total_records": X, "data": [...]}
+            data_list = analytics_data.get('data', [])
+            if len(data_list) > 0:
+                # Check if we have DL_date fields
+                sample_record = data_list[0]
+                dl_date = sample_record.get('DL_date')
                 
-                # Also check calculation-details for DL date consistency
-                success2, calc_data, error2 = self.test_endpoint("GET", "/calculation-details", 200)
-                if success2 and isinstance(calc_data, list) and len(calc_data) > 0:
-                    calc_sample = calc_data[0]
-                    calc_dl_date = calc_sample.get('DL_date')
+                if dl_date:
+                    self.log_test(
+                        "DL Date Verification", 
+                        "PASS", 
+                        f"DL dates are present in analytics",
+                        f"Sample DL_date: {dl_date}"
+                    )
                     
-                    if calc_dl_date == dl_date:
-                        self.log_test(
-                            "DL Date Consistency", 
-                            "PASS", 
-                            "DL dates consistent across endpoints",
-                            f"Both show: {dl_date}"
-                        )
-                        return True
+                    # Also check calculation-details for DL date consistency
+                    success2, calc_data, error2 = self.test_endpoint("GET", "/calculation-details", 200)
+                    if success2 and isinstance(calc_data, list) and len(calc_data) > 0:
+                        calc_sample = calc_data[0]
+                        calc_dl_date = calc_sample.get('DL_date')
+                        
+                        if calc_dl_date == dl_date:
+                            self.log_test(
+                                "DL Date Consistency", 
+                                "PASS", 
+                                "DL dates consistent across endpoints",
+                                f"Both show: {dl_date}"
+                            )
+                            return True
+                        else:
+                            self.log_test(
+                                "DL Date Consistency", 
+                                "FAIL", 
+                                "DL dates inconsistent between endpoints",
+                                f"Database: {dl_date}, Calculations: {calc_dl_date}"
+                            )
+                            return False
                     else:
-                        self.log_test(
-                            "DL Date Consistency", 
-                            "FAIL", 
-                            "DL dates inconsistent between endpoints",
-                            f"Database: {dl_date}, Calculations: {calc_dl_date}"
-                        )
+                        self.log_test("DL Date Consistency", "FAIL", "Could not verify calculation details", error2)
                         return False
                 else:
-                    self.log_test("DL Date Consistency", "FAIL", "Could not verify calculation details", error2)
+                    self.log_test("DL Date Verification", "FAIL", "No DL_date found in analytics data", "DL dates may not be updating")
                     return False
             else:
-                self.log_test("DL Date Verification", "FAIL", "No DL_date found in analytics data", "DL dates may not be updating")
+                self.log_test("DL Date Verification", "FAIL", "No data records found", "Database may be empty")
                 return False
         else:
             self.log_test("DL Date Verification", "FAIL", "Could not retrieve analytics data", error)
