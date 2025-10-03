@@ -346,20 +346,21 @@ function App() {
               </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              {/* Help Guide */}
-              <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="bg-white hover:bg-gray-50"
-                    data-testid="help-guide-btn"
-                  >
-                    <HelpCircle className="w-4 h-4 mr-2" />
-                    Help Guide
-                  </Button>
-                </DialogTrigger>
+            <div className="flex flex-col lg:flex-row items-end lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
+              <div className="flex items-center space-x-2">
+                {/* Help Guide */}
+                <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="bg-white hover:bg-gray-50 text-xs"
+                      data-testid="help-guide-btn"
+                    >
+                      <HelpCircle className="w-3 h-3 mr-1" />
+                      Help
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">
