@@ -158,7 +158,7 @@ def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> 
             df = pd.read_excel(io.BytesIO(file_content))
             
             # Check if it looks like a tabular format (has typical column names)
-            if len(df.columns) >= 3 and any(col.lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+            if len(df.columns) >= 3 and any(str(col).lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
                 return parse_tabular_format(df, upload_type)
             else:
                 # Try headerless format
