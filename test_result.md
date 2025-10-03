@@ -101,3 +101,65 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  1. Fix 500 Internal Server Error during refresh caused by Pydantic validation error in DemandRecommendation model
+  2. Fix DL values not updating in frontend after "Today's Data" uploads  
+  3. Fix tab styling to have initial colors (currently only show colors when active/hover)
+
+backend:
+  - task: "Fix Pydantic validation error in DemandRecommendation model"
+    implemented: false
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "recommended_qty field expects int but receives float from calculation monthly_sales_qty - current_stock_qty"
+
+  - task: "Fix DL date updates in analytics after Today's Data uploads"
+    implemented: false
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"  
+        comment: "DL dates not updating in frontend header after Today's Data uploads"
+
+frontend:
+  - task: "Fix tab styling to show initial colors"
+    implemented: false
+    working: false
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Tabs only show colors on active state, need initial colors for better UX"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Fix Pydantic validation error in DemandRecommendation model"
+    - "Fix DL date updates in analytics after Today's Data uploads"
+    - "Fix tab styling to show initial colors"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Starting implementation of fixes for 500 error, DL date updates, and tab styling. Will implement backend fixes first, then frontend styling."
