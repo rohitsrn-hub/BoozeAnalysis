@@ -916,9 +916,9 @@ async def upload_todays_data(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
-        # Parse the data to extract date information for duplicate checking
+        # Parse today's data (different from full monthly data parsing)
         try:
-            parsed_data = parse_excel_data(content, "daily_update")
+            todays_data = parse_todays_data(content)
         except HTTPException as parse_error:
             # Add specific guidance for Today's Data upload errors
             if "utf-8" in str(parse_error.detail).lower() or "codec" in str(parse_error.detail).lower():
@@ -937,69 +937,124 @@ async def upload_todays_data(file: UploadFile = File(...)):
             else:
                 raise parse_error
         
-        if not parsed_data:
-            raise HTTPException(status_code=400, detail="No valid data found in the file")
+        if not todays_data or not todays_data.get('brands_data'):
+            raise HTTPException(status_code=400, detail="No valid brand data found in today's file")
         
-        # Check for duplicate dates before processing
-        await check_duplicate_dates_in_upload(parsed_data, file.filename)
+        new_date_column = todays_data['new_date_column']
+        brands_data = todays_data['brands_data']
         
-        # Update existing data with today's stock positions
+        # Check for duplicate dates (simpler check for today's data)
+        existing_records = await db.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(10)
+        existing_dates = set()
+        for record in existing_records:
+            if record.get('DL_date'):
+                existing_dates.add(record['DL_date'])
+            daily_sales = record.get('daily_sales', {})
+            for date_key in daily_sales.keys():
+                existing_dates.add(date_key)
+        
+        if new_date_column in existing_dates:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Duplicate dates detected",
+                    "message": f"The date '{new_date_column}' already exists in the database",
+                    "duplicate_dates": [new_date_column],
+                    "filename": file.filename,
+                    "suggestion": "Please upload data for a new date or use 'Upload Full Monthly Data' to replace all existing data"
+                }
+            )
+        
+        # Append today's data to existing monthly data
         updated_count = 0
         new_brands_count = 0
         
-        for item_data in parsed_data:
-            brand_name = item_data['brand_name']
+        for brand_name, brand_info in brands_data.items():
+            new_stock_qty = brand_info['stock_qty']
+            index_number = brand_info['index_number']
             
-            # Check if brand exists
+            # Try to find existing brand by name first, then by index
             existing_brand = await db.liquor_data.find_one({"brand_name": brand_name})
+            if not existing_brand and index_number:
+                existing_brand = await db.liquor_data.find_one({"index_number": index_number})
             
             if existing_brand:
-                # Update existing brand with new stock data
+                # Append new date column to existing daily_sales
+                current_daily_sales = existing_brand.get('daily_sales', {})
+                current_daily_sales[new_date_column] = new_stock_qty
+                
+                # Update DL to the new date
+                old_DL_date = existing_brand.get('DL_date')
+                old_D1_date = existing_brand.get('D1_date')
+                
+                # Recalculate analytics with the new data point
+                D1_stock = existing_brand.get('D1_stock', 0)
+                selling_rate = existing_brand.get('selling_rate', existing_brand.get('rate', 0))
+                
+                # Calculate new number of days with updated date range
+                try:
+                    from datetime import datetime
+                    
+                    def parse_date_string(date_str):
+                        import re
+                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                        if match:
+                            day, month_name, year_suffix = match.groups()
+                            year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                        return None
+                    
+                    d1_datetime = parse_date_string(old_D1_date) if old_D1_date else None
+                    new_dl_datetime = parse_date_string(new_date_column)
+                    
+                    if d1_datetime and new_dl_datetime:
+                        days_analyzed = (new_dl_datetime - d1_datetime).days + 1
+                    else:
+                        days_analyzed = existing_brand.get('days_analyzed', 1) + 1
+                        
+                    days_analyzed = max(1, days_analyzed)
+                    
+                except:
+                    days_analyzed = existing_brand.get('days_analyzed', 1) + 1
+                
+                # Recalculate all dependent values
+                total_sales_qty = max(0, D1_stock - new_stock_qty)
+                avg_daily_sales_qty = total_sales_qty / days_analyzed if days_analyzed > 0 else 0
+                monthly_sales_qty = avg_daily_sales_qty * 24
+                monthly_sales_value = monthly_sales_qty * selling_rate
+                current_stock_value = new_stock_qty * selling_rate
+                stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+                stock_available_days = (new_stock_qty / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+                
+                # Update the brand in database
                 update_data = {
-                    "DL_stock": item_data['DL_stock'],
-                    "current_stock_qty": item_data['current_stock_qty'],
-                    "stock_value_today": item_data['stock_value_today'],
-                    "DL_date": item_data['DL_date'],
+                    "daily_sales": current_daily_sales,
+                    "DL_date": new_date_column,
+                    "DL_stock": float(new_stock_qty),
+                    "current_stock_qty": int(new_stock_qty),
+                    "days_analyzed": int(days_analyzed),
+                    "total_sales_qty": float(total_sales_qty),
+                    "avg_daily_sales_qty": float(avg_daily_sales_qty),
+                    "monthly_sales_qty": float(monthly_sales_qty),
+                    "monthly_sale_qty": int(monthly_sales_qty),
+                    "monthly_sale_value": float(monthly_sales_value),
+                    "stock_value_today": float(current_stock_value),
+                    "stock_ratio": float(stock_ratio),
+                    "stock_available_days": float(min(999, max(0, stock_available_days))),
                     "upload_timestamp": datetime.now(timezone.utc)
                 }
                 
-                # Update daily_sales with new date data
-                if 'daily_sales' in item_data:
-                    update_data["daily_sales"] = {**existing_brand.get('daily_sales', {}), **item_data['daily_sales']}
-                
-                # Recalculate dependent values
-                D1_stock = existing_brand.get('D1_stock', 0)
-                new_DL_stock = item_data['DL_stock']
-                days_analyzed = existing_brand.get('days_analyzed', 1)
-                selling_rate = existing_brand.get('selling_rate', item_data.get('selling_rate', 0))
-                
-                total_sales_qty = max(0, D1_stock - new_DL_stock)
-                avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
-                monthly_sales_qty = avg_daily_sales_qty * 24
-                monthly_sales_value = monthly_sales_qty * selling_rate
-                stock_ratio = (new_DL_stock * selling_rate) / max(1, monthly_sales_value)
-                stock_available_days = (new_DL_stock / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
-                
-                update_data.update({
-                    "total_sales_qty": total_sales_qty,
-                    "avg_daily_sales_qty": avg_daily_sales_qty,
-                    "monthly_sales_qty": monthly_sales_qty,
-                    "monthly_sale_qty": int(monthly_sales_qty),
-                    "monthly_sale_value": monthly_sales_value,
-                    "stock_ratio": stock_ratio,
-                    "stock_available_days": min(999, max(0, stock_available_days))
-                })
-                
                 await db.liquor_data.update_one(
-                    {"brand_name": brand_name}, 
+                    {"_id": existing_brand["_id"]}, 
                     {"$set": update_data}
                 )
                 updated_count += 1
+                
+                print(f"✅ Updated {brand_name}: {old_DL_date}({existing_brand.get('DL_stock', 0)}) -> {new_date_column}({new_stock_qty})")
+                
             else:
-                # Add new brand
-                liquor_obj = LiquorData(**item_data)
-                await db.liquor_data.insert_one(liquor_obj.dict())
-                new_brands_count += 1
+                print(f"⚠️ Brand '{brand_name}' (Index: {index_number}) not found in existing data - skipping")
+                # Note: We don't add new brands for today's data uploads
         
         # Save upload history
         upload_history = UploadHistory(
