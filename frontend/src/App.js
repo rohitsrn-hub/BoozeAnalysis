@@ -284,8 +284,9 @@ function App() {
       setUploadProgress(100);
       toast.success(`Successfully uploaded ${response.data.total_records} records`);
       
-      // Fetch analytics after successful upload
+      // Fetch analytics and upload history after successful upload
       await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
       
     } catch (error) {
       console.error("Error uploading file:", error);
