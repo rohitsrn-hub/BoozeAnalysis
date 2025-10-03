@@ -361,7 +361,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 from datetime import datetime
                 
                 def parse_date_string(date_str):
-                    \"\"\"Parse date string like '20-Sep-25' to datetime object\"\"\"
+                    """Parse date string like '20-Sep-25' to datetime object"""
                     import re
                     match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
                     if match:
