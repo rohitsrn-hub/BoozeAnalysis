@@ -349,8 +349,13 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     
     print(f"Valid date columns AFTER filtering and sorting: {date_columns}")
     
-    print(f"Detected columns - Brand: {brand_col}, Index: {index_col}, Wholesale: {wholesale_rate_col}, Selling: {selling_rate_col}")
-    print(f"Date columns found: {date_columns}")
+    print(f"📊 Column Detection Summary:")
+    print(f"  - Brand column: {brand_col}")
+    print(f"  - Index column: {index_col}")
+    print(f"  - Wholesale rate: {wholesale_rate_col}")
+    print(f"  - Selling rate: {selling_rate_col}")
+    print(f"  - Date columns found: {date_columns}")
+    print(f"  - All available columns: {list(df.columns)}")
     
     if not brand_col:
         raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in the file")
