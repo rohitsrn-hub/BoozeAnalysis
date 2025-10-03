@@ -537,7 +537,17 @@ function App() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
-                <p className="text-sm text-gray-600">D1=First Date Column | DL=Last Date Column | CORRECTED Calculations</p>
+                <div className="flex items-center space-x-4">
+                  <p className="text-sm text-gray-600">D1=First Date Column | DL=Last Date Column | CORRECTED Calculations</p>
+                  {currentDateRange && (
+                    <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                      <span className="text-xs font-medium text-blue-800">
+                        Current: D1={currentDateRange.d1_date} | DL={currentDateRange.dl_date}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
