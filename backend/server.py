@@ -91,6 +91,65 @@ class DemandRecommendation(BaseModel):
     urgency_level: str
 
 # Helper functions
+async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], filename: str):
+    """Check if the uploaded data contains dates that already exist in the database"""
+    try:
+        # Extract dates from the new upload
+        new_dates = set()
+        for item in parsed_data:
+            # Get DL_date (the current/today's date in the upload)
+            dl_date = item.get('DL_date')
+            if dl_date:
+                new_dates.add(dl_date)
+            
+            # Also check daily_sales dates
+            daily_sales = item.get('daily_sales', {})
+            for date_key in daily_sales.keys():
+                new_dates.add(date_key)
+        
+        if not new_dates:
+            return  # No dates to check
+        
+        # Get existing data from database
+        existing_records = await db.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(1000)
+        
+        # Extract existing dates from database
+        existing_dates = set()
+        for record in existing_records:
+            # Check DL_date
+            dl_date = record.get('DL_date')
+            if dl_date:
+                existing_dates.add(dl_date)
+            
+            # Check daily_sales dates
+            daily_sales = record.get('daily_sales', {})
+            for date_key in daily_sales.keys():
+                existing_dates.add(date_key)
+        
+        # Find duplicate dates
+        duplicate_dates = new_dates.intersection(existing_dates)
+        
+        if duplicate_dates:
+            duplicate_list = sorted(list(duplicate_dates))
+            raise HTTPException(
+                status_code=409,  # 409 Conflict status code for duplicate data
+                detail={
+                    "error": "Duplicate dates detected",
+                    "message": f"The following dates already exist in the database: {', '.join(duplicate_list)}",
+                    "duplicate_dates": duplicate_list,
+                    "filename": filename,
+                    "suggestion": "Please upload data for a new date or use 'Upload Full Monthly Data' to replace all existing data"
+                }
+            )
+        
+        print(f"✅ Date validation passed for {filename}. New dates: {sorted(list(new_dates))}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Warning: Could not validate dates for duplicate checking: {e}")
+        # Don't block upload if date validation fails, just log the warning
+
 def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> List[Dict[str, Any]]:
     """Parse Excel file and return structured data - supports both tabular and list formats"""
     try:
