@@ -1059,7 +1059,7 @@ function App() {
                 <TabsTrigger 
                   value="database-view" 
                   data-testid="database-view-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-gray-50 border border-transparent data-[state=active]:border-gray-400"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300 data-[state=active]:border-gray-400"
                 >
                   <Database className="w-4 h-4" />
                   <span>Database</span>
