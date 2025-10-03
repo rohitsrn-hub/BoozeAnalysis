@@ -625,6 +625,16 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
         if not parsed_data:
             raise HTTPException(status_code=400, detail="No valid data found in the file")
         
+        # For full monthly data, we don't need to check duplicates since it replaces everything
+        # But we can log the dates being processed for reference
+        new_dates = set()
+        for item in parsed_data[:3]:  # Just check first few items for logging
+            dl_date = item.get('DL_date')
+            if dl_date:
+                new_dates.add(dl_date)
+        if new_dates:
+            print(f"📅 Full monthly upload processing dates: {sorted(list(new_dates))}")
+        
         # Clear existing data and insert new data (full replacement)
         await db.liquor_data.delete_many({})
         
