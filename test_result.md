@@ -165,8 +165,6 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Fix Pydantic validation error in DemandRecommendation model"
-    - "Fix DL date updates in analytics after Today's Data uploads"
     - "Fix tab styling to show initial colors"
   stuck_tasks: []
   test_all: false
