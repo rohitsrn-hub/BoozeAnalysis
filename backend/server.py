@@ -623,11 +623,14 @@ async def upload_todays_data(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
-        # Parse the data
+        # Parse the data to extract date information for duplicate checking
         parsed_data = parse_excel_data(content, "daily_update")
         
         if not parsed_data:
             raise HTTPException(status_code=400, detail="No valid data found in the file")
+        
+        # Check for duplicate dates before processing
+        await check_duplicate_dates_in_upload(parsed_data, file.filename)
         
         # Update existing data with today's stock positions
         updated_count = 0
