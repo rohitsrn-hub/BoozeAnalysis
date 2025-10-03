@@ -1425,6 +1425,76 @@ async def clear_all_data():
         logging.error(f"Error clearing data: {e}")
         raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")
 
+@api_router.get("/database-view")
+async def get_database_view():
+    """Get complete raw database view for debugging and transparency"""
+    try:
+        # Get all records with all fields
+        all_records = await db.liquor_data.find().to_list(1000)
+        
+        if not all_records:
+            return {
+                "total_records": 0,
+                "data": [],
+                "summary": {
+                    "message": "Database is empty",
+                    "unique_dates": [],
+                    "date_range": None
+                }
+            }
+        
+        # Extract summary information
+        all_dates = set()
+        d1_dates = set()
+        dl_dates = set()
+        
+        for record in all_records:
+            # Collect D1 dates
+            if record.get('D1_date'):
+                d1_dates.add(str(record['D1_date']))
+            
+            # Collect DL dates
+            if record.get('DL_date'):
+                dl_dates.add(str(record['DL_date']))
+            
+            # Collect daily_sales dates
+            daily_sales = record.get('daily_sales', {})
+            if daily_sales:
+                for date_key in daily_sales.keys():
+                    all_dates.add(str(date_key))
+        
+        # Prepare clean data for frontend (remove MongoDB ObjectId if present)
+        clean_data = []
+        for record in all_records:
+            clean_record = {}
+            for key, value in record.items():
+                if key != '_id':  # Skip MongoDB ObjectId
+                    clean_record[key] = value
+            clean_data.append(clean_record)
+        
+        # Sort by index_number if available
+        try:
+            clean_data.sort(key=lambda x: x.get('index_number', 9999))
+        except:
+            pass
+        
+        return {
+            "total_records": len(all_records),
+            "data": clean_data,
+            "summary": {
+                "unique_d1_dates": sorted(list(d1_dates)),
+                "unique_dl_dates": sorted(list(dl_dates)),
+                "unique_daily_sales_dates": sorted(list(all_dates)),
+                "total_brands": len(all_records),
+                "date_range": f"{min(d1_dates)} to {max(dl_dates)}" if d1_dates and dl_dates else None,
+                "sample_record_fields": list(all_records[0].keys()) if all_records else []
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"Error getting database view: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching database view: {str(e)}")
+
 @api_router.get("/calculation-details")
 async def get_calculation_details():
     """Get detailed calculations for all brands for verification"""
