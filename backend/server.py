@@ -943,25 +943,107 @@ async def upload_todays_data(file: UploadFile = File(...)):
         new_date_column = todays_data['new_date_column']
         brands_data = todays_data['brands_data']
         
-        # Check for duplicate dates (simpler check for today's data)
+        # Check for duplicate dates with proper date format comparison
+        def normalize_date_for_comparison(date_str):
+            """Convert various date formats to a standard format for comparison"""
+            try:
+                from datetime import datetime
+                import re
+                
+                if not date_str:
+                    return None
+                
+                date_str = str(date_str).strip()
+                
+                # If it's already a datetime string, parse it
+                if 'T' in date_str or len(date_str) > 15:
+                    try:
+                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+                        return dt.strftime("%Y-%m-%d")
+                    except:
+                        pass
+                
+                # Parse various date formats
+                patterns = [
+                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
+                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
+                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
+                ]
+                
+                for pattern, fmt in patterns:
+                    match = re.search(pattern, date_str, re.IGNORECASE)
+                    if match:
+                        if fmt == "%d-%b-%Y":
+                            day, month_name, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            full_date = f"{day}-{month_name}-{year}"
+                            dt = datetime.strptime(full_date, fmt)
+                        elif fmt == "%Y-%m-%d":
+                            dt = datetime.strptime(match.group(0), fmt)
+                        elif fmt == "%d-%m-%Y":
+                            day, month, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            dt = datetime(int(year), int(month), int(day))
+                        
+                        return dt.strftime("%Y-%m-%d")
+                        
+            except Exception as e:
+                print(f"Warning: Could not normalize date '{date_str}': {e}")
+                return str(date_str)
+            
+            return str(date_str)
+        
+        # Normalize the new date for comparison
+        normalized_new_date = normalize_date_for_comparison(new_date_column)
+        print(f"📅 New date to upload: '{new_date_column}' -> normalized: '{normalized_new_date}'")
+        
+        # Get existing dates and normalize them
         existing_records = await db.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(10)
         existing_dates = set()
-        for record in existing_records:
-            if record.get('DL_date'):
-                existing_dates.add(record['DL_date'])
-            daily_sales = record.get('daily_sales', {})
-            for date_key in daily_sales.keys():
-                existing_dates.add(date_key)
+        existing_dates_raw = []
         
-        if new_date_column in existing_dates:
+        for record in existing_records:
+            # Check DL_date
+            if record.get('DL_date'):
+                raw_dl_date = record['DL_date']
+                normalized_dl_date = normalize_date_for_comparison(raw_dl_date)
+                existing_dates.add(normalized_dl_date)
+                existing_dates_raw.append(f"DL_date: {raw_dl_date}")
+            
+            # Check daily_sales dates  
+            daily_sales = record.get('daily_sales', {})
+            if daily_sales:
+                for date_key in daily_sales.keys():
+                    normalized_daily_date = normalize_date_for_comparison(date_key)
+                    existing_dates.add(normalized_daily_date)
+                    existing_dates_raw.append(f"daily_sales: {date_key}")
+        
+        print(f"📅 Existing dates in database: {sorted(list(existing_dates))}")
+        print(f"📅 Raw existing dates: {existing_dates_raw[:5]}")  # Show first 5
+        
+        if normalized_new_date in existing_dates:
+            # Show detailed information about the conflict
+            matching_dates = []
+            for record in existing_records[:3]:  # Show details for first 3 records
+                if record.get('DL_date'):
+                    raw_date = record['DL_date']
+                    if normalize_date_for_comparison(raw_date) == normalized_new_date:
+                        matching_dates.append(f"DL_date: {raw_date}")
+                
+                daily_sales = record.get('daily_sales', {})
+                for date_key in daily_sales.keys():
+                    if normalize_date_for_comparison(date_key) == normalized_new_date:
+                        matching_dates.append(f"daily_sales: {date_key}")
+            
             raise HTTPException(
                 status_code=409,
                 detail={
                     "error": "Duplicate dates detected",
-                    "message": f"The date '{new_date_column}' already exists in the database",
+                    "message": f"The date '{new_date_column}' (normalized: {normalized_new_date}) already exists in the database",
                     "duplicate_dates": [new_date_column],
+                    "existing_dates_found": matching_dates[:3],
                     "filename": file.filename,
-                    "suggestion": "Please upload data for a new date or use 'Upload Full Monthly Data' to replace all existing data"
+                    "suggestion": "This date already exists in your data. Please upload data for a newer date or use 'Upload Full Monthly Data' to replace all existing data"
                 }
             )
         
