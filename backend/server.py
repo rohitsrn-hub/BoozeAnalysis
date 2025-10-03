@@ -356,7 +356,33 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in the file")
     
     if not date_columns:
-        raise HTTPException(status_code=400, detail="Could not find date columns for daily stock data")
+        # Try one more fallback - use any remaining columns that aren't brand/rate columns
+        potential_date_cols = []
+        for col in df.columns:
+            col_str = str(col)
+            if (col != brand_col and col != wholesale_rate_col and col != selling_rate_col and 
+                col != index_col and not col_str.lower().strip() in ['brand name', 'brand_name', 'rate', 'index', 'sl', 'sr']):
+                potential_date_cols.append(col)
+        
+        if potential_date_cols:
+            print(f"🔄 Fallback: Using potential date columns: {potential_date_cols}")
+            date_columns = potential_date_cols[:10]  # Limit to first 10 columns
+        else:
+            # Show detailed error with column information
+            available_columns = [str(col) for col in df.columns]
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "No date columns detected",
+                    "message": "Could not identify date columns in your Excel file. Please ensure your file has columns with dates (like '20-Sep-25', '03-Oct-25', etc.)",
+                    "available_columns": available_columns,
+                    "suggestions": [
+                        "Ensure date columns contain recognizable date formats (20-Sep-25, 03/10/25, etc.)",
+                        "Check that date columns have month names or date patterns",
+                        "Verify your Excel file structure matches the expected format"
+                    ]
+                }
+            )
     
     # Filter out only obvious header rows, be more lenient
     df = df[df[brand_col].notna()]
