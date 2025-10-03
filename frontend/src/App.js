@@ -33,6 +33,7 @@ function App() {
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [duplicateError, setDuplicateError] = useState(null);
   const [databaseView, setDatabaseView] = useState(null);
+  const [currentDateRange, setCurrentDateRange] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Fetch all data
