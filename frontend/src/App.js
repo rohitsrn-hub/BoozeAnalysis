@@ -1043,7 +1043,7 @@ function App() {
                 <TabsTrigger 
                   value="recommendations" 
                   data-testid="recommendations-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-indigo-50 border border-transparent data-[state=active]:border-indigo-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200 data-[state=active]:border-indigo-300"
                 >
                   <Target className="w-4 h-4" />
                   <span>Forecast</span>
