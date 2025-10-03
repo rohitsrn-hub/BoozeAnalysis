@@ -937,6 +937,16 @@ async def get_demand_recommendations():
         logging.error(f"Error generating demand recommendations: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
 
+@api_router.delete("/clear-data")
+async def clear_all_data():
+    """Clear all liquor data to force re-upload with corrected D1/DL logic"""
+    try:
+        result = await db.liquor_data.delete_many({})
+        return {"message": f"Cleared {result.deleted_count} records. Please re-upload your data to apply corrected D1/DL calculations."}
+    except Exception as e:
+        logging.error(f"Error clearing data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")
+
 @api_router.get("/calculation-details")
 async def get_calculation_details():
     """Get detailed calculations for all brands for verification"""
