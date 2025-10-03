@@ -173,7 +173,7 @@ def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> 
                 
                 # If decoding succeeds, it might be a CSV file
                 df = pd.read_csv(io.StringIO(file_content_str))
-                if len(df.columns) >= 3 and any(col.lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+                if len(df.columns) >= 3 and any(str(col).lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
                     return parse_tabular_format(df, upload_type)
                 else:
                     df_headerless = pd.read_csv(io.StringIO(file_content_str), header=None)
