@@ -214,8 +214,13 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     if df.empty:
         raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
     
-    # Clean column names - handle non-string column names
-    df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+    try:
+        # Clean column names - handle non-string column names
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+    except Exception as e:
+        print(f"Warning: Error cleaning column names: {e}")
+        # Fallback: create simple column names
+        df.columns = [f"Column_{i}" for i in range(len(df.columns))]
     
     # Find key columns
     brand_col = None
