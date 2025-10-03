@@ -356,12 +356,39 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             # Calculate total sales between D1 and DL
             total_sales_qty = max(0, D1_stock - DL_stock)
             
-            # Calculate number of days between D1 and DL  
+            # Calculate number of days between D1 and DL using actual date arithmetic
             try:
-                d1_idx = date_columns.index(D1_date) if D1_date in date_columns else 0
-                dl_idx = date_columns.index(DL_date) if DL_date in date_columns else len(date_columns) - 1
-                days_between = max(1, dl_idx - d1_idx + 1)
-            except:
+                from datetime import datetime
+                
+                def parse_date_string(date_str):
+                    \"\"\"Parse date string like '20-Sep-25' to datetime object\"\"\"
+                    import re
+                    match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                    if match:
+                        day, month_name, year_suffix = match.groups()
+                        year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                        return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                    return None
+                
+                d1_datetime = parse_date_string(D1_date)
+                dl_datetime = parse_date_string(DL_date)
+                
+                if d1_datetime and dl_datetime:
+                    # Calculate actual days difference (inclusive of both start and end dates)
+                    days_between = (dl_datetime - d1_datetime).days + 1
+                    print(f"  {brand_name}: Date arithmetic: {D1_date} to {DL_date} = {days_between} days")
+                else:
+                    # Fallback to index-based calculation if date parsing fails
+                    d1_idx = date_columns.index(D1_date) if D1_date in date_columns else 0
+                    dl_idx = date_columns.index(DL_date) if DL_date in date_columns else len(date_columns) - 1
+                    days_between = max(1, dl_idx - d1_idx + 1)
+                    print(f"  {brand_name}: Fallback calculation: {days_between} days (index-based)")
+                
+                # Ensure minimum of 1 day
+                days_between = max(1, days_between)
+                
+            except Exception as e:
+                print(f"  {brand_name}: Error calculating days - using default: {e}")
                 days_between = max(1, len(sorted_stock_values) - 1)
             
             # Calculate average daily sales
