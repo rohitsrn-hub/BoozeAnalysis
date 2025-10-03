@@ -717,7 +717,25 @@ async def upload_todays_data(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
         # Parse the data to extract date information for duplicate checking
-        parsed_data = parse_excel_data(content, "daily_update")
+        try:
+            parsed_data = parse_excel_data(content, "daily_update")
+        except HTTPException as parse_error:
+            # Add specific guidance for Today's Data upload errors
+            if "utf-8" in str(parse_error.detail).lower() or "codec" in str(parse_error.detail).lower():
+                raise HTTPException(
+                    status_code=400, 
+                    detail={
+                        "error": "File encoding issue",
+                        "message": "Unable to read the Excel file. This may be due to file corruption or an unsupported Excel format.",
+                        "suggestions": [
+                            "Try saving the file as a new Excel file (.xlsx format)",
+                            "Ensure the file is not corrupted",
+                            "Check that the file contains proper date columns for today's data"
+                        ]
+                    }
+                )
+            else:
+                raise parse_error
         
         if not parsed_data:
             raise HTTPException(status_code=400, detail="No valid data found in the file")
