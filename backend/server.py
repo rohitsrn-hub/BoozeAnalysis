@@ -194,7 +194,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     global_DL_date = sorted_dates[-1]
     print(f"*** DL (Last Date Column): {global_DL_date} ***")
     
-    # STEP 3: Process each brand with the corrected D1 and DL
+    # STEP 2: Process each brand with the SIMPLE D1 and DL logic
     liquor_data = []
     
     for idx, row in df.iterrows():
