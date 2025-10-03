@@ -225,7 +225,10 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     date_columns = []
     
     for col in df.columns:
-        col_lower = col.lower().strip()
+        # Convert column name to string and handle potential NaN/float values
+        col_str = str(col) if col is not None else ""
+        col_lower = col_str.lower().strip()
+        
         if 'brand' in col_lower and 'name' in col_lower:
             brand_col = col
         elif 'wholesale' in col_lower and 'rate' in col_lower:
@@ -234,7 +237,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             selling_rate_col = col
         elif 'rate' in col_lower and not wholesale_rate_col and not selling_rate_col:
             selling_rate_col = col  # Default to selling rate if only one rate column
-        elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col) <= 10:
+        elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
             index_col = col
         else:
             # Check if column represents a date (contains date patterns)
