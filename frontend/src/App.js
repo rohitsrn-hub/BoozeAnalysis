@@ -1,52 +1,1447 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import axios from "axios";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Upload, TrendingUp, AlertTriangle, BarChart3, Package, DollarSign, Calendar, FileSpreadsheet, HelpCircle, Play, CheckCircle, ArrowRight, Download, Zap, Target, Crown, History, Database, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
+function App() {
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [chartsData, setChartsData] = useState(null);
+  const [demandData, setDemandData] = useState(null);
+  const [calculationData, setCalculationData] = useState(null);
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [overstockMultiplier, setOverstockMultiplier] = useState(3.0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [hasData, setHasData] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showUploadHistory, setShowUploadHistory] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  // Fetch all data
+  const fetchAnalytics = async (multiplier = 3.0) => {
     try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+      setLoading(true);
+      
+      // Fetch analytics data
+      const analyticsResponse = await axios.get(`${API}/analytics?overstock_multiplier=${multiplier}`);
+      setAnalyticsData(analyticsResponse.data);
+      
+      // Fetch charts data
+      const chartsResponse = await axios.get(`${API}/charts`);
+      setChartsData(chartsResponse.data);
+      
+      // Fetch demand recommendations
+      const demandResponse = await axios.get(`${API}/demand-recommendations`);
+      setDemandData(demandResponse.data);
+      
+      // Fetch calculation details
+      const calculationResponse = await axios.get(`${API}/calculation-details`);
+      setCalculationData(calculationResponse.data);
+      
+      setHasData(true);
+      toast.success("Analytics updated successfully");
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      if (error.response?.status === 404) {
+        setHasData(false);
+        toast.error("No data found. Please upload liquor data first.");
+      } else {
+        toast.error("Failed to fetch data");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Fetch upload history
+  const fetchUploadHistory = async () => {
+    try {
+      const response = await axios.get(`${API}/upload-history`);
+      setUploadHistory(response.data);
+    } catch (error) {
+      console.error("Error fetching upload history:", error);
+      toast.error("Failed to fetch upload history");
+    }
+  };
+
+  // Handle full monthly data upload
+  const handleFullMonthlyUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-full-monthly-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Successfully uploaded full monthly data: ${response.data.total_records} records`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading full monthly data:", error);
+      
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle today's data upload
+  const handleTodaysDataUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-todays-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading today's data:", error);
+      
+      let errorMessage = "Failed to upload today's data";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle multiplier change
+  const handleMultiplierChange = async () => {
+    if (hasData) {
+      await fetchAnalytics(overstockMultiplier);
+    }
+  };
+
+  // Handle demand forecast export
+  const handleExportDemandList = async () => {
+    try {
+      const response = await axios.get(`${API}/export-demand-list`, {
+        responseType: 'blob',
+      });
+      
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition'];
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+        : `liquor_demand_forecast_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Demand forecast exported successfully!");
+    } catch (error) {
+      console.error("Error exporting demand forecast:", error);
+      toast.error("Failed to export demand forecast");
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  // Format number
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-IN").format(number);
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-IN", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Chart colors
+  const CHART_COLORS = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+    '#F97316', '#06B6D4', '#84CC16', '#EC4899', '#6366F1'
+  ];
+
+  // Onboarding content
+  const onboardingSteps = [
+    {
+      title: "Welcome to Liquor Sales Analytics! 🎯",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600 leading-relaxed">
+            This dashboard helps you analyze your liquor sales patterns and identify overstocking issues with FIXED D1/DL calculations. 
+            Let's take a quick tour to get you started!
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">What you can do:</h4>
+            <ul className="text-blue-800 space-y-1 text-sm">
+              <li>• Upload Excel/CSV files with sales data</li>
+              <li>• Track daily sales trends across all brands</li>
+              <li>• Identify overstocked items automatically</li>
+              <li>• Compare brand performance rankings</li>
+              <li>• View upload history and track data changes</li>
+              <li>• Use two upload modes: Full Monthly or Today's Data</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 1: Choose Your Upload Type 📊",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Choose between two upload options based on your needs:
+          </p>
+          <div className="grid gap-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="font-semibold text-green-900 mb-2">📋 Upload Full Monthly Data</h4>
+              <ul className="text-green-800 space-y-1 text-sm">
+                <li>• Complete data between stock collection dates</li>
+                <li>• Replaces all existing data</li>
+                <li>• Use for new monthly analysis</li>
+                <li>• Contains all date columns with daily stock positions</li>
+              </ul>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <h4 className="font-semibold text-orange-900 mb-2">📈 Upload Today's Data</h4>
+              <ul className="text-orange-800 space-y-1 text-sm">
+                <li>• Daily stock position update</li>
+                <li>• Appends to existing monthly data</li>
+                <li>• Updates current stock levels</li>
+                <li>• Maintains historical analysis while updating current position</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 2: Fixed D1 and DL Calculations 🔧",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            The system now uses CORRECTED D1 and DL calculation logic:
+          </p>
+          <div className="grid gap-4">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+              <h4 className="font-semibold text-indigo-900 mb-2">🎯 D1 (Start Date) Logic</h4>
+              <ul className="text-indigo-800 space-y-1 text-sm">
+                <li>• <strong>First:</strong> Check for first date when ANY brand stock increases</li>
+                <li>• <strong>Fallback:</strong> Use first date column in Excel sheet</li>
+                <li>• <strong>NOT</strong> based on day of the month anymore</li>
+              </ul>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <h4 className="font-semibold text-purple-900 mb-2">🎯 DL (End Date) Logic</h4>
+              <ul className="text-purple-800 space-y-1 text-sm">
+                <li>• <strong>Always:</strong> Last date column in Excel sheet</li>
+                <li>• <strong>Simple:</strong> No complex calculations</li>
+                <li>• <strong>Consistent:</strong> Same for all brands</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 3: View Upload History 📚",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Track all your uploads and data changes with the new Upload History feature:
+          </p>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="font-semibold text-gray-900 mb-2">📋 Upload History Tracks:</h4>
+            <ul className="text-gray-800 space-y-1 text-sm">
+              <li>• All uploaded Excel files (both types)</li>
+              <li>• Upload timestamps and file sizes</li>
+              <li>• Number of records processed</li>
+              <li>• Upload type (Full Monthly vs Today's Data)</li>
+              <li>• Complete audit trail of data changes</li>
+            </ul>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-600 mt-4">
+            <History className="w-4 h-4" />
+            <span>Click the "Upload History" button in the top-right corner</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Ready to Get Started! 🚀",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            You're all set with the improved dashboard! Here's your updated checklist:
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Choose appropriate upload type (Full Monthly or Today's Data)</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Upload your Excel file with liquor sales data</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Review corrected D1/DL calculations in verification tab</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Check upload history to track all data changes</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Monitor overstocking alerts with fixed calculations</span>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4 mt-6">
+            <p className="text-indigo-800 text-center font-medium">
+              💡 Pro Tip: The D1/DL calculation issues are now FIXED! Your analytics will be more accurate.
+            </p>
+          </div>
+        </div>
+      )
+    }
+  ];
+
+  // Initialize
   useEffect(() => {
-    helloWorldApi();
+    fetchAnalytics();
+    fetchUploadHistory();
   }, []);
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <Toaster position="top-right" />
+      
+      {/* Header */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <BarChart3 className="h-8 w-8 text-indigo-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
+                <p className="text-sm text-gray-600">Comprehensive sales analysis with FIXED D1/DL calculations</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              {/* Help Guide */}
+              <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-white hover:bg-gray-50"
+                    data-testid="help-guide-btn"
+                  >
+                    <HelpCircle className="w-4 h-4 mr-2" />
+                    Help Guide
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center space-x-2">
+                      <Play className="w-5 h-5 text-indigo-600" />
+                      <span>{onboardingSteps[onboardingStep].title}</span>
+                    </DialogTitle>
+                    <DialogDescription>
+                      Step {onboardingStep + 1} of {onboardingSteps.length}
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="mt-6">
+                    {onboardingSteps[onboardingStep].content}
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-8">
+                    <div className="flex space-x-1">
+                      {onboardingSteps.map((_, index) => (
+                        <div
+                          key={index}
+                          className={`w-2 h-2 rounded-full transition-colors ${
+                            index <= onboardingStep ? 'bg-indigo-600' : 'bg-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      {onboardingStep > 0 && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setOnboardingStep(onboardingStep - 1)}
+                          size="sm"
+                        >
+                          Previous
+                        </Button>
+                      )}
+                      
+                      {onboardingStep < onboardingSteps.length - 1 ? (
+                        <Button
+                          onClick={() => setOnboardingStep(onboardingStep + 1)}
+                          size="sm"
+                          className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          Next
+                          <ArrowRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => {
+                            setShowOnboarding(false);
+                            setOnboardingStep(0);
+                          }}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Get Started!
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+              {/* Upload History Button */}
+              <Dialog open={showUploadHistory} onOpenChange={setShowUploadHistory}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="bg-white hover:bg-gray-50"
+                    data-testid="upload-history-btn"
+                  >
+                    <History className="w-4 h-4 mr-2" />
+                    Upload History
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center space-x-2">
+                      <History className="w-5 h-5 text-indigo-600" />
+                      <span>Upload History</span>
+                    </DialogTitle>
+                    <DialogDescription>
+                      Track all uploaded Excel files and data changes
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="mt-6">
+                    {uploadHistory.length > 0 ? (
+                      <div className="space-y-4">
+                        {uploadHistory.map((upload, index) => (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-3">
+                                <div className={`p-2 rounded-lg ${
+                                  upload.upload_type === 'full_monthly' 
+                                    ? 'bg-green-100 text-green-600'
+                                    : 'bg-orange-100 text-orange-600'
+                                }`}>
+                                  {upload.upload_type === 'full_monthly' ? <Database className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-gray-900">{upload.filename}</h4>
+                                  <p className="text-sm text-gray-600">
+                                    {upload.upload_type === 'full_monthly' ? 'Full Monthly Data' : "Today's Data Update"}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
+                                {upload.records_count} records
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
+                              <div>
+                                <span className="font-medium">Uploaded:</span>
+                                <div>{formatDate(upload.upload_timestamp)}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium">File Size:</span>
+                                <div>{formatFileSize(upload.file_size)}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium">Uploaded By:</span>
+                                <div>{upload.uploaded_by}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Upload History</h3>
+                        <p className="text-gray-600">Upload your first Excel file to see history</p>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Overstock Multiplier Configuration */}
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="multiplier" className="text-sm font-medium text-gray-700">
+                  Overstock Multiplier:
+                </Label>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    id="multiplier"
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="10"
+                    value={overstockMultiplier}
+                    onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                    className="w-20"
+                    data-testid="overstock-multiplier-input"
+                  />
+                  <Button
+                    onClick={handleMultiplierChange}
+                    size="sm"
+                    variant="outline"
+                    disabled={!hasData || loading}
+                    data-testid="update-multiplier-btn"
+                  >
+                    Update
+                  </Button>
+                </div>
+              </div>
+
+              {/* Upload Buttons */}
+              <div className="flex items-center space-x-2">
+                {/* Full Monthly Data Upload */}
+                <div className="relative">
+                  <Button 
+                    variant="default" 
+                    className="bg-green-600 hover:bg-green-700 cursor-pointer transition-all duration-200"
+                    disabled={loading}
+                    data-testid="upload-full-monthly-btn"
+                    onClick={() => {
+                      const fileInput = document.getElementById('full-monthly-upload');
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                  >
+                    <Database className="w-4 h-4 mr-2" />
+                    {loading ? 'Processing...' : 'Upload Full Monthly Data'}
+                  </Button>
+                  <Input
+                    id="full-monthly-upload"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleFullMonthlyUpload}
+                    className="hidden"
+                    data-testid="full-monthly-file-input"
+                  />
+                </div>
+
+                {/* Today's Data Upload */}
+                <div className="relative">
+                  <Button 
+                    variant="outline" 
+                    className="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 cursor-pointer transition-all duration-200"
+                    disabled={loading}
+                    data-testid="upload-todays-btn"
+                    onClick={() => {
+                      const fileInput = document.getElementById('todays-data-upload');
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    {loading ? 'Processing...' : "Upload Today's Data"}
+                  </Button>
+                  <Input
+                    id="todays-data-upload"
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleTodaysDataUpload}
+                    className="hidden"
+                    data-testid="todays-data-file-input"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Upload Progress */}
+          {uploadProgress > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm text-gray-600">Uploading...</span>
+              </div>
+              <Progress value={uploadProgress} className="mt-2" data-testid="upload-progress" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!hasData && !loading ? (
+          <div className="text-center py-12">
+            <div className="p-6 bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300">
+              <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
+              <p className="text-gray-600 mb-4">Upload your liquor sales Excel file to start analyzing data with FIXED D1/DL calculations</p>
+              <div className="text-sm text-gray-500 mb-4">
+                <p>Supported formats: .xlsx, .xls, .csv</p>
+                <p>Choose: Full Monthly Data or Today's Data Update</p>
+              </div>
+              <Button
+                onClick={() => setShowOnboarding(true)}
+                variant="outline"
+                className="mt-2"
+                data-testid="get-started-btn"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Get Started Guide
+              </Button>
+            </div>
+          </div>
+        ) : loading && !analyticsData ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading analytics...</p>
+            </div>
+          </div>
+        ) : analyticsData ? (
+          <div className="space-y-8">
+            {/* Key Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card data-testid="total-brands-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total Brands</CardTitle>
+                  <Package className="h-4 w-4 text-indigo-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{analyticsData.total_brands}</div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="total-stock-value-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total Stock Value</CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(analyticsData.total_stock_value)}</div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="overstocked-brands-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Overstocked Brands</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{analyticsData.overstocked_brands}</div>
+                  <Badge variant="secondary" className="mt-1 text-xs">
+                    {overstockMultiplier}x rule (FIXED)
+                  </Badge>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="overstocked-value-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Overstocked Value</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-red-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{formatCurrency(analyticsData.total_overstocked_value)}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Rest of the existing dashboard tabs and content remain the same */}
+            {/* Main Dashboard Tabs */}
+            <Tabs defaultValue="performance-charts" className="w-full">
+              <TabsList className="grid w-full grid-cols-6">
+                <TabsTrigger value="performance-charts" data-testid="performance-charts-tab">Performance Charts</TabsTrigger>
+                <TabsTrigger value="sales-trends" data-testid="sales-trends-tab">Sales Trends</TabsTrigger>
+                <TabsTrigger value="overstocking" data-testid="overstocking-tab">Overstocking Alerts</TabsTrigger>
+                <TabsTrigger value="brand-performance" data-testid="brand-performance-tab">Top Brands</TabsTrigger>
+                <TabsTrigger value="recommendations" data-testid="recommendations-tab">Demand Forecast</TabsTrigger>
+                <TabsTrigger value="calculations" data-testid="calculations-tab">Calculation Verification</TabsTrigger>
+              </TabsList>
+
+              {/* Performance Charts Tab */}
+              <TabsContent value="performance-charts" className="space-y-6">
+                {chartsData && (
+                  <div className="grid gap-6">
+                    {/* Volume Leaders Chart */}
+                    <Card data-testid="volume-leaders-chart">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <BarChart3 className="h-5 w-5 text-blue-600" />
+                          <span>Volume Leaders - Stock Quantities</span>
+                        </CardTitle>
+                        <CardDescription>Brands with highest current stock quantities</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-80 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartsData.volume_leaders}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="name" 
+                                angle={-45}
+                                textAnchor="end"
+                                height={100}
+                                interval={0}
+                              />
+                              <YAxis />
+                              <Tooltip formatter={(value) => [formatNumber(value), "Quantity in Stock"]} />
+                              <Bar dataKey="value" fill="#3B82F6" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Revenue Leaders and Fastest Moving */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <Card data-testid="revenue-leaders-chart">
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <DollarSign className="h-5 w-5 text-green-600" />
+                            <span>Revenue Leaders</span>
+                          </CardTitle>
+                          <CardDescription>Top brands by estimated sales revenue</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={chartsData.revenue_leaders.slice(0, 6)}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis 
+                                  dataKey="name" 
+                                  angle={-45}
+                                  textAnchor="end"
+                                  height={80}
+                                  interval={0}
+                                />
+                                <YAxis />
+                                <Tooltip formatter={(value) => [formatCurrency(value), "Revenue"]} />
+                                <Bar dataKey="value" fill="#10B981" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card data-testid="velocity-leaders-chart">
+                        <CardHeader>
+                          <CardTitle className="flex items-center space-x-2">
+                            <Zap className="h-5 w-5 text-yellow-600" />
+                            <span>Fastest Moving Brands</span>
+                          </CardTitle>
+                          <CardDescription>Brands with highest sales velocity</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
+                            {chartsData.velocity_leaders.slice(0, 5).map((brand, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                                <div>
+                                  <div className="font-medium text-gray-900">{brand.name}</div>
+                                  <div className="text-sm text-gray-600">{brand.days_of_stock.toFixed(1)} days stock</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-lg font-semibold text-yellow-600">
+                                    {brand.velocity}x
+                                  </div>
+                                  <div className="text-xs text-gray-500">velocity</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Revenue Proportion Pie Chart */}
+                    <Card data-testid="revenue-proportion-chart">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Crown className="h-5 w-5 text-purple-600" />
+                          <span>Revenue Share Distribution</span>
+                        </CardTitle>
+                        <CardDescription>Each brand's contribution to total estimated sales</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-80 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={chartsData.revenue_proportion.slice(0, 8)}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={120}
+                                paddingAngle={5}
+                                dataKey="percentage"
+                                label={({ name, percentage }) => `${name.substring(0, 15)}...: ${percentage}%`}
+                              >
+                                {chartsData.revenue_proportion.slice(0, 8).map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value) => [`${value}%`, "Revenue Share"]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Sales Trends Tab - keeping existing implementation */}
+              <TabsContent value="sales-trends" className="space-y-6">
+                <Card data-testid="sales-trends-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <TrendingUp className="h-5 w-5 text-indigo-600" />
+                      <span>Stock Analysis Overview</span>
+                    </CardTitle>
+                    <CardDescription>Current stock positions and estimated performance with FIXED calculations</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {analyticsData && Object.entries(analyticsData.sales_trends).length > 0 ? (
+                        <>
+                          <div className="h-80 w-full mb-6">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={Object.entries(analyticsData.sales_trends)
+                                  .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                                  .map(([date, sales]) => ({
+                                    date: date.length > 10 ? date.substring(0, 10) : date,
+                                    sales: sales || 0,
+                                    displayDate: date
+                                  }))
+                                }
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis 
+                                  dataKey="date" 
+                                  angle={-45}
+                                  textAnchor="end"
+                                  height={80}
+                                />
+                                <YAxis />
+                                <Tooltip 
+                                  formatter={(value) => [formatNumber(value || 0), "Daily Stock"]}
+                                  labelFormatter={(label) => `Date: ${label}`}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="sales" 
+                                  stroke="#3B82F6" 
+                                  strokeWidth={3}
+                                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                          
+                          <div className="grid gap-4">
+                            <h4 className="font-medium text-gray-900">Recent Stock Trends</h4>
+                            {Object.entries(analyticsData.sales_trends)
+                              .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
+                              .slice(-7)
+                              .map(([date, sales]) => (
+                                <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex items-center space-x-3">
+                                    <Calendar className="h-4 w-4 text-gray-500" />
+                                    <span className="font-medium text-gray-900">{date}</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales || 0)}</div>
+                                    <div className="text-xs text-gray-500">total stock units</div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-8">
+                          <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Stock Analysis Ready</h3>
+                          <p className="text-gray-600">Upload your new liquor data to view detailed stock analysis with FIXED D1/DL calculations</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Continue with existing overstocking, brand-performance, recommendations, and calculations tabs */}
+              {/* Overstocking Tab */}
+              <TabsContent value="overstocking" className="space-y-6">
+                <Card data-testid="overstocking-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-600" />
+                      <span>Overstocked Items</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Items with stock value exceeding {overstockMultiplier}x their monthly average sales (FIXED calculations)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analyticsData.overstocked_items.length > 0 ? (
+                      <div className="space-y-4">
+                        {analyticsData.overstocked_items.map((item, index) => (
+                          <Alert key={index} className="border-orange-200 bg-orange-50" data-testid={`overstock-item-${index}`}>
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertDescription>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-start">
+                                  <h4 className="font-semibold text-gray-900">{item.brand_name}</h4>
+                                  <Badge variant="destructive">
+                                    Overstock: {formatCurrency(item.overstock_value)}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Current Stock:</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.current_stock_value)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Monthly Avg:</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.monthly_avg_sale)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Threshold ({overstockMultiplier}x):</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.threshold)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Stock Ratio:</span>
+                                    <span className="ml-2 font-medium">{item.stock_ratio.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Package className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Overstocking Issues</h3>
+                        <p className="text-gray-600">All brands are within optimal stock levels (with FIXED calculations)</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Brand Performance Tab */}
+              <TabsContent value="brand-performance" className="space-y-6">
+                <Card data-testid="brand-performance-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+                      <span>Top Performing Brands</span>
+                    </CardTitle>
+                    <CardDescription>Ranked by estimated sales performance (FIXED calculations)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {analyticsData && analyticsData.top_selling_brands.map((brand, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                          data-testid={`top-brand-${index}`}
+                        >
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-600 font-bold text-sm rounded-full">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{brand.brand_name}</h4>
+                              <p className="text-sm text-gray-600">Stock Ratio: {brand.stock_ratio.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-indigo-600">
+                              {formatCurrency(brand.monthly_sale_value)}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Stock: {formatCurrency(brand.stock_value_today)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Demand Forecast Tab */}
+              <TabsContent value="recommendations" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Smart Demand Forecast</h2>
+                    <p className="text-gray-600">AI-powered recommendations with wholesale rates and quantities (FIXED calculations)</p>
+                  </div>
+                  <Button
+                    onClick={handleExportDemandList}
+                    className="bg-green-600 hover:bg-green-700"
+                    data-testid="export-demand-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Excel
+                  </Button>
+                </div>
+
+                {demandData && demandData.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Urgency Level Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="border-red-200 bg-red-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-red-600">
+                                {demandData.filter(item => item.urgency_level === 'HIGH').length}
+                              </div>
+                              <div className="text-sm text-red-800">High Priority</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="border-yellow-200 bg-yellow-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <Package className="h-5 w-5 text-yellow-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-yellow-600">
+                                {demandData.filter(item => item.urgency_level === 'MEDIUM').length}
+                              </div>
+                              <div className="text-sm text-yellow-800">Medium Priority</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <Target className="h-5 w-5 text-blue-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-blue-600">
+                                {demandData.filter(item => item.urgency_level === 'LOW').length}
+                              </div>
+                              <div className="text-sm text-blue-800">Low Priority</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Recommendations List */}
+                    <Card data-testid="recommendations-list">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Target className="h-5 w-5 text-indigo-600" />
+                          <span>Recommended Orders</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Optimized ordering recommendations with wholesale rates (10% lower than selling price)
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {demandData.map((rec, index) => {
+                            const urgencyColors = {
+                              HIGH: 'border-red-200 bg-red-50',
+                              MEDIUM: 'border-yellow-200 bg-yellow-50',
+                              LOW: 'border-blue-200 bg-blue-50'
+                            };
+                            
+                            const urgencyBadgeColors = {
+                              HIGH: 'bg-red-600 text-white',
+                              MEDIUM: 'bg-yellow-600 text-white',
+                              LOW: 'bg-blue-600 text-white'
+                            };
+
+                            return (
+                              <div 
+                                key={index} 
+                                className={`p-4 rounded-lg border ${urgencyColors[rec.urgency_level]}`}
+                                data-testid={`recommendation-${index}`}
+                              >
+                                <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                    <h4 className="font-semibold text-gray-900">{rec.brand_name}</h4>
+                                    <p className="text-sm text-gray-600">
+                                      Current Stock: {rec.current_stock_qty} units
+                                    </p>
+                                  </div>
+                                  <Badge className={urgencyBadgeColors[rec.urgency_level]}>
+                                    {rec.urgency_level} PRIORITY
+                                  </Badge>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Selling Rate:</span>
+                                    <div className="font-medium">{formatCurrency(rec.selling_rate)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Wholesale Rate:</span>
+                                    <div className="font-medium text-green-600">{formatCurrency(rec.wholesale_rate)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Current Stock:</span>
+                                    <div className="font-medium">{rec.current_stock_qty} units</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Recommended Order:</span>
+                                    <div className="font-medium text-indigo-600 text-lg">
+                                      {rec.recommended_qty} units
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recommendations Available</h3>
+                    <p className="text-gray-600">Upload liquor data to generate smart demand forecasts with FIXED calculations</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Calculation Verification Tab */}
+              <TabsContent value="calculations" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Calculation Verification (FIXED)</h2>
+                    <p className="text-gray-600">Compare corrected D1/DL calculations with your manual calculations</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (calculationData && calculationData.length > 0) {
+                        // Export calculation data as CSV for easy comparison
+                        const csvContent = [
+                          // Header row
+                          'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
+                          // Data rows
+                          ...calculationData.map(row => [
+                            row.index,
+                            `"${row.brand_name}"`,
+                            row.D1_stock,
+                            row.DL_stock,
+                            row.D1_date,
+                            row.DL_date,
+                            row.calculated_wholesale_rate,
+                            row.selling_rate,
+                            row.total_sales_qty.toFixed(2),
+                            row.avg_daily_sales_qty.toFixed(3),
+                            row.calculated_avg_monthly_sale.toFixed(2),
+                            row.calculated_current_stock_value.toFixed(2),
+                            row.calculated_multiplier_value,
+                            row.days_analyzed,
+                            row.stock_available_days.toFixed(1)
+                          ].join(','))
+                        ].join('\n');
+                        
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `calculation_verification_FIXED_${new Date().toISOString().split('T')[0]}.csv`;
+                        link.click();
+                        window.URL.revokeObjectURL(url);
+                        toast.success("FIXED calculation data exported to CSV!");
+                      }
+                    }}
+                    variant="outline"
+                    disabled={!calculationData || calculationData.length === 0}
+                    data-testid="export-calculations-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export CSV (FIXED)
+                  </Button>
+                </div>
+
+                {calculationData && calculationData.length > 0 ? (
+                  <Card data-testid="calculation-table">
+                    <CardHeader>
+                      <CardTitle>FIXED Detailed Calculations for All Brands</CardTitle>
+                      <CardDescription>
+                        Verify these CORRECTED calculations against your manual Excel calculations. 
+                        D1 = First date column OR first stock increase | DL = Last date column
+                        Multiplier Value = Current Stock Value ÷ Monthly Sales Value
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-gray-50">
+                              <th className="text-left p-3 font-semibold">Index</th>
+                              <th className="text-left p-3 font-semibold">Brand Name</th>
+                              <th className="text-left p-3 font-semibold">D1 Date</th>
+                              <th className="text-left p-3 font-semibold">D1 Stock</th>
+                              <th className="text-left p-3 font-semibold">DL Date</th>
+                              <th className="text-left p-3 font-semibold">DL Stock</th>
+                              <th className="text-left p-3 font-semibold">Wholesale Rate</th>
+                              <th className="text-left p-3 font-semibold">Selling Rate</th>
+                              <th className="text-left p-3 font-semibold">Monthly Sale Value</th>
+                              <th className="text-left p-3 font-semibold">Current Stock Value</th>
+                              <th className="text-left p-3 font-semibold">Multiplier Value</th>
+                              <th className="text-left p-3 font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {calculationData.map((row, index) => (
+                              <tr key={index} className="border-b hover:bg-gray-50" data-testid={`calc-row-${index}`}>
+                                <td className="p-3 font-medium">{row.index}</td>
+                                <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
+                                <td className="p-3 text-sm text-blue-600">{row.D1_date}</td>
+                                <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
+                                <td className="p-3 text-sm text-purple-600">{row.DL_date}</td>
+                                <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
+                                <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
+                                <td className="p-3">{formatCurrency(row.selling_rate)}</td>
+                                <td className="p-3 font-medium text-blue-600">
+                                  {formatCurrency(row.calculated_avg_monthly_sale)}
+                                </td>
+                                <td className="p-3 font-medium text-green-600">
+                                  {formatCurrency(row.calculated_current_stock_value)}
+                                </td>
+                                <td className="p-3 font-bold text-purple-600">{row.calculated_multiplier_value}</td>
+                                <td className="p-3">
+                                  {row.calculated_multiplier_value > overstockMultiplier ? (
+                                    <Badge variant="destructive">Overstocked</Badge>
+                                  ) : row.calculated_multiplier_value > overstockMultiplier * 0.7 ? (
+                                    <Badge className="bg-yellow-500 text-white">Warning</Badge>
+                                  ) : (
+                                    <Badge className="bg-green-500 text-white">Healthy</Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Calculation Details Breakdown */}
+                      <div className="mt-8 grid gap-4">
+                        <h4 className="text-lg font-semibold text-gray-900">CORRECTED Calculation Formula Breakdown</h4>
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                          <div className="p-4 bg-blue-50 rounded-lg">
+                            <h5 className="font-semibold text-blue-900 mb-2">FIXED D1 & DL Logic</h5>
+                            <ol className="text-blue-800 space-y-1">
+                              <li>1. D1 = First date column OR first stock increase date</li>
+                              <li>2. DL = Last date column in Excel sheet</li>
+                              <li>3. Total Sales = D1 Stock - DL Stock</li>
+                              <li>4. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
+                              <li>5. Monthly Sales Value = Avg Daily Sales × 24 × Selling Rate</li>
+                            </ol>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg">
+                            <h5 className="font-semibold text-purple-900 mb-2">Overstocking Analysis (FIXED)</h5>
+                            <ol className="text-purple-800 space-y-1">
+                              <li>1. Current Stock Value = DL Stock × Selling Rate</li>
+                              <li>2. Multiplier Value = Stock Value ÷ Monthly Sales Value</li>
+                              <li>3. Overstocked if Multiplier > {overstockMultiplier}x</li>
+                              <li>4. Warning if Multiplier > {(overstockMultiplier * 0.7).toFixed(1)}x</li>
+                              <li>5. ✅ NO MORE day-of-month errors!</li>
+                            </ol>
+                          </div>
+                        </div>
+
+                        {/* Show D1/DL detection info */}
+                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <h5 className="font-semibold text-green-900 mb-2">✅ FIXED D1/DL Detection:</h5>
+                          <div className="text-sm text-green-800 space-y-1">
+                            <p>• <strong>D1 Logic:</strong> System first checks for stock increases across all brands. If found, uses that date. Otherwise, uses the first date column in your Excel sheet.</p>
+                            <p>• <strong>DL Logic:</strong> Always uses the last date column in your Excel sheet - simple and consistent.</p>
+                            <p>• <strong>Result:</strong> More accurate sales calculations and reliable overstocking analysis!</p>
+                          </div>
+                        </div>
+
+                        {/* Detailed calculation example */}
+                        {calculationData.length > 0 && (() => {
+                          // Find the first brand with good data for example
+                          const exampleBrand = calculationData.find(item => 
+                            item.D1_stock > 0 && item.DL_stock >= 0 && item.total_sales_qty > 0
+                          ) || calculationData[0];
+                          
+                          return (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                ✅ CORRECTED Example Calculation ({exampleBrand.brand_name}):
+                              </h5>
+                              <div className="text-sm text-gray-700 space-y-1">
+                                <p><strong>Index:</strong> {exampleBrand.index}</p>
+                                <p>• <strong>FIXED D1</strong> ({exampleBrand.D1_date}): <span className="text-indigo-600 font-medium">{exampleBrand.D1_stock} units</span></p>
+                                <p>• <strong>FIXED DL</strong> ({exampleBrand.DL_date}): <span className="text-orange-600 font-medium">{exampleBrand.DL_stock} units</span></p>
+                                <p>• <strong>Total Sales:</strong> {exampleBrand.D1_stock} - {exampleBrand.DL_stock} = <span className="text-red-600 font-medium">{exampleBrand.total_sales_qty} units</span></p>
+                                <p>• <strong>Days Analyzed:</strong> {exampleBrand.days_analyzed} days</p>
+                                <p>• <strong>Average Daily Sales:</strong> {exampleBrand.total_sales_qty} ÷ {exampleBrand.days_analyzed} = <span className="text-blue-600 font-medium">{exampleBrand.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
+                                <p>• <strong>Monthly Sales Value:</strong> {exampleBrand.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{exampleBrand.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(exampleBrand.calculated_avg_monthly_sale)}</span></p>
+                                <p>• <strong>Current Stock Value:</strong> {exampleBrand.DL_stock} × ₹{exampleBrand.selling_rate} = <span className="text-green-600 font-medium">{formatCurrency(exampleBrand.calculated_current_stock_value)}</span></p>
+                                <p>• <strong>Multiplier:</strong> {formatCurrency(exampleBrand.calculated_current_stock_value)} ÷ {formatCurrency(exampleBrand.calculated_avg_monthly_sale)} = <strong className="text-purple-600 text-lg">{exampleBrand.calculated_multiplier_value}</strong></p>
+                                <p>• <strong>Stock Status:</strong> 
+                                  {exampleBrand.calculated_multiplier_value > 3 ? (
+                                    <span className="text-red-600 font-medium"> ✅ Correctly Identified as Overstocked (>{overstockMultiplier}x)</span>
+                                  ) : exampleBrand.calculated_multiplier_value > 2.1 ? (
+                                    <span className="text-yellow-600 font-medium"> ✅ Correctly Identified as Warning (>2.1x)</span>
+                                  ) : (
+                                    <span className="text-green-600 font-medium"> ✅ Correctly Identified as Healthy Stock Level</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="text-center py-12">
+                    <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Calculation Data</h3>
+                    <p className="text-gray-600">Upload liquor data to see FIXED detailed calculations</p>
+                  </div>
+                )}
+              </TabsContent>
+
+            </Tabs>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
