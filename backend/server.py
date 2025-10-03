@@ -1495,6 +1495,89 @@ async def get_database_view():
         logging.error(f"Error getting database view: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching database view: {str(e)}")
 
+@api_router.post("/refresh-analytics")
+async def refresh_analytics():
+    """Force refresh of all analytics calculations"""
+    try:
+        # Get all records
+        all_records = await db.liquor_data.find().to_list(1000)
+        
+        if not all_records:
+            raise HTTPException(status_code=404, detail="No data found to refresh")
+        
+        updated_count = 0
+        
+        # Find the current D1 and DL dates from the data
+        d1_dates = set()
+        dl_dates = set()
+        
+        for record in all_records:
+            if record.get('D1_date'):
+                d1_dates.add(record['D1_date'])
+            if record.get('DL_date'):
+                dl_dates.add(record['DL_date'])
+        
+        print(f"📊 Refreshing analytics for {len(all_records)} records")
+        print(f"   D1 dates found: {sorted(d1_dates)}")
+        print(f"   DL dates found: {sorted(dl_dates)}")
+        
+        # Recalculate analytics for each record
+        for record in all_records:
+            try:
+                # Use existing values or recalculate if needed
+                D1_stock = record.get('D1_stock', 0)
+                DL_stock = record.get('DL_stock', 0)
+                selling_rate = record.get('selling_rate', record.get('rate', 0))
+                days_analyzed = record.get('days_analyzed', 1)
+                
+                # Recalculate derived values
+                total_sales_qty = max(0, D1_stock - DL_stock)
+                avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
+                monthly_sales_qty = avg_daily_sales_qty * 24
+                monthly_sales_value = monthly_sales_qty * selling_rate
+                current_stock_value = DL_stock * selling_rate
+                stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+                stock_available_days = (DL_stock / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+                
+                # Update record with recalculated values
+                update_data = {
+                    "total_sales_qty": float(total_sales_qty),
+                    "avg_daily_sales_qty": float(avg_daily_sales_qty),
+                    "monthly_sales_qty": float(monthly_sales_qty),
+                    "monthly_sale_qty": int(monthly_sales_qty),
+                    "monthly_sale_value": float(monthly_sales_value),
+                    "stock_value_today": float(current_stock_value),
+                    "stock_ratio": float(stock_ratio),
+                    "stock_available_days": float(min(999, max(0, stock_available_days))),
+                    "avg_daily_sale": float(monthly_sales_value / 30),
+                    "upload_timestamp": datetime.now(timezone.utc)
+                }
+                
+                await db.liquor_data.update_one(
+                    {"_id": record["_id"]}, 
+                    {"$set": update_data}
+                )
+                updated_count += 1
+                
+            except Exception as e:
+                print(f"Warning: Error updating {record.get('brand_name', 'Unknown')}: {e}")
+                continue
+        
+        print(f"✅ Successfully refreshed {updated_count} records")
+        
+        return {
+            "message": f"Successfully refreshed analytics for {updated_count} records",
+            "updated_records": updated_count,
+            "d1_dates": sorted(list(d1_dates)),
+            "dl_dates": sorted(list(dl_dates))
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error refreshing analytics: {e}")
+        raise HTTPException(status_code=500, detail=f"Error refreshing analytics: {str(e)}")
+
 @api_router.get("/calculation-details")
 async def get_calculation_details():
     """Get detailed calculations for all brands for verification"""
