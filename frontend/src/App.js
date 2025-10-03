@@ -296,8 +296,23 @@ function App() {
 
   // Handle manual refresh
   const handleManualRefresh = async () => {
-    toast.info("Refreshing analytics...");
-    await fetchAnalytics(overstockMultiplier);
+    try {
+      setLoading(true);
+      toast.info("Refreshing analytics...");
+      
+      // Call backend refresh endpoint first
+      await axios.post(`${API}/refresh-analytics`);
+      
+      // Then fetch updated analytics
+      await fetchAnalytics(overstockMultiplier);
+      
+      toast.success("Analytics refreshed successfully!");
+    } catch (error) {
+      console.error("Error refreshing analytics:", error);
+      toast.error("Failed to refresh analytics");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle demand forecast export
