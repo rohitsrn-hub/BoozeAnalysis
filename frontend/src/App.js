@@ -1035,7 +1035,7 @@ function App() {
                 <TabsTrigger 
                   value="brand-performance" 
                   data-testid="brand-performance-tab"
-                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-white hover:bg-purple-50 border border-transparent data-[state=active]:border-purple-300"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200 data-[state=active]:border-purple-300"
                 >
                   <Crown className="w-4 h-4" />
                   <span>Top Brands</span>
