@@ -553,6 +553,19 @@ function App() {
             
             <div className="flex flex-col lg:flex-row items-end lg:items-center space-y-3 lg:space-y-0 lg:space-x-4">
               <div className="flex items-center space-x-2">
+                {/* Refresh Button */}
+                <Button
+                  onClick={handleManualRefresh}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white hover:bg-gray-50 text-xs"
+                  disabled={loading}
+                  data-testid="refresh-analytics-btn"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                  {loading ? 'Refreshing...' : 'Refresh'}
+                </Button>
+                
                 {/* Help Guide */}
                 <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
                   <DialogTrigger asChild>
