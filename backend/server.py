@@ -171,9 +171,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             
             # Look for patterns like "20-Sep-25", "03-Oct-25", "Sep-20", "Oct-03"
             date_patterns = [
-                r'(\\d{1,2})[-/](\\w{3})[-/]?(\\d{2,4})?',  # 20-Sep-25, 03-Oct-25
-                r'(\\w{3})[-/](\\d{1,2})[-/]?(\\d{2,4})?',  # Sep-20, Oct-03
-                r'(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})',   # 20/09/25, 03/10/25
+                r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})?',  # 20-Sep-25, 03-Oct-25
+                r'(\w{3})[-/](\d{1,2})[-/]?(\d{2,4})?',  # Sep-20, Oct-03
+                r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})',   # 20/09/25, 03/10/25
             ]
             
             for pattern in date_patterns:
