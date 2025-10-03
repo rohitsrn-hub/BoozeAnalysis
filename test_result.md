@@ -109,16 +109,19 @@ user_problem_statement: |
 
 backend:
   - task: "Fix Pydantic validation error in DemandRecommendation model"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "recommended_qty field expects int but receives float from calculation monthly_sales_qty - current_stock_qty"
+      - working: true
+        agent: "main"
+        comment: "Fixed by changing recommended_qty field from int to float in DemandRecommendation model. Refresh functionality now working without 500 error."
 
   - task: "Fix DL date updates in analytics after Today's Data uploads"
     implemented: false
