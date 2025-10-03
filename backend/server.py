@@ -180,66 +180,19 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     if df.empty:
         raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
     
-    # FIXED D1 and DL CALCULATION
-    # D1: First date column OR first date where ANY brand shows stock increase
-    # DL: Last date column with data in the Excel sheet
+    # CORRECTED D1 and DL CALCULATION - SIMPLE AND ACCURATE
+    # D1: ALWAYS First date column in Excel sheet
+    # DL: ALWAYS Last date column in Excel sheet
     
     sorted_dates = sorted(date_columns)
     
-    # STEP 1: Determine D1 - First date column OR first stock increase
-    global_D1_date = sorted_dates[0]  # Default: First date column
+    # D1 = First date column (e.g., 20-Sep)
+    global_D1_date = sorted_dates[0]
+    print(f"*** D1 (First Date Column): {global_D1_date} ***")
     
-    # Check if there's a stock increase pattern to find actual D1
-    print(f"Checking for stock increases to determine D1...")
-    
-    # Collect all stock data across all brands first
-    all_brand_stock_data = {}
-    for idx, row in df.iterrows():
-        brand_name = str(row[brand_col]).strip()
-        if not brand_name or brand_name.lower() in ['nan', 'none', '']:
-            continue
-            
-        brand_stock_data = {}
-        for date_col in date_columns:
-            if pd.notna(row[date_col]):
-                try:
-                    stock_qty = float(row[date_col])
-                    brand_stock_data[date_col] = stock_qty
-                except:
-                    brand_stock_data[date_col] = 0
-        
-        if brand_stock_data:
-            all_brand_stock_data[brand_name] = brand_stock_data
-    
-    # Look for first stock increase across all brands
-    for i in range(1, len(sorted_dates)):
-        prev_date = sorted_dates[i-1] 
-        curr_date = sorted_dates[i]
-        
-        # Check if ANY brand shows stock increase on curr_date
-        for brand_name, stock_data in all_brand_stock_data.items():
-            if prev_date in stock_data and curr_date in stock_data:
-                prev_stock = stock_data[prev_date]
-                curr_stock = stock_data[curr_date]
-                
-                # Stock increase indicates restocking
-                if curr_stock > prev_stock:
-                    global_D1_date = curr_date
-                    print(f"*** FOUND D1 by stock increase: {curr_date} ***")
-                    print(f"    Restocking detected in: {brand_name}")
-                    print(f"    Stock change: {prev_stock} -> {curr_stock}")
-                    break
-        
-        if global_D1_date != sorted_dates[0]:
-            break
-    
-    # If no stock increase found, use first date column
-    if global_D1_date == sorted_dates[0]:
-        print(f"*** Using first date column as D1: {global_D1_date} ***")
-    
-    # STEP 2: Determine DL - Last date column in Excel sheet
-    global_DL_date = sorted_dates[-1]  # Always use last date column
-    print(f"*** Using last date column as DL: {global_DL_date} ***")
+    # DL = Last date column (e.g., 03-Oct) 
+    global_DL_date = sorted_dates[-1]
+    print(f"*** DL (Last Date Column): {global_DL_date} ***")
     
     # STEP 3: Process each brand with the corrected D1 and DL
     liquor_data = []
