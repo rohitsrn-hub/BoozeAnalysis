@@ -1142,7 +1142,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
         upload_history = UploadHistory(
             filename=file.filename,
             upload_type="daily_update",
-            records_count=len(parsed_data),
+            records_count=len(brands_data),
             file_size=len(content)
         )
         await db.upload_history.insert_one(upload_history.dict())
@@ -1153,7 +1153,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 "message": f"Successfully updated today's data: {updated_count} brands updated, {new_brands_count} new brands added",
                 "updated_brands": updated_count,
                 "new_brands": new_brands_count,
-                "total_records": len(parsed_data),
+                "total_records": len(brands_data),
                 "upload_type": "daily_update"
             }
         )
