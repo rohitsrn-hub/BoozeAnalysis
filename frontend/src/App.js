@@ -187,6 +187,12 @@ function App() {
         if (typeof detail === 'object') {
           errorMessage = detail.message || errorMessage;
           
+          // Show available columns if provided
+          if (detail.available_columns && Array.isArray(detail.available_columns)) {
+            const columns = detail.available_columns.join(', ');
+            errorMessage += `\n\nColumns found in your file: ${columns}`;
+          }
+          
           // Show additional suggestions if available
           if (detail.suggestions && Array.isArray(detail.suggestions)) {
             const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
