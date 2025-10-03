@@ -694,6 +694,16 @@ function App() {
                           <div className="text-sm text-orange-800">
                             <div className="font-medium">File: {duplicateError.filename}</div>
                             <div className="mt-1">Dates: <span className="font-mono bg-white px-1 rounded">{duplicateError.duplicateDates.join(', ')}</span></div>
+                            {duplicateError.existing_dates_found && (
+                              <div className="mt-2">
+                                <div className="font-medium">Found in database:</div>
+                                <ul className="mt-1 ml-4 text-xs">
+                                  {duplicateError.existing_dates_found.map((date, idx) => (
+                                    <li key={idx} className="font-mono">• {date}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
