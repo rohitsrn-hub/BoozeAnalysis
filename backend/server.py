@@ -87,7 +87,7 @@ class DemandRecommendation(BaseModel):
     selling_rate: float
     wholesale_rate: float
     current_stock_qty: int
-    recommended_qty: int
+    recommended_qty: float
     urgency_level: str
 
 # Helper functions
