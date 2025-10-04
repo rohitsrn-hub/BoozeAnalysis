@@ -1274,6 +1274,7 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     day, month_name = match.groups()
                     year = "2025"  # Default to 2025 for dates without year
                     full_date = f"{day}-{month_name}-{year}"
+                    print(f"DEBUG: Parsing date without year: '{date_str}' → '{full_date}'")
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
                 # Third try: ISO format (2025-10-04)
