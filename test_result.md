@@ -144,6 +144,24 @@ backend:
         agent: "testing"
         comment: "TESTED: DL dates are properly updating in backend analytics. Current DL_date: '2025-10-04 00:00:00' is consistent across /api/database-view and /api/calculation-details endpoints. Backend DL date functionality working correctly."
 
+  - task: "Fix Trends tab chronological date ordering"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Trends tab showing dates in wrong chronological order - dates like '21-Sep', '22-Sep', '26-Sep' appearing before '20-Sep-25' due to alphabetical string sorting instead of chronological date sorting"
+      - working: true
+        agent: "main"
+        comment: "Fixed by implementing parse_date_for_sorting() function in /api/analytics endpoint that handles various date formats including dates without years (21-Sep treated as 21-Sep-2025) and sorts by actual datetime objects instead of string comparison"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Trends tab chronological ordering fix working perfectly. ✅ /api/analytics returns sales_trends in correct chronological order: 20-Sep-25 → 21-Sep → 22-Sep → 26-Sep → 28-Sep-25 → 29-Sep-25 → 30-Sep-25 → 01-Oct-25 → 03-Oct-25 ✅ parse_date_for_sorting() function correctly handles dates without years (21-Sep, 22-Sep, 26-Sep) by defaulting to 2025 ✅ All date formats (21-Sep, 20-Sep-25, 01-Oct-25) parsed and sorted correctly ✅ Data completeness verified - all 9 dates from database included in sales_trends ✅ Today's Data upload impact tested - new dates would maintain chronological ordering"
+
 frontend:
   - task: "Fix tab styling to show initial colors"
     implemented: true
