@@ -1,114 +1,114 @@
 {
   "summary": {
-    "passed": 8,
+    "passed": 9,
     "total": 9,
-    "success_rate": 88.88888888888889,
-    "timestamp": "2025-10-04T01:09:56.883772"
+    "success_rate": 100.0,
+    "timestamp": "2025-10-04T01:10:22.939323"
   },
   "detailed_results": [
     {
       "test_name": "Root Endpoint",
       "status": "PASS",
       "message": "API root accessible",
-      "timestamp": "2025-10-04T01:09:56.590134",
+      "timestamp": "2025-10-04T01:10:22.672238",
       "details": "{'message': 'Liquor Sales Analysis Dashboard API'}"
     },
     {
       "test_name": "Trends Chronological Ordering",
-      "status": "FAIL",
-      "message": "Sales trends dates are NOT in chronological order",
-      "timestamp": "2025-10-04T01:09:56.601721",
-      "details": "Current order: 20-Sep-25 (2025-09-20) \u2192 21-Sep (1-01-01) \u2192 22-Sep (1-01-01) \u2192 26-Sep (1-01-01) \u2192 28-Sep-25 (2025-09-28) \u2192 29-Sep-25 (2025-09-29) \u2192 30-Sep-25 (2025-09-30) \u2192 01-Oct-25 (2025-10-01) \u2192 03-Oct-25 (2025-10-03)"
+      "status": "PASS",
+      "message": "Sales trends dates are in chronological order (9 dates)",
+      "timestamp": "2025-10-04T01:10:22.683835",
+      "details": "Sample order: 20-Sep-25 (2025-09-20) \u2192 21-Sep (2025-09-21) \u2192 22-Sep (2025-09-22) \u2192 26-Sep (2025-09-26) \u2192 28-Sep-25 (2025-09-28)"
     },
     {
       "test_name": "Date Parsing Function",
       "status": "PASS",
       "message": "All 9 date formats recognized and parseable",
-      "timestamp": "2025-10-04T01:09:56.617984",
+      "timestamp": "2025-10-04T01:10:22.695064",
       "details": "Format breakdown: day_month_year: 9"
     },
     {
       "test_name": "Data Completeness",
       "status": "PASS",
       "message": "All 9 dates from database included in sales_trends",
-      "timestamp": "2025-10-04T01:09:56.644201",
+      "timestamp": "2025-10-04T01:10:22.722420",
       "details": "Perfect match between database dates and trends data"
     },
     {
       "test_name": "Refresh Analytics",
       "status": "PASS",
       "message": "Successfully refreshed 62 records",
-      "timestamp": "2025-10-04T01:09:56.706195",
+      "timestamp": "2025-10-04T01:10:22.751013",
       "details": "D1 dates: ['20-Sep-25'], DL dates: ['03-Oct-25']"
     },
     {
       "test_name": "Demand Recommendations",
       "status": "PASS",
       "message": "Found 16 recommendations with proper float values",
-      "timestamp": "2025-10-04T01:09:56.716155",
+      "timestamp": "2025-10-04T01:10:22.761320",
       "details": "Sample recommended_qty: 846.0 (type: float)"
     },
     {
       "test_name": "DL Date Verification",
       "status": "PASS",
       "message": "DL dates are present in analytics",
-      "timestamp": "2025-10-04T01:09:56.730766",
+      "timestamp": "2025-10-04T01:10:22.775198",
       "details": "Sample DL_date: 03-Oct-25"
     },
     {
       "test_name": "DL Date Consistency",
       "status": "PASS",
       "message": "DL dates consistent across endpoints",
-      "timestamp": "2025-10-04T01:09:56.742414",
+      "timestamp": "2025-10-04T01:10:22.786554",
       "details": "Both show: 03-Oct-25"
     },
     {
       "test_name": "Analytics - Analytics with overstock multiplier",
       "status": "PASS",
       "message": "Returned valid data (4401 items/chars)",
-      "timestamp": "2025-10-04T01:09:56.751270",
+      "timestamp": "2025-10-04T01:10:22.796903",
       "details": null
     },
     {
       "test_name": "Analytics - Charts data",
       "status": "PASS",
       "message": "Returned valid data (4209 items/chars)",
-      "timestamp": "2025-10-04T01:09:56.760966",
+      "timestamp": "2025-10-04T01:10:22.807439",
       "details": null
     },
     {
       "test_name": "Analytics - Calculation details",
       "status": "PASS",
       "message": "Returned valid data (62 items/chars)",
-      "timestamp": "2025-10-04T01:09:56.770224",
+      "timestamp": "2025-10-04T01:10:22.819770",
       "details": null
     },
     {
       "test_name": "Analytics - Database view",
       "status": "PASS",
       "message": "Returned valid data (52003 items/chars)",
-      "timestamp": "2025-10-04T01:09:56.810550",
+      "timestamp": "2025-10-04T01:10:22.834451",
       "details": null
     },
     {
       "test_name": "Analytics - Upload history",
       "status": "PASS",
       "message": "Returned valid data (24 items/chars)",
-      "timestamp": "2025-10-04T01:09:56.821695",
+      "timestamp": "2025-10-04T01:10:22.843611",
       "details": null
     },
     {
       "test_name": "Upload - Full Monthly Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-04T01:09:56.832516",
+      "timestamp": "2025-10-04T01:10:22.891105",
       "details": "Returns proper validation error when no file provided"
     },
     {
       "test_name": "Upload - Today's Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-04T01:09:56.883622",
+      "timestamp": "2025-10-04T01:10:22.939170",
       "details": "Returns proper validation error when no file provided"
     }
   ]
