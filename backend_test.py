@@ -223,6 +223,256 @@ class BackendTester:
             self.log_test("DL Date Verification", "FAIL", "Could not retrieve analytics data", error)
             return False
     
+    def test_trends_chronological_ordering(self):
+        """PRIORITY TEST: Test Trends tab chronological date ordering fix"""
+        print("\n📊 Testing Trends Tab Chronological Date Ordering (PRIORITY)")
+        
+        # Test the analytics endpoint for sales_trends chronological ordering
+        success, analytics_data, error = self.test_endpoint("GET", "/analytics", 200)
+        
+        if not success:
+            self.log_test("Trends Chronological Ordering", "FAIL", "Analytics endpoint failed", error)
+            return False
+        
+        if not isinstance(analytics_data, dict):
+            self.log_test("Trends Chronological Ordering", "FAIL", "Invalid analytics response format", f"Expected dict, got {type(analytics_data)}")
+            return False
+        
+        sales_trends = analytics_data.get('sales_trends', {})
+        
+        if not sales_trends:
+            self.log_test("Trends Chronological Ordering", "FAIL", "No sales_trends data found", "sales_trends is empty or missing")
+            return False
+        
+        # Get the date keys from sales_trends
+        date_keys = list(sales_trends.keys())
+        
+        if len(date_keys) < 2:
+            self.log_test("Trends Chronological Ordering", "PASS", "Insufficient dates for ordering test", f"Only {len(date_keys)} dates found")
+            return True
+        
+        # Test chronological ordering by parsing dates
+        def parse_date_for_validation(date_str):
+            """Parse date string for validation - similar to backend logic"""
+            try:
+                import re
+                from datetime import datetime
+                
+                if not date_str:
+                    return datetime.min
+                
+                date_str = str(date_str).strip()
+                
+                # Handle full datetime strings
+                if 'T' in date_str or len(date_str) > 15:
+                    try:
+                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+                        return dt
+                    except:
+                        pass
+                
+                # Parse various date formats
+                patterns = [
+                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
+                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
+                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
+                ]
+                
+                for pattern, fmt in patterns:
+                    match = re.search(pattern, date_str, re.IGNORECASE)
+                    if match:
+                        if fmt == "%d-%b-%Y":
+                            day, month_name, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            full_date = f"{day}-{month_name}-{year}"
+                            return datetime.strptime(full_date, fmt)
+                        elif fmt == "%Y-%m-%d":
+                            return datetime.strptime(match.group(0), fmt)
+                        elif fmt == "%d-%m-%Y":
+                            day, month, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            return datetime(int(year), int(month), int(day))
+                        
+            except Exception as e:
+                print(f"Warning: Could not parse date '{date_str}': {e}")
+                return datetime.min
+            
+            return datetime.min
+        
+        # Parse all dates and check if they're in chronological order
+        parsed_dates = []
+        for date_key in date_keys:
+            parsed_date = parse_date_for_validation(date_key)
+            parsed_dates.append((date_key, parsed_date))
+        
+        # Check if dates are in chronological order
+        is_chronological = True
+        previous_date = None
+        
+        for i, (date_key, parsed_date) in enumerate(parsed_dates):
+            if previous_date is not None and parsed_date < previous_date:
+                is_chronological = False
+                break
+            previous_date = parsed_date
+        
+        if is_chronological:
+            # Format dates for display
+            date_display = [f"{date_key} ({parsed_date.strftime('%Y-%m-%d')})" for date_key, parsed_date in parsed_dates[:5]]
+            self.log_test(
+                "Trends Chronological Ordering", 
+                "PASS", 
+                f"Sales trends dates are in chronological order ({len(date_keys)} dates)",
+                f"Sample order: {' → '.join(date_display)}"
+            )
+            return True
+        else:
+            # Show the problematic ordering
+            date_display = [f"{date_key} ({parsed_date.strftime('%Y-%m-%d')})" for date_key, parsed_date in parsed_dates]
+            self.log_test(
+                "Trends Chronological Ordering", 
+                "FAIL", 
+                "Sales trends dates are NOT in chronological order",
+                f"Current order: {' → '.join(date_display)}"
+            )
+            return False
+    
+    def test_date_parsing_function(self):
+        """Test various date formats that the parse_date_for_sorting function should handle"""
+        print("\n🗓️ Testing Date Parsing Function Formats")
+        
+        # Get analytics data to test actual date parsing
+        success, analytics_data, error = self.test_endpoint("GET", "/analytics", 200)
+        
+        if not success:
+            self.log_test("Date Parsing Function", "FAIL", "Could not get analytics data for testing", error)
+            return False
+        
+        sales_trends = analytics_data.get('sales_trends', {})
+        
+        if not sales_trends:
+            self.log_test("Date Parsing Function", "FAIL", "No sales_trends data to test date parsing", "Empty sales_trends")
+            return False
+        
+        # Test different date format patterns that should be supported
+        date_keys = list(sales_trends.keys())
+        supported_formats = {
+            'day_month_year': 0,  # 21-Sep, 20-Sep-25
+            'full_datetime': 0,   # Full datetime strings
+            'iso_format': 0,      # 2025-10-01
+            'other_formats': 0    # Other recognized formats
+        }
+        
+        import re
+        
+        for date_key in date_keys:
+            date_str = str(date_key).strip()
+            
+            # Check format patterns
+            if re.search(r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}', date_str, re.IGNORECASE):
+                supported_formats['day_month_year'] += 1
+            elif 'T' in date_str or len(date_str) > 15:
+                supported_formats['full_datetime'] += 1
+            elif re.search(r'\d{4}-\d{1,2}-\d{1,2}', date_str):
+                supported_formats['iso_format'] += 1
+            else:
+                supported_formats['other_formats'] += 1
+        
+        # Verify that we can handle the formats present in the data
+        total_dates = len(date_keys)
+        recognized_dates = sum(supported_formats.values())
+        
+        if recognized_dates == total_dates:
+            format_summary = ", ".join([f"{fmt}: {count}" for fmt, count in supported_formats.items() if count > 0])
+            self.log_test(
+                "Date Parsing Function", 
+                "PASS", 
+                f"All {total_dates} date formats recognized and parseable",
+                f"Format breakdown: {format_summary}"
+            )
+            return True
+        else:
+            self.log_test(
+                "Date Parsing Function", 
+                "FAIL", 
+                f"Some date formats not recognized: {recognized_dates}/{total_dates}",
+                f"Unrecognized dates may cause sorting issues"
+            )
+            return False
+    
+    def test_data_completeness(self):
+        """Test that all dates from database are included in sales_trends"""
+        print("\n📋 Testing Data Completeness in Sales Trends")
+        
+        # Get database view to see all dates in raw data
+        success1, db_data, error1 = self.test_endpoint("GET", "/database-view", 200)
+        
+        if not success1:
+            self.log_test("Data Completeness", "FAIL", "Could not get database data", error1)
+            return False
+        
+        # Get analytics data to see sales_trends
+        success2, analytics_data, error2 = self.test_endpoint("GET", "/analytics", 200)
+        
+        if not success2:
+            self.log_test("Data Completeness", "FAIL", "Could not get analytics data", error2)
+            return False
+        
+        # Extract all dates from database records
+        db_dates = set()
+        data_list = db_data.get('data', [])
+        
+        for record in data_list:
+            # Check DL_date
+            dl_date = record.get('DL_date')
+            if dl_date:
+                db_dates.add(str(dl_date))
+            
+            # Check daily_sales dates
+            daily_sales = record.get('daily_sales', {})
+            for date_key in daily_sales.keys():
+                db_dates.add(str(date_key))
+        
+        # Extract dates from sales_trends
+        sales_trends = analytics_data.get('sales_trends', {})
+        trends_dates = set(str(key) for key in sales_trends.keys())
+        
+        # Compare completeness
+        missing_dates = db_dates - trends_dates
+        extra_dates = trends_dates - db_dates
+        
+        if not missing_dates and not extra_dates:
+            self.log_test(
+                "Data Completeness", 
+                "PASS", 
+                f"All {len(db_dates)} dates from database included in sales_trends",
+                f"Perfect match between database dates and trends data"
+            )
+            return True
+        elif missing_dates and not extra_dates:
+            self.log_test(
+                "Data Completeness", 
+                "FAIL", 
+                f"{len(missing_dates)} dates missing from sales_trends",
+                f"Missing dates: {sorted(list(missing_dates))[:5]}"
+            )
+            return False
+        elif extra_dates and not missing_dates:
+            self.log_test(
+                "Data Completeness", 
+                "PASS", 
+                f"All database dates included, {len(extra_dates)} additional dates in trends",
+                f"Extra dates may be from processed/calculated data"
+            )
+            return True
+        else:
+            self.log_test(
+                "Data Completeness", 
+                "FAIL", 
+                f"Data mismatch: {len(missing_dates)} missing, {len(extra_dates)} extra",
+                f"Missing: {sorted(list(missing_dates))[:3]}, Extra: {sorted(list(extra_dates))[:3]}"
+            )
+            return False
+    
     def test_file_upload_endpoints(self):
         """Test file upload endpoints (without actually uploading files)"""
         print("\n📁 Testing File Upload Endpoints")
