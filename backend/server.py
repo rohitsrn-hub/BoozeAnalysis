@@ -1238,8 +1238,56 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     sales_trends[date] = 0
                 sales_trends[date] += sales
         
-        # Sort sales trends by date
-        sorted_trends = dict(sorted(sales_trends.items()))
+        # Sort sales trends by date chronologically
+        def parse_date_for_sorting(date_str):
+            """Parse various date formats for chronological sorting"""
+            try:
+                import re
+                from datetime import datetime
+                
+                if not date_str:
+                    return datetime.min
+                
+                date_str = str(date_str).strip()
+                
+                # Handle full datetime strings
+                if 'T' in date_str or len(date_str) > 15:
+                    try:
+                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+                        return dt
+                    except:
+                        pass
+                
+                # Parse various date formats
+                patterns = [
+                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
+                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
+                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
+                ]
+                
+                for pattern, fmt in patterns:
+                    match = re.search(pattern, date_str, re.IGNORECASE)
+                    if match:
+                        if fmt == "%d-%b-%Y":
+                            day, month_name, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            full_date = f"{day}-{month_name}-{year}"
+                            return datetime.strptime(full_date, fmt)
+                        elif fmt == "%Y-%m-%d":
+                            return datetime.strptime(match.group(0), fmt)
+                        elif fmt == "%d-%m-%Y":
+                            day, month, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            return datetime(int(year), int(month), int(day))
+                        
+            except Exception as e:
+                print(f"Warning: Could not parse date '{date_str}': {e}")
+                return datetime.min
+            
+            return datetime.min
+        
+        # Sort by actual date values, not string comparison
+        sorted_trends = dict(sorted(sales_trends.items(), key=lambda item: parse_date_for_sorting(item[0])))
         
         return AnalyticsResponse(
             total_brands=len(data_dicts),
