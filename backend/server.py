@@ -1258,27 +1258,35 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     except:
                         pass
                 
-                # Parse various date formats
-                patterns = [
-                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
-                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
-                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
-                ]
+                # Parse various date formats - handle dates with and without years
                 
-                for pattern, fmt in patterns:
-                    match = re.search(pattern, date_str, re.IGNORECASE)
-                    if match:
-                        if fmt == "%d-%b-%Y":
-                            day, month_name, year = match.groups()
-                            year = f"20{year}" if len(year) == 2 else year
-                            full_date = f"{day}-{month_name}-{year}"
-                            return datetime.strptime(full_date, fmt)
-                        elif fmt == "%Y-%m-%d":
-                            return datetime.strptime(match.group(0), fmt)
-                        elif fmt == "%d-%m-%Y":
-                            day, month, year = match.groups()
-                            year = f"20{year}" if len(year) == 2 else year
-                            return datetime(int(year), int(month), int(day))
+                # First try: dates with year (21-Sep-25, 01-Oct-25)
+                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
+                if match:
+                    day, month_name, year = match.groups()
+                    year = f"20{year}" if len(year) == 2 else year
+                    full_date = f"{day}-{month_name}-{year}"
+                    return datetime.strptime(full_date, "%d-%b-%Y")
+                
+                # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
+                if match:
+                    day, month_name = match.groups()
+                    year = "2025"  # Default to 2025 for dates without year
+                    full_date = f"{day}-{month_name}-{year}"
+                    return datetime.strptime(full_date, "%d-%b-%Y")
+                
+                # Third try: ISO format (2025-10-04)
+                match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
+                if match:
+                    return datetime.strptime(match.group(0), "%Y-%m-%d")
+                
+                # Fourth try: numeric dates (04-10-25, 04/10/2025)
+                match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
+                if match:
+                    day, month, year = match.groups()
+                    year = f"20{year}" if len(year) == 2 else year
+                    return datetime(int(year), int(month), int(day))
                         
             except Exception as e:
                 print(f"Warning: Could not parse date '{date_str}': {e}")
