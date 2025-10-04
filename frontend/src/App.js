@@ -1250,7 +1250,6 @@ function App() {
                             <h4 className="font-medium text-gray-900">Recent Stock Trends</h4>
                             {Object.entries(analyticsData.sales_trends)
                               .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
-                              .slice(-7)
                               .map(([date, sales]) => (
                                 <div key={date} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                   <div className="flex items-center space-x-3">
