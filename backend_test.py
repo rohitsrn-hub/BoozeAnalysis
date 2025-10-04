@@ -521,10 +521,13 @@ class BackendTester:
         print(f"Backend URL: {self.base_url}")
         print("=" * 60)
         
-        # Test results tracking
+        # Test results tracking - PRIORITY: Trends tab chronological ordering tests
         test_functions = [
             ("Root Endpoint", self.test_root_endpoint),
-            ("Refresh Analytics (PRIORITY)", self.test_refresh_analytics),
+            ("Trends Chronological Ordering (PRIORITY)", self.test_trends_chronological_ordering),
+            ("Date Parsing Function", self.test_date_parsing_function),
+            ("Data Completeness", self.test_data_completeness),
+            ("Refresh Analytics", self.test_refresh_analytics),
             ("Demand Recommendations", self.test_demand_recommendations),
             ("DL Date Updates", self.test_dl_date_updates),
             ("Analytics Endpoints", self.test_analytics_endpoints),
