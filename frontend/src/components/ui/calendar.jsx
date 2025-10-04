@@ -5,6 +5,17 @@ import { DayPicker } from "react-day-picker"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
+/**
+* Renders a customizable DayPicker calendar with optional styling overrides.
+* @example
+* Calendar({ className: "mt-4", showOutsideDays: false })
+* <DayPicker /> React element
+* @param {string} [className] - Additional CSS classes to apply to the calendar wrapper.
+* @param {Object<string,string>} [classNames] - Map of class names to override default DayPicker styling.
+* @param {boolean} [showOutsideDays=true] - Determines whether days outside the current month are displayed.
+* @param {...any} [props] - Extra props forwarded to the underlying DayPicker component.
+* @returns {JSX.Element} React element representing the rendered calendar.
+**/
 function Calendar({
   className,
   classNames,

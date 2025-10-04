@@ -17,6 +17,16 @@ const ResizablePanelGroup = ({
 
 const ResizablePanel = ResizablePrimitive.Panel
 
+/**
+* Renders a resizable panel handle that can optionally display a visible grab bar for user interaction.
+* @example
+* ResizableHandle({ withHandle: true, className: "my-class" })
+* // => <PanelResizeHandle /> element with an inner grip icon
+* @param {boolean} withHandle - When true, shows a small grip icon inside the resize handle.
+* @param {string} className - Additional Tailwind CSS classes to merge with the default styles.
+* @param {...Object} props - Any other props to forward to `ResizablePrimitive.PanelResizeHandle`.
+* @returns {JSX.Element} A configured `ResizablePrimitive.PanelResizeHandle` React element.
+**/
 const ResizableHandle = ({
   withHandle,
   className,

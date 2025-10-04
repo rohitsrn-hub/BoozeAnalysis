@@ -31,6 +31,14 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState(0);
 
   // Fetch all data
+  /**
+  * Synchronizes analytics, charts, demand recommendations, and calculation details from backend APIs, updates local state, and shows toast notifications.
+  * @example
+  * sync(2.5)
+  * // Updates UI with latest analytics data
+  * @param {number} multiplier - Overstock multiplier applied when requesting analytics data.
+  * @returns {Promise<void>} A promise that resolves once all data has been fetched and state updated.
+  **/
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
       setLoading(true);
@@ -67,6 +75,14 @@ function App() {
   };
 
   // Handle file upload
+  /**
+  * Uploads a selected file to the server, tracks the progress, shows user feedback, and fetches analytics after completion.
+  * @example
+  * handleFileUpload(event)
+  * // Displays “Successfully uploaded 120 records” on success
+  * @param {Event} event - The file-input change event that provides the selected file.
+  * @returns {Promise<void>} Promise that resolves when upload and subsequent analytics fetch are finished.
+  **/
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -132,6 +148,13 @@ function App() {
   };
 
   // Handle demand forecast export
+  /**
+  * Exports the liquor demand forecast data as an Excel file by requesting a blob from the API and triggering a browser download.
+  * @example
+  * sync()
+  * // Triggers file download and shows a success toast notification
+  * @returns {Promise<void>} Resolves when the download is initiated or rejects if the request fails.
+  **/
   const handleExportDemandList = async () => {
     try {
       const response = await axios.get(`${API}/export-demand-list`, {

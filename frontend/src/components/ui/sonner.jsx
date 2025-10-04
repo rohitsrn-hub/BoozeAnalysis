@@ -1,6 +1,14 @@
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
 
+/**
+* Renders a themed Sonner toast provider with customizable props.
+* @example
+* Toaster({ duration: 3000 })
+* // Renders a Sonner component with light theme and custom duration.
+* @param {Object} props - Additional properties to pass to the Sonner component.
+* @returns {JSX.Element} The rendered Sonner toast provider component.
+**/
 const Toaster = ({
   ...props
 }) => {

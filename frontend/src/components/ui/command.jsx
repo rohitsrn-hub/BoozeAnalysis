@@ -16,6 +16,15 @@ const Command = React.forwardRef(({ className, ...props }, ref) => (
 ))
 Command.displayName = CommandPrimitive.displayName
 
+/**
+* Renders a dialog that wraps a cmdk-based command menu.
+* @example
+* CommandDialog({ children: <div>Item</div>, open: true })
+* <Dialog open>…</Dialog>
+* @param {React.ReactNode} children - Elements to be displayed inside the Command component.
+* @param {Object} props - Additional props forwarded to the underlying Dialog component.
+* @returns {JSX.Element} A JSX element containing the command dialog.
+**/
 const CommandDialog = ({
   children,
   ...props
