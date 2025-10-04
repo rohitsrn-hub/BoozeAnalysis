@@ -187,6 +187,7 @@ metadata:
 test_plan:
   current_focus:
     - "Fix Trends tab chronological date ordering"
+    - "Fix Recent Stock Trends to show all dates"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
