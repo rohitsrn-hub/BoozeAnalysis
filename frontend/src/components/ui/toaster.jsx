@@ -8,6 +8,14 @@ import {
   ToastViewport,
 } from "@/components/ui/toast"
 
+/**
+* React component that renders the toast provider, all active toasts, and the toast viewport.
+* @example
+* // Include the component once, typically near the root of your app
+* <Toaster />
+* // Displays each toast inside a ToastProvider and attaches a ToastViewport
+* @returns {JSX.Element} A React element that handles toast notifications and their viewport.
+**/
 export function Toaster() {
   const { toasts } = useToast()
 

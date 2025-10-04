@@ -30,6 +30,37 @@ api_router = APIRouter(prefix="/api")
 
 # Data Models
 class LiquorData(BaseModel):
+    """
+    Represents a comprehensive snapshot of liquor inventory, sales, and pricing metrics for analytic and reporting purposes.
+    Parameters:
+        - id (str): Auto-generated unique identifier for each liquor record.
+        - brand_name (str): Name of the liquor brand.
+        - rate (float): MRP or standard rate for the product.
+        - daily_sales (Dict[str, int]): Mapping of date strings to quantity sold on that day.
+        - monthly_sale_qty (int): Total units sold in the current month.
+        - monthly_sale_value (float): Revenue generated from monthly sales.
+        - avg_daily_sale (float): Average value of daily sales in currency.
+        - stock_available_days (float): Estimated number of days current stock will last.
+        - stock_value_before (float): Inventory value at the start of the analysis period.
+        - stock_value_today (float): Current inventory value.
+        - stock_ratio (float): Ratio of stock sold versus stock remaining.
+        - index_number (int): Positional index used during batch processing.
+        - wholesale_rate (float): Purchase price per unit.
+        - selling_rate (float): Current selling price per unit.
+        - D1_date (str): Date representing the first day of the analysis window.
+        - D1_stock (float): Stock quantity recorded on D1_date.
+        - DL_date (str): Date representing the last day of the analysis window.
+        - DL_stock (float): Stock quantity recorded on DL_date.
+        - total_sales_qty (float): Cumulative units sold over the analysis window.
+        - avg_daily_sales_qty (float): Average units sold per day.
+        - days_analyzed (int): Total number of days included in the analysis.
+        - current_stock_qty (int): Actual stock units available at the time of upload.
+        - upload_timestamp (datetime): UTC time when the record was created.
+    Processing Logic:
+        - Generates a UUID for id and captures upload_timestamp automatically to ensure traceability.
+        - Uses default_factory for mutable fields (e.g., daily_sales) to avoid shared state across instances.
+        - Combines both monetary and quantity metrics to facilitate multi-dimensional stock analysis.
+        - Indexing fields (index_number) enable ordered exports without altering the original dataset."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     brand_name: str
     rate: float
@@ -59,6 +90,18 @@ class OverstockConfig(BaseModel):
     multiplier: float = 3.0
 
 class AnalyticsResponse(BaseModel):
+    """Aggregates high-level inventory and sales metrics returned by the analytics endpoint.
+    Parameters:
+        - total_brands (int): Number of distinct brands represented in the inventory.
+        - total_stock_value (float): Combined monetary value of all items currently in stock.
+        - total_overstocked_value (float): Monetary value attributed to items exceeding target stock levels.
+        - overstocked_brands (int): Count of brands with stock quantities above optimal thresholds.
+        - top_selling_brands (List[Dict[str, Any]]): List of brand records ordered by sales volume.
+        - overstocked_items (List[Dict[str, Any]]): Detailed records for products classified as overstocked.
+        - sales_trends (Dict[str, Any]): Aggregated time-series data outlining sales performance over selected periods.
+    Processing Logic:
+        - Utilises Pydantic’s type enforcement to validate all numeric and collection fields at instantiation.
+        - Supports rapid conversion to JSON for API responses, ensuring consistent data formats."""
     total_brands: int
     total_stock_value: float
     total_overstocked_value: float

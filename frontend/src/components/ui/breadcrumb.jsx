@@ -51,6 +51,16 @@ const BreadcrumbPage = React.forwardRef(({ className, ...props }, ref) => (
 ))
 BreadcrumbPage.displayName = "BreadcrumbPage"
 
+/**
+* Renders a breadcrumb separator as a list item containing either the provided children or a default Chevron icon.
+* @example
+* BreadcrumbSeparator(<span>/</span>, "text-gray-500")
+* <li role="presentation" aria-hidden="true" class="text-gray-500"><span>/</span></li>
+* @param {React.ReactNode} children - Optional node to be displayed instead of the default chevron icon.
+* @param {string} className - Additional class names to merge with the default Tailwind classes.
+* @param {...object} props - Any other props that will be forwarded to the underlying &lt;li&gt; element.
+* @returns {JSX.Element} A list item element acting as a visual separator inside a breadcrumb component.
+**/
 const BreadcrumbSeparator = ({
   children,
   className,
@@ -66,6 +76,14 @@ const BreadcrumbSeparator = ({
 )
 BreadcrumbSeparator.displayName = "BreadcrumbSeparator"
 
+/**
+* Renders a breadcrumb “More” icon inside a span element.
+* @example
+* BreadcrumbMore({ className: "text-muted-foreground" })
+* // <span role="presentation" aria-hidden="true" class="flex h-9 w-9 items-center justify-center text-muted-foreground"><svg>...</svg></span>
+* @param {Object} props - Component props containing optional className and any additional span attributes.
+* @returns {JSX.Element} JSX for the breadcrumb “More” icon element.
+**/
 const BreadcrumbEllipsis = ({
   className,
   ...props

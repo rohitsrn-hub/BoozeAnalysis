@@ -21,6 +21,14 @@ function genId() {
 
 const toastTimeouts = new Map()
 
+/**
+* Schedules the removal of a toast notification after a preset delay if it has not already been scheduled.
+* @example
+* scheduleToastRemoval("toast-123")
+* // toast is removed automatically after the delay
+* @param {string|number} toastId - Unique identifier of the toast to remove.
+* @returns {void} No value is returned.
+**/
 const addToRemoveQueue = (toastId) => {
   if (toastTimeouts.has(toastId)) {
     return
@@ -37,6 +45,15 @@ const addToRemoveQueue = (toastId) => {
   toastTimeouts.set(toastId, timeout)
 }
 
+/**
+* Handles toast state transitions based on dispatched actions.
+* @example
+* toastReducer(currentState, { type: "ADD_TOAST", toast: newToast })
+* // returns a new state object with the added toast
+* @param {Object} state - Current toast state.
+* @param {Object} action - Action object containing the action type and payload.
+* @returns {Object} Updated toast state after applying the given action.
+**/
 export const reducer = (state, action) => {
   switch (action.type) {
     case "ADD_TOAST":
@@ -101,6 +118,14 @@ function dispatch(action) {
   })
 }
 
+/**
+* Creates and dispatches a new toast notification, returning utilities to manage it.
+* @example
+* toast({ title: "Saved", description: "Your changes have been saved." })
+* { id: "abc123", dismiss: [Function], update: [Function] }
+* @param {{Object}} props - Initial properties for the toast notification.
+* @returns {{Object}} An object containing the toast id and helper functions.
+**/
 function toast({
   ...props
 }) {
@@ -132,6 +157,13 @@ function toast({
   }
 }
 
+/**
+* Custom React hook that provides toast notification state and helper methods in one line
+* @example
+* const { toast, dismiss, ...state } = useToast()
+* toast('Item added successfully!')
+* @returns {{Object}} Object containing the current toast state along with `toast` and `dismiss` functions.
+**/
 function useToast() {
   const [state, setState] = React.useState(memoryState)
 

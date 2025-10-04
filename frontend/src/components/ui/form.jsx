@@ -21,6 +21,21 @@ const FormField = (
   );
 }
 
+/**
+* Retrieves combined metadata and validation state for the current form field from React context.
+* @example
+* useFormField()
+* {
+*   id: "username",
+*   name: "username",
+*   formItemId: "username-form-item",
+*   formDescriptionId: "username-form-item-description",
+*   formMessageId: "username-form-item-message",
+*   invalid: false,
+*   error: undefined
+* }
+* @returns {{Object}} Object containing field identifiers and validation state.
+**/
 const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext)
   const itemContext = React.useContext(FormItemContext)
