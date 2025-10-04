@@ -106,6 +106,9 @@ user_problem_statement: |
   1. Fix 500 Internal Server Error during refresh caused by Pydantic validation error in DemandRecommendation model
   2. Fix DL values not updating in frontend after "Today's Data" uploads  
   3. Fix tab styling to have initial colors (currently only show colors when active/hover)
+  4. Fix Trends tab - Stock Analysis Overview graph showing dates in wrong chronological order
+  5. Fix Trends tab - Recent Stock Trends not showing stocks for all dates in database
+  6. Both charts should update when Today's Data is uploaded
 
 backend:
   - task: "Fix Pydantic validation error in DemandRecommendation model"
