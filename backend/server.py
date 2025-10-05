@@ -1844,3 +1844,13 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+from fastapi import UploadFile, File
+
+@api_router.post("/upload-full-monthly-data")
+async def upload_full_monthly_data(file: UploadFile = File(...)):
+    # Minimal: acknowledge file upload, implement logic as needed
+    content = await file.read()
+    return {"success": True, "filename": file.filename}
+
+# Make sure this line is present once, near the end:
+app.include_router(api_router)
