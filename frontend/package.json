@@ -55,8 +55,8 @@
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
     "zod": "^3.24.4",
-    "ajv": "6.12.6",
-    "ajv-keywords": "3.5.2"
+    "ajv": "^8.12.0",
+    "ajv-keywords": "^5.1.0"
   },
   "scripts": {
     "start": "react-scripts start",
