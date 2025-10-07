@@ -90,6 +90,33 @@ class DemandRecommendation(BaseModel):
     recommended_qty: float
     urgency_level: str
 
+# Module 1: Brand & Rate Management Models
+class AddBrandRequest(BaseModel):
+    """Request model for adding a new brand manually"""
+    index_number: int
+    brand_name: str
+    wholesale_rate: float
+    selling_rate: float
+    initial_stock_qty: int = Field(default=0)
+
+class BrandRateInfo(BaseModel):
+    """Response model for brand rate information"""
+    id: str
+    index_number: int
+    brand_name: str
+    wholesale_rate: float
+    selling_rate: float
+    current_stock_qty: int
+    stock_value_today: float
+    last_updated: datetime
+
+class UpdateRatesResponse(BaseModel):
+    """Response for bulk rate update operations"""
+    updated_count: int
+    not_found_count: int
+    updated_brands: List[str]
+    not_found_brands: List[str]
+
 # Helper functions
 async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], filename: str):
     """Check if the uploaded data contains dates that already exist in the database"""
