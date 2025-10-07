@@ -36,6 +36,18 @@ function App() {
   const [currentDateRange, setCurrentDateRange] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(0);
 
+  // Module 1: Brand Management state
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [showRatesModal, setShowRatesModal] = useState(false);
+  const [brandFormData, setBrandFormData] = useState({
+    index_number: '',
+    brand_name: '',
+    wholesale_rate: '',
+    selling_rate: '',
+    initial_stock_qty: 0
+  });
+  const [ratesFile, setRatesFile] = useState(null);
+
   // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
