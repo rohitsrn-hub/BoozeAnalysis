@@ -1850,6 +1850,230 @@ async def export_demand_list():
         logging.error(f"Error exporting demand list: {e}")
         raise HTTPException(status_code=500, detail=f"Error exporting demand list: {str(e)}")
 
+# ========================================
+# MODULE 1: Brand & Rate Management APIs
+# ========================================
+
+@api_router.post("/brands/add")
+async def add_brand_manually(brand: AddBrandRequest):
+    """Add a new brand manually with rates and initial stock"""
+    try:
+        # Check if brand with same index already exists
+        existing_brand = await db.liquor_data.find_one({"index_number": brand.index_number})
+        if existing_brand:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Brand with index {brand.index_number} already exists: {existing_brand['brand_name']}"
+            )
+        
+        # Check if brand name already exists
+        existing_name = await db.liquor_data.find_one({"brand_name": brand.brand_name})
+        if existing_name:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Brand name '{brand.brand_name}' already exists with index {existing_name.get('index_number', 'N/A')}"
+            )
+        
+        # Create new brand record with minimal data
+        new_brand = LiquorData(
+            brand_name=brand.brand_name,
+            index_number=brand.index_number,
+            wholesale_rate=brand.wholesale_rate,
+            selling_rate=brand.selling_rate,
+            rate=brand.selling_rate,  # For compatibility
+            current_stock_qty=brand.initial_stock_qty,
+            D1_stock=float(brand.initial_stock_qty),
+            DL_stock=float(brand.initial_stock_qty),
+            stock_value_today=brand.selling_rate * brand.initial_stock_qty,
+            stock_value_before=brand.selling_rate * brand.initial_stock_qty,
+            # Set defaults for calculated fields
+            daily_sales={},
+            monthly_sale_qty=0,
+            monthly_sale_value=0.0,
+            avg_daily_sale=0.0,
+            stock_available_days=999.0,
+            stock_ratio=0.0,
+            total_sales_qty=0.0,
+            avg_daily_sales_qty=0.0,
+            days_analyzed=0,
+            D1_date="N/A",
+            DL_date="N/A",
+            upload_timestamp=datetime.now(timezone.utc)
+        )
+        
+        # Insert into database
+        await db.liquor_data.insert_one(new_brand.dict())
+        
+        logging.info(f"Successfully added new brand: {brand.brand_name} (Index: {brand.index_number})")
+        
+        return JSONResponse(
+            status_code=201,
+            content={
+                "message": f"Successfully added brand: {brand.brand_name}",
+                "brand": {
+                    "index_number": brand.index_number,
+                    "brand_name": brand.brand_name,
+                    "wholesale_rate": brand.wholesale_rate,
+                    "selling_rate": brand.selling_rate,
+                    "initial_stock_qty": brand.initial_stock_qty
+                }
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error adding brand: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding brand: {str(e)}")
+
+@api_router.get("/brands/rates")
+async def get_all_brand_rates():
+    """Get all brands with their current rates and stock information"""
+    try:
+        # Fetch all liquor data sorted by index
+        liquor_records = await db.liquor_data.find().sort("index_number", 1).to_list(1000)
+        
+        if not liquor_records:
+            return []
+        
+        # Format response
+        brand_rates = []
+        for record in liquor_records:
+            brand_rates.append({
+                "id": record.get("id", str(record.get("_id", ""))),
+                "index_number": record.get("index_number", 0),
+                "brand_name": record.get("brand_name", ""),
+                "wholesale_rate": record.get("wholesale_rate", 0.0),
+                "selling_rate": record.get("selling_rate", record.get("rate", 0.0)),
+                "current_stock_qty": record.get("current_stock_qty", 0),
+                "stock_value_today": record.get("stock_value_today", 0.0),
+                "last_updated": record.get("upload_timestamp", datetime.now(timezone.utc))
+            })
+        
+        return brand_rates
+        
+    except Exception as e:
+        logging.error(f"Error fetching brand rates: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching brand rates: {str(e)}")
+
+@api_router.post("/brands/update-rates")
+async def update_rates_from_excel(file: UploadFile = File(...)):
+    """Upload Excel file to update wholesale and retail rates for existing brands"""
+    try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+            raise HTTPException(
+                status_code=400, 
+                detail="Only Excel (.xlsx, .xls) and CSV files are supported"
+            )
+        
+        # Read file content
+        content = await file.read()
+        
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        
+        # Parse Excel file
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+        except Exception:
+            try:
+                df = pd.read_csv(io.BytesIO(content))
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Unable to parse file. Error: {str(e)}"
+                )
+        
+        # Clean column names
+        df.columns = df.columns.str.strip().str.lower()
+        
+        # Expected columns: index, brand name, wholesale rate, retail rate
+        required_cols = ['index', 'brand name', 'wholesale rate', 'retail rate']
+        missing_cols = []
+        
+        # Flexible column matching
+        col_mapping = {}
+        for req_col in required_cols:
+            found = False
+            for df_col in df.columns:
+                if req_col.replace(' ', '') in df_col.replace(' ', ''):
+                    col_mapping[req_col] = df_col
+                    found = True
+                    break
+            if not found:
+                missing_cols.append(req_col)
+        
+        if missing_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(missing_cols)}. Expected: Index, Brand Name, Wholesale Rate, Retail Rate"
+            )
+        
+        # Process updates
+        updated_brands = []
+        not_found_brands = []
+        updated_count = 0
+        
+        for idx, row in df.iterrows():
+            try:
+                index_num = int(float(row[col_mapping['index']]))
+                brand_name = str(row[col_mapping['brand name']]).strip()
+                wholesale_rate = float(row[col_mapping['wholesale rate']])
+                retail_rate = float(row[col_mapping['retail rate']])
+                
+                # Find brand by index number (primary) or brand name (fallback)
+                brand_record = await db.liquor_data.find_one({"index_number": index_num})
+                
+                if not brand_record:
+                    # Try finding by name
+                    brand_record = await db.liquor_data.find_one({"brand_name": brand_name})
+                
+                if brand_record:
+                    # Update rates and recalculate stock values
+                    current_stock_qty = brand_record.get('current_stock_qty', 0)
+                    
+                    update_data = {
+                        "wholesale_rate": wholesale_rate,
+                        "selling_rate": retail_rate,
+                        "rate": retail_rate,  # For compatibility
+                        "stock_value_today": retail_rate * current_stock_qty,
+                        "stock_value_before": brand_record.get('D1_stock', 0) * retail_rate,
+                        "upload_timestamp": datetime.now(timezone.utc)
+                    }
+                    
+                    # Recalculate monthly sale value if needed
+                    if brand_record.get('monthly_sale_qty', 0) > 0:
+                        update_data['monthly_sale_value'] = brand_record['monthly_sale_qty'] * retail_rate
+                        update_data['avg_daily_sale'] = update_data['monthly_sale_value'] / 30
+                    
+                    await db.liquor_data.update_one(
+                        {"_id": brand_record["_id"]},
+                        {"$set": update_data}
+                    )
+                    
+                    updated_brands.append(brand_name)
+                    updated_count += 1
+                else:
+                    not_found_brands.append(f"{brand_name} (Index: {index_num})")
+                    
+            except Exception as row_error:
+                logging.warning(f"Error processing row {idx}: {row_error}")
+                continue
+        
+        return UpdateRatesResponse(
+            updated_count=updated_count,
+            not_found_count=len(not_found_brands),
+            updated_brands=updated_brands,
+            not_found_brands=not_found_brands
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error updating rates: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating rates: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
