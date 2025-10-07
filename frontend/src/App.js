@@ -2026,6 +2026,162 @@ function App() {
           </div>
         ) : null}
       </div>
+
+      {/* Module 1: Add Brand Modal */}
+      <Dialog open={showBrandModal} onOpenChange={setShowBrandModal}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="add-brand-modal">
+          <DialogHeader>
+            <DialogTitle>Add New Brand</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new liquor brand you want to add to your inventory.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddBrand} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="index_number">Index Number *</Label>
+              <Input
+                id="index_number"
+                type="number"
+                required
+                value={brandFormData.index_number}
+                onChange={(e) => setBrandFormData({...brandFormData, index_number: e.target.value})}
+                placeholder="e.g., 63"
+                data-testid="brand-index-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brand_name">Brand Name *</Label>
+              <Input
+                id="brand_name"
+                type="text"
+                required
+                value={brandFormData.brand_name}
+                onChange={(e) => setBrandFormData({...brandFormData, brand_name: e.target.value})}
+                placeholder="e.g., Johnnie Walker Black Label"
+                data-testid="brand-name-input"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="wholesale_rate">Wholesale Rate *</Label>
+                <Input
+                  id="wholesale_rate"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={brandFormData.wholesale_rate}
+                  onChange={(e) => setBrandFormData({...brandFormData, wholesale_rate: e.target.value})}
+                  placeholder="e.g., 2500"
+                  data-testid="brand-wholesale-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="selling_rate">Retail Rate *</Label>
+                <Input
+                  id="selling_rate"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={brandFormData.selling_rate}
+                  onChange={(e) => setBrandFormData({...brandFormData, selling_rate: e.target.value})}
+                  placeholder="e.g., 2800"
+                  data-testid="brand-retail-input"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="initial_stock_qty">Initial Stock Quantity</Label>
+              <Input
+                id="initial_stock_qty"
+                type="number"
+                value={brandFormData.initial_stock_qty}
+                onChange={(e) => setBrandFormData({...brandFormData, initial_stock_qty: e.target.value})}
+                placeholder="e.g., 50 (optional)"
+                data-testid="brand-stock-input"
+              />
+              <p className="text-xs text-gray-500">Leave as 0 if you don't have stock yet</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBrandModal(false)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+                data-testid="brand-submit-btn"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {loading ? 'Adding...' : 'Add Brand'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 1: Update Rates Modal */}
+      <Dialog open={showRatesModal} onOpenChange={setShowRatesModal}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="update-rates-modal">
+          <DialogHeader>
+            <DialogTitle>Update Brand Rates</DialogTitle>
+            <DialogDescription>
+              Upload an Excel file to update wholesale and retail rates for existing brands.
+              <br />
+              <span className="text-sm font-medium mt-2 block">Required columns:</span>
+              <span className="text-xs text-gray-600">Index, Brand Name, Wholesale Rate, Retail Rate</span>
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateRates} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rates-file">Select Excel File *</Label>
+              <Input
+                id="rates-file"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                required
+                onChange={(e) => setRatesFile(e.target.files[0])}
+                data-testid="rates-file-input"
+              />
+              <p className="text-xs text-gray-500">
+                File should contain: Index, Brand Name, Wholesale Rate, Retail Rate
+              </p>
+            </div>
+            {ratesFile && (
+              <Alert>
+                <AlertDescription className="flex items-center">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Selected: {ratesFile.name}
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowRatesModal(false);
+                  setRatesFile(null);
+                }}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading || !ratesFile}
+                data-testid="rates-submit-btn"
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading ? 'Updating...' : 'Update Rates'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
