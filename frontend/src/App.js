@@ -390,6 +390,94 @@ function App() {
     }
   };
 
+  // Module 1: Brand Management handlers
+  const handleAddBrand = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/brands/add`, {
+        index_number: parseInt(brandFormData.index_number),
+        brand_name: brandFormData.brand_name,
+        wholesale_rate: parseFloat(brandFormData.wholesale_rate),
+        selling_rate: parseFloat(brandFormData.selling_rate),
+        initial_stock_qty: parseInt(brandFormData.initial_stock_qty) || 0
+      });
+      
+      toast.success(response.data.message);
+      setShowBrandModal(false);
+      
+      // Reset form
+      setBrandFormData({
+        index_number: '',
+        brand_name: '',
+        wholesale_rate: '',
+        selling_rate: '',
+        initial_stock_qty: 0
+      });
+      
+      // Refresh analytics if data exists
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error adding brand:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to add brand";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateRates = async (e) => {
+    e.preventDefault();
+    
+    if (!ratesFile) {
+      toast.error("Please select an Excel file");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const formData = new FormData();
+      formData.append("file", ratesFile);
+      
+      const response = await axios.post(`${API}/brands/update-rates`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      
+      const result = response.data;
+      
+      if (result.updated_count > 0) {
+        toast.success(`Successfully updated ${result.updated_count} brand(s)`);
+      }
+      
+      if (result.not_found_count > 0) {
+        toast.warning(`${result.not_found_count} brand(s) not found: ${result.not_found_brands.slice(0, 3).join(', ')}${result.not_found_brands.length > 3 ? '...' : ''}`);
+      }
+      
+      setShowRatesModal(false);
+      setRatesFile(null);
+      
+      // Refresh analytics
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error updating rates:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to update rates";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
