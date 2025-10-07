@@ -1010,6 +1010,30 @@ function App() {
                     className="hidden"
                     data-testid="todays-data-file-input"
                   />
+
+                  {/* Module 1: Brand Management Buttons */}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowBrandModal(true)}
+                    disabled={loading}
+                    data-testid="add-brand-btn"
+                    className="border-green-600 text-green-600 hover:bg-green-50 text-xs"
+                  >
+                    <Package className="w-3 h-3 mr-1" />
+                    Add Brand
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowRatesModal(true)}
+                    disabled={loading}
+                    data-testid="update-rates-btn"
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs"
+                  >
+                    <DollarSign className="w-3 h-3 mr-1" />
+                    Update Rates
+                  </Button>
                 </div>
               </div>
             </div>
