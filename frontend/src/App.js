@@ -2292,6 +2292,144 @@ function App() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Module 3: Stock Reset Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="reset-stock-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Reset Stock Data</span>
+            </DialogTitle>
+            <DialogDescription>
+              This action will delete all current stock data. A backup will be created automatically before reset.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Warning:</strong> This action cannot be undone. All date-wise stock data will be permanently deleted.
+              </AlertDescription>
+            </Alert>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-2">What happens during reset:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>✅ Automatic backup is created</li>
+                <li>✅ All stock records are deleted</li>
+                <li>✅ Next upload becomes the new D1 (first date)</li>
+                <li>✅ Fresh start for new cycle</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h4 className="font-semibold text-green-900 mb-2">Safety measures:</h4>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li>🛡️ Backup created before deletion</li>
+                <li>🛡️ Download backup anytime from "Backups" button</li>
+                <li>🛡️ Backup includes all data for recovery</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowResetDialog(false)}
+                disabled={resetting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleStockReset}
+                disabled={resetting}
+                data-testid="confirm-reset-btn"
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {resetting ? 'Resetting...' : 'Confirm Reset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 3: Backups List Dialog */}
+      <Dialog open={showBackupsDialog} onOpenChange={setShowBackupsDialog}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto" data-testid="backups-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Database className="w-5 h-5 text-purple-600" />
+              <span>Stock Backups</span>
+            </DialogTitle>
+            <DialogDescription>
+              View and download stock data backups
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-gray-600">Total backups: {backupsList.length}</p>
+              <Button
+                onClick={handleCreateBackup}
+                size="sm"
+                disabled={loading || !hasData}
+                data-testid="create-backup-btn"
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Create Backup
+              </Button>
+            </div>
+
+            {backupsList.length > 0 ? (
+              <div className="space-y-3">
+                {backupsList.map((backup, index) => (
+                  <div 
+                    key={backup.id} 
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    data-testid={`backup-item-${index}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {backup.backup_reason === 'pre_reset_backup' ? '🔄 Pre-Reset Backup' : '💾 Manual Backup'}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          {formatDate(backup.backup_timestamp)}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {backup.total_records} records
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs text-gray-500">
+                        Created by: {backup.created_by}
+                      </div>
+                      <Button
+                        onClick={() => handleDownloadBackup(backup.id, backup.backup_timestamp)}
+                        size="sm"
+                        variant="outline"
+                        data-testid={`download-backup-${index}`}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Database className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Backups Yet</h3>
+                <p className="text-gray-600">Create a backup to safely store your stock data</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
