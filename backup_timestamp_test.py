@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Focused test for backup timestamp functionality as requested in review
+Comprehensive test for backup timestamp functionality as requested in review
 Tests:
 1. Create backup using POST /api/stock/backup
 2. List backups using GET /api/stock/backups - verify UTC timestamps with timezone info
 3. Download backup using GET /api/stock/backup/{backup_id}/download - verify IST filename
-4. Verify timezone conversion is mathematically correct (UTC + 5:30 = IST)
+4. Verify Excel content upload_timestamp field is in IST format (not UTC)
+5. Verify timezone conversion is mathematically correct (UTC + 5:30 = IST)
+6. Verify consistency between filename and Excel content timestamps
 """
 
 import requests
@@ -13,6 +15,8 @@ import json
 import re
 from datetime import datetime, timezone
 import pytz
+import pandas as pd
+import io
 
 # Backend URL
 BACKEND_URL = "https://liquor-manager.preview.emergentagent.com/api"
