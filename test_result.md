@@ -179,6 +179,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "RE-TESTED AFTER RECENT FIX: Comprehensive backup timestamp functionality verification completed successfully. ✅ POST /api/stock/backup creates backup with proper UTC timestamp format (2025-10-09T23:04:18.182808+00:00) ✅ GET /api/stock/backups returns timestamps with correct timezone info (+00:00 format) ✅ GET /api/stock/backup/{backup_id}/download generates Excel file with correct IST filename (stock_backup_20251010_043418.xlsx) ✅ MATHEMATICAL VERIFICATION: UTC to IST conversion is accurate (UTC 23:04:18 + 5:30 = IST 04:34:18) ✅ Timezone offset verified (+5.5 hours from UTC) ✅ Excel file format validated (17,009 bytes, valid ZIP-based Excel structure) ✅ Filename format YYYYMMDD_HHMMSS confirmed. Both frontend display timestamps and Excel filename timestamps are correctly converted to IST as requested."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE EXCEL CONTENT TIMESTAMP TESTING COMPLETED: ✅ POST /api/stock/backup creates backup (62 records) ✅ GET /api/stock/backup/{backup_id}/download downloads Excel with IST filename (stock_backup_20251010_044810.xlsx) ✅ CRITICAL: Excel content verification passed - upload_timestamp field contains IST format timestamps ('2025-10-10 04:44:51 IST') instead of UTC format ✅ Excel file successfully parsed with 62 records containing upload_timestamp column ✅ All sample timestamps in Excel content are in readable IST format with 'IST' suffix ✅ Filename and Excel content both use IST timezone consistently ✅ Mathematical verification: UTC + 5:30 = IST conversion working perfectly (0.0s difference) ✅ Complete requirement fulfillment: Excel filename IST format + Excel content IST format + timezone consistency verified. The backup timestamp functionality fully meets all specified requirements including Excel content timestamp conversion."
 
 frontend:
   - task: "Fix tab styling to show initial colors"
