@@ -2437,15 +2437,29 @@ function App() {
                       <div className="text-xs text-gray-500">
                         Created by: {backup.created_by}
                       </div>
-                      <Button
-                        onClick={() => handleDownloadBackup(backup.id, backup.backup_timestamp)}
-                        size="sm"
-                        variant="outline"
-                        data-testid={`download-backup-${index}`}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        Download
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleDownloadBackup(backup.id, backup.backup_timestamp)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`download-backup-${index}`}
+                          className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          Download
+                        </Button>
+                        <Button
+                          onClick={() => handleDeleteBackup(backup.id, backup.backup_reason)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`delete-backup-${index}`}
+                          className="border-red-600 text-red-600 hover:bg-red-50"
+                          disabled={loading}
+                        >
+                          <AlertTriangle className="w-4 h-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
