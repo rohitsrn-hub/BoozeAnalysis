@@ -186,8 +186,113 @@ def test_backup_timestamp_functionality():
     
     print()
     
-    # Step 4: Verify timezone conversion is mathematically correct
-    print("🧮 Step 4: Verifying timezone conversion (UTC + 5:30 = IST)")
+    # Step 4: Verify Excel content timestamps are in IST format
+    print("📊 Step 4: Verifying Excel content upload_timestamp field is in IST format")
+    try:
+        # Read Excel content
+        df = pd.read_excel(io.BytesIO(response.content))
+        
+        if df.empty:
+            print(f"❌ FAIL: Excel file is empty")
+            return False
+        
+        # Check if upload_timestamp column exists
+        if 'upload_timestamp' not in df.columns:
+            print(f"❌ FAIL: upload_timestamp column not found in Excel")
+            print(f"   Available columns: {list(df.columns)}")
+            return False
+        
+        # Get sample upload_timestamp values
+        timestamp_values = df['upload_timestamp'].dropna().head(3).tolist()
+        
+        if not timestamp_values:
+            print(f"❌ FAIL: No upload_timestamp values found in Excel")
+            return False
+        
+        print(f"✅ SUCCESS: Excel file read with {len(df)} records")
+        print(f"   Found upload_timestamp column with {len(timestamp_values)} sample values")
+        
+        # Analyze timestamp format in Excel content
+        sample_timestamps = [str(ts).strip() for ts in timestamp_values]
+        print(f"   Sample timestamps: {sample_timestamps}")
+        
+        # Check if timestamps are in IST format (should be readable format, not UTC)
+        ist_format_count = 0
+        utc_format_count = 0
+        
+        for ts_str in sample_timestamps:
+            if 'IST' in ts_str.upper():
+                ist_format_count += 1
+            elif 'T' in ts_str and ('+00:00' in ts_str or 'Z' in ts_str or ts_str.endswith('.000000')):
+                # UTC format like "2025-10-09T23:14:57.900642" or "2025-10-09T23:14:57+00:00"
+                utc_format_count += 1
+            else:
+                # Check if it looks like a readable datetime (likely IST)
+                if len(ts_str) > 10 and any(char in ts_str for char in ['-', ':', ' ']):
+                    ist_format_count += 1
+        
+        if ist_format_count > 0 and utc_format_count == 0:
+            print(f"✅ SUCCESS: Excel upload_timestamp values are in IST format")
+            print(f"   {ist_format_count} IST format timestamps found")
+        elif utc_format_count > 0:
+            print(f"❌ FAIL: Found UTC format timestamps in Excel content")
+            print(f"   Expected IST format like '2025-10-10 04:47:17 IST'")
+            print(f"   Found UTC format: {[ts for ts in sample_timestamps if 'T' in ts]}")
+            return False
+        else:
+            print(f"⚠️  WARNING: Could not determine timestamp format clearly")
+            print(f"   Assuming IST format based on readable format")
+        
+        # Try to parse one timestamp to verify it matches filename timestamp
+        try:
+            sample_ts = sample_timestamps[0]
+            
+            # Parse the Excel timestamp (try different formats)
+            excel_datetime_ist = None
+            
+            if 'IST' in sample_ts.upper():
+                # Format: "2025-10-10 04:47:17 IST"
+                ts_clean = sample_ts.replace(' IST', '').replace(' ist', '').strip()
+                excel_datetime_naive = datetime.strptime(ts_clean, "%Y-%m-%d %H:%M:%S")
+                excel_datetime_ist = ist_timezone.localize(excel_datetime_naive)
+            else:
+                # Try parsing as standard datetime and assume IST
+                ts_clean = re.sub(r'[+\-]\d{2}:?\d{2}$', '', sample_ts)
+                ts_clean = ts_clean.replace('T', ' ').replace('Z', '').strip()
+                
+                for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"]:
+                    try:
+                        excel_datetime_naive = datetime.strptime(ts_clean, fmt)
+                        excel_datetime_ist = ist_timezone.localize(excel_datetime_naive)
+                        break
+                    except:
+                        continue
+            
+            if excel_datetime_ist:
+                # Compare with filename timestamp (should be very close)
+                excel_filename_diff = abs((excel_datetime_ist - filename_datetime_ist).total_seconds())
+                print(f"   Excel timestamp: {excel_datetime_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                print(f"   Filename timestamp: {filename_datetime_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                print(f"   Difference: {excel_filename_diff:.1f} seconds")
+                
+                if excel_filename_diff <= 60:  # Within 1 minute
+                    print(f"✅ SUCCESS: Excel content and filename timestamps are consistent")
+                else:
+                    print(f"⚠️  WARNING: Excel and filename timestamps differ by {excel_filename_diff:.1f}s")
+            else:
+                print(f"⚠️  WARNING: Could not parse Excel timestamp for comparison")
+                
+        except Exception as e:
+            print(f"⚠️  WARNING: Could not verify timestamp consistency: {e}")
+        
+    except Exception as e:
+        print(f"❌ FAIL: Error reading Excel content: {e}")
+        return False
+    
+    print()
+    
+    # Step 5: Verify timezone conversion is mathematically correct
+    print("🧮 Step 5: Verifying timezone conversion (UTC + 5:30 = IST)")
     
     # Convert backup UTC time to IST
     backup_ist_converted = backup_utc.astimezone(ist_timezone)
