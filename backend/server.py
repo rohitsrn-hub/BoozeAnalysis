@@ -2169,9 +2169,23 @@ async def list_stock_backups():
         
         backup_list = []
         for backup in backups:
+            # Ensure backup_timestamp is properly formatted with timezone information
+            timestamp = backup.get("backup_timestamp")
+            if isinstance(timestamp, str):
+                # Parse string timestamp and ensure it has UTC timezone
+                try:
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = datetime.fromisoformat(timestamp)
+                    if timestamp.tzinfo is None:
+                        timestamp = timestamp.replace(tzinfo=timezone.utc)
+            elif isinstance(timestamp, datetime) and timestamp.tzinfo is None:
+                # Add UTC timezone if missing
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            
             backup_list.append({
                 "id": backup.get("id"),
-                "backup_timestamp": backup.get("backup_timestamp"),
+                "backup_timestamp": timestamp.isoformat() if timestamp else None,
                 "total_records": backup.get("total_records"),
                 "backup_reason": backup.get("backup_reason"),
                 "created_by": backup.get("created_by")
