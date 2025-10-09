@@ -2232,6 +2232,29 @@ async def download_backup(backup_id: str):
         logging.error(f"Error downloading backup: {e}")
         raise HTTPException(status_code=500, detail=f"Error downloading backup: {str(e)}")
 
+@api_router.delete("/stock/backup/{backup_id}")
+async def delete_backup(backup_id: str):
+    """Delete a specific backup"""
+    try:
+        # Find and delete backup
+        result = await db.stock_backups.delete_one({"id": backup_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Backup not found")
+        
+        logging.info(f"Deleted backup: {backup_id}")
+        
+        return {
+            "message": "Backup deleted successfully",
+            "backup_id": backup_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error deleting backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting backup: {str(e)}")
+
 @api_router.post("/stock/reset")
 async def reset_stock_data():
     """Reset all date-wise stock data after creating backup"""
