@@ -117,6 +117,24 @@ class UpdateRatesResponse(BaseModel):
     updated_brands: List[str]
     not_found_brands: List[str]
 
+# Module 3: Stock Reset & Backup Models
+class StockBackup(BaseModel):
+    """Model for stock backup records"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    backup_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    total_records: int
+    backup_reason: str = Field(default="manual_backup")
+    created_by: str = Field(default="dashboard_user")
+    data_snapshot: List[Dict[str, Any]]
+
+class BackupListResponse(BaseModel):
+    """Response for listing backups"""
+    id: str
+    backup_timestamp: datetime
+    total_records: int
+    backup_reason: str
+    created_by: str
+
 # Helper functions
 async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], filename: str):
     """Check if the uploaded data contains dates that already exist in the database"""
