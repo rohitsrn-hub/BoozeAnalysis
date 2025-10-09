@@ -48,6 +48,12 @@ function App() {
   });
   const [ratesFile, setRatesFile] = useState(null);
 
+  // Module 3: Stock Reset & Backup state
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showBackupsDialog, setShowBackupsDialog] = useState(false);
+  const [backupsList, setBackupsList] = useState([]);
+  const [resetting, setResetting] = useState(false);
+
   // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
