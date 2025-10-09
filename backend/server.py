@@ -2250,7 +2250,6 @@ async def download_backup(backup_id: str):
         
         # Convert UTC timestamp to IST (India Standard Time, UTC+5:30)
         from datetime import timedelta
-        import pytz
         
         # Get backup timestamp and ensure it's a datetime object
         backup_timestamp_utc = backup['backup_timestamp']
