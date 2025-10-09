@@ -479,6 +479,168 @@ class BackendTester:
             )
             return False
     
+    def test_backup_functionality_with_ist_timestamp(self):
+        """PRIORITY TEST: Test backup functionality with IST timestamp verification"""
+        print("\n💾 Testing Backup Functionality with IST Timestamp (PRIORITY)")
+        
+        # Record the test start time in IST for comparison
+        import pytz
+        from datetime import datetime, timezone
+        
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        test_start_time_ist = datetime.now(ist_timezone)
+        
+        # Step 1: Create a new backup
+        print("  Step 1: Creating backup...")
+        success, backup_data, error = self.test_endpoint("POST", "/stock/backup", 200, data={"reason": "test_backup"})
+        
+        if not success:
+            self.log_test("Backup Creation", "FAIL", "Failed to create backup", error)
+            return False
+        
+        if not isinstance(backup_data, dict) or 'backup_id' not in backup_data:
+            self.log_test("Backup Creation", "FAIL", "Invalid backup response format", f"Expected dict with backup_id, got: {backup_data}")
+            return False
+        
+        backup_id = backup_data['backup_id']
+        backup_timestamp = backup_data.get('backup_timestamp')
+        total_records = backup_data.get('total_records', 0)
+        
+        self.log_test(
+            "Backup Creation", 
+            "PASS", 
+            f"Backup created successfully with ID: {backup_id}",
+            f"Records: {total_records}, Timestamp: {backup_timestamp}"
+        )
+        
+        # Step 2: List all backups to verify the backup exists
+        print("  Step 2: Listing backups...")
+        success, backups_list, error = self.test_endpoint("GET", "/stock/backups", 200)
+        
+        if not success:
+            self.log_test("Backup Listing", "FAIL", "Failed to list backups", error)
+            return False
+        
+        if not isinstance(backups_list, list):
+            self.log_test("Backup Listing", "FAIL", "Invalid backups list format", f"Expected list, got: {type(backups_list)}")
+            return False
+        
+        # Find our backup in the list
+        our_backup = None
+        for backup in backups_list:
+            if backup.get('id') == backup_id:
+                our_backup = backup
+                break
+        
+        if not our_backup:
+            self.log_test("Backup Listing", "FAIL", f"Created backup {backup_id} not found in list", f"Available backups: {[b.get('id') for b in backups_list[:3]]}")
+            return False
+        
+        self.log_test(
+            "Backup Listing", 
+            "PASS", 
+            f"Backup found in list ({len(backups_list)} total backups)",
+            f"Backup timestamp: {our_backup.get('backup_timestamp')}"
+        )
+        
+        # Step 3: Download the backup and verify filename timestamp
+        print("  Step 3: Downloading backup and verifying IST timestamp...")
+        url = f"{self.base_url}/stock/backup/{backup_id}/download"
+        
+        try:
+            response = self.session.get(url, timeout=30)
+            
+            if response.status_code != 200:
+                self.log_test("Backup Download", "FAIL", f"Download failed with status {response.status_code}", response.text[:200])
+                return False
+            
+            # Check Content-Disposition header for filename
+            content_disposition = response.headers.get('Content-Disposition', '')
+            
+            if 'filename=' not in content_disposition:
+                self.log_test("Backup Download", "FAIL", "No filename in Content-Disposition header", f"Header: {content_disposition}")
+                return False
+            
+            # Extract filename
+            import re
+            filename_match = re.search(r'filename=([^;]+)', content_disposition)
+            if not filename_match:
+                self.log_test("Backup Download", "FAIL", "Could not extract filename", f"Content-Disposition: {content_disposition}")
+                return False
+            
+            filename = filename_match.group(1).strip('"')
+            
+            # Verify filename format: stock_backup_YYYYMMDD_HHMMSS.xlsx
+            filename_pattern = r'stock_backup_(\d{8})_(\d{6})\.xlsx'
+            match = re.match(filename_pattern, filename)
+            
+            if not match:
+                self.log_test("Backup Download", "FAIL", f"Filename format incorrect", f"Expected: stock_backup_YYYYMMDD_HHMMSS.xlsx, Got: {filename}")
+                return False
+            
+            date_part, time_part = match.groups()
+            
+            # Parse the timestamp from filename
+            try:
+                filename_datetime_str = f"{date_part}_{time_part}"
+                filename_datetime = datetime.strptime(filename_datetime_str, "%Y%m%d_%H%M%S")
+                
+                # Make it timezone-aware as IST
+                filename_datetime_ist = ist_timezone.localize(filename_datetime)
+                
+            except ValueError as e:
+                self.log_test("Backup Download", "FAIL", f"Could not parse timestamp from filename", f"Timestamp: {date_part}_{time_part}, Error: {e}")
+                return False
+            
+            # Verify the timestamp is reasonable (within 5 minutes of test start)
+            time_diff = abs((filename_datetime_ist - test_start_time_ist).total_seconds())
+            
+            if time_diff > 300:  # 5 minutes tolerance
+                self.log_test(
+                    "Backup IST Timestamp", 
+                    "FAIL", 
+                    f"Timestamp difference too large: {time_diff:.1f} seconds",
+                    f"Test start: {test_start_time_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}, Filename: {filename_datetime_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                )
+                return False
+            
+            # Verify file content is Excel format
+            if not response.content or len(response.content) < 100:
+                self.log_test("Backup Download", "FAIL", "Downloaded file is too small or empty", f"Size: {len(response.content)} bytes")
+                return False
+            
+            # Check Excel file signature (first few bytes)
+            excel_signature = response.content[:4]
+            if excel_signature != b'PK\x03\x04':  # ZIP signature (Excel files are ZIP-based)
+                self.log_test("Backup Download", "FAIL", "Downloaded file is not a valid Excel file", f"File signature: {excel_signature}")
+                return False
+            
+            self.log_test(
+                "Backup IST Timestamp", 
+                "PASS", 
+                f"IST timestamp conversion working correctly",
+                f"Filename: {filename}, IST time: {filename_datetime_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}, Diff: {time_diff:.1f}s"
+            )
+            
+            self.log_test(
+                "Backup Download", 
+                "PASS", 
+                f"Excel file downloaded successfully",
+                f"Size: {len(response.content)} bytes, Format: Valid Excel"
+            )
+            
+            return True
+            
+        except requests.exceptions.Timeout:
+            self.log_test("Backup Download", "FAIL", "Download request timeout (30s)", "Server may be slow")
+            return False
+        except requests.exceptions.ConnectionError:
+            self.log_test("Backup Download", "FAIL", "Connection error during download", "Backend may be down")
+            return False
+        except Exception as e:
+            self.log_test("Backup Download", "FAIL", f"Download error: {str(e)}", "Unexpected error during download")
+            return False
+
     def test_file_upload_endpoints(self):
         """Test file upload endpoints (without actually uploading files)"""
         print("\n📁 Testing File Upload Endpoints")
