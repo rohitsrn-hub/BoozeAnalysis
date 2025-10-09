@@ -326,9 +326,11 @@ def test_backup_timestamp_functionality():
     print(f"✅ SUCCESS: IST offset correct (+{utc_offset_hours} hours from UTC)")
     
     print()
-    print("🎉 ALL BACKUP TIMESTAMP TESTS PASSED!")
+    print("🎉 ALL COMPREHENSIVE BACKUP TIMESTAMP TESTS PASSED!")
     print("✅ Backend returns UTC timestamps with proper timezone info (+00:00)")
     print("✅ Excel filename uses correct IST timestamp in YYYYMMDD_HHMMSS format")
+    print("✅ Excel content upload_timestamp field is in IST format (not UTC)")
+    print("✅ Filename and Excel content timestamps are consistent")
     print("✅ Timezone conversion is mathematically accurate (UTC + 5:30 = IST)")
     
     return True
