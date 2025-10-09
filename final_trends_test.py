@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 import re
 
-BACKEND_URL = "https://liquor-analytics.preview.emergentagent.com/api"
+BACKEND_URL = "https://liquor-manager.preview.emergentagent.com/api"
 
 def test_chronological_ordering_fix():
     """Test that the chronological ordering fix is working correctly"""
