@@ -561,6 +561,29 @@ function App() {
     }
   };
 
+  const handleDeleteBackup = async (backupId, backupReason) => {
+    if (!window.confirm(`Are you sure you want to delete this backup?\n\nReason: ${backupReason}\n\nThis action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      await axios.delete(`${API}/stock/backup/${backupId}`);
+      
+      toast.success("Backup deleted successfully!");
+      
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error deleting backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to delete backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
