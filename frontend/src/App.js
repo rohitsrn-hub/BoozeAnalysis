@@ -484,6 +484,83 @@ function App() {
     }
   };
 
+  // Module 3: Stock Reset & Backup handlers
+  const fetchBackups = async () => {
+    try {
+      const response = await axios.get(`${API}/stock/backups`);
+      setBackupsList(response.data);
+    } catch (error) {
+      console.error("Error fetching backups:", error);
+      toast.error("Failed to fetch backups");
+    }
+  };
+
+  const handleStockReset = async () => {
+    try {
+      setResetting(true);
+      
+      const response = await axios.post(`${API}/stock/reset`);
+      
+      toast.success(`Stock reset successful! ${response.data.records_deleted} records deleted. Backup ID: ${response.data.backup_id}`);
+      
+      setShowResetDialog(false);
+      setHasData(false);
+      
+      // Refresh backups list
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error resetting stock:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to reset stock";
+      toast.error(errorMessage);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleDownloadBackup = async (backupId, timestamp) => {
+    try {
+      const response = await axios.get(`${API}/stock/backup/${backupId}/download`, {
+        responseType: 'blob',
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const filename = `stock_backup_${new Date(timestamp).toISOString().split('T')[0]}.xlsx`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Backup downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading backup:", error);
+      toast.error("Failed to download backup");
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/stock/backup?reason=manual_backup`);
+      
+      toast.success(`Backup created! ${response.data.total_records} records backed up.`);
+      
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error creating backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to create backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
