@@ -1040,110 +1040,116 @@ function App() {
                   </Button>
                 </div>
 
-                {/* Upload Buttons */}
-                <div className="flex items-center space-x-2">
-                  {/* Full Monthly Data Upload */}
-                  <Button 
-                    variant="default" 
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 cursor-pointer transition-all duration-200 text-xs"
-                    disabled={loading}
-                    data-testid="upload-full-monthly-btn"
-                    onClick={() => {
-                      const fileInput = document.getElementById('full-monthly-upload');
-                      if (fileInput) {
-                        fileInput.click();
-                      }
-                    }}
-                  >
-                    <Database className="w-3 h-3 mr-1" />
-                    {loading ? 'Processing...' : 'Full Monthly'}
-                  </Button>
-                  <Input
-                    id="full-monthly-upload"
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleFullMonthlyUpload}
-                    className="hidden"
-                    data-testid="full-monthly-file-input"
-                  />
+                {/* Action Buttons - Two Rows Layout */}
+                <div className="flex flex-col space-y-2">
+                  {/* First Row: Upload & Management Buttons */}
+                  <div className="flex items-center space-x-2">
+                    {/* Full Monthly Data Upload */}
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 cursor-pointer transition-all duration-200 text-xs"
+                      disabled={loading}
+                      data-testid="upload-full-monthly-btn"
+                      onClick={() => {
+                        const fileInput = document.getElementById('full-monthly-upload');
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }}
+                    >
+                      <Database className="w-3 h-3 mr-1" />
+                      {loading ? 'Processing...' : 'Full Monthly'}
+                    </Button>
+                    <Input
+                      id="full-monthly-upload"
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFullMonthlyUpload}
+                      className="hidden"
+                      data-testid="full-monthly-file-input"
+                    />
 
-                  {/* Today's Data Upload */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 cursor-pointer transition-all duration-200 text-xs"
-                    disabled={loading}
-                    data-testid="upload-todays-btn"
-                    onClick={() => {
-                      const fileInput = document.getElementById('todays-data-upload');
-                      if (fileInput) {
-                        fileInput.click();
-                      }
-                    }}
-                  >
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    {loading ? 'Processing...' : "Today's Data"}
-                  </Button>
-                  <Input
-                    id="todays-data-upload"
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleTodaysDataUpload}
-                    className="hidden"
-                    data-testid="todays-data-file-input"
-                  />
+                    {/* Today's Data Upload */}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 cursor-pointer transition-all duration-200 text-xs"
+                      disabled={loading}
+                      data-testid="upload-todays-btn"
+                      onClick={() => {
+                        const fileInput = document.getElementById('todays-data-upload');
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }}
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      {loading ? 'Processing...' : "Today's Data"}
+                    </Button>
+                    <Input
+                      id="todays-data-upload"
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleTodaysDataUpload}
+                      className="hidden"
+                      data-testid="todays-data-file-input"
+                    />
 
-                  {/* Module 1: Brand Management Buttons */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowBrandModal(true)}
-                    disabled={loading}
-                    data-testid="add-brand-btn"
-                    className="border-green-600 text-green-600 hover:bg-green-50 text-xs"
-                  >
-                    <Package className="w-3 h-3 mr-1" />
-                    Add Brand
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowRatesModal(true)}
-                    disabled={loading}
-                    data-testid="update-rates-btn"
-                    className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs"
-                  >
-                    <DollarSign className="w-3 h-3 mr-1" />
-                    Update Rates
-                  </Button>
+                    {/* Module 1: Brand Management Buttons */}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowBrandModal(true)}
+                      disabled={loading}
+                      data-testid="add-brand-btn"
+                      className="border-green-600 text-green-600 hover:bg-green-50 text-xs"
+                    >
+                      <Package className="w-3 h-3 mr-1" />
+                      Add Brand
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowRatesModal(true)}
+                      disabled={loading}
+                      data-testid="update-rates-btn"
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs"
+                    >
+                      <DollarSign className="w-3 h-3 mr-1" />
+                      Update Rates
+                    </Button>
+                  </div>
 
-                  {/* Module 3: Stock Reset & Backup Buttons */}
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      fetchBackups();
-                      setShowBackupsDialog(true);
-                    }}
-                    disabled={loading}
-                    data-testid="backups-btn"
-                    className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs"
-                  >
-                    <Database className="w-3 h-3 mr-1" />
-                    Backups
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowResetDialog(true)}
-                    disabled={loading || !hasData}
-                    data-testid="reset-stock-btn"
-                    className="border-red-600 text-red-600 hover:bg-red-50 text-xs"
-                  >
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    Reset Stock
-                  </Button>
+                  {/* Second Row: Backup & Reset Buttons */}
+                  <div className="flex items-center space-x-2">
+                    {/* Module 3: Stock Reset & Backup Buttons */}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        fetchBackups();
+                        setShowBackupsDialog(true);
+                      }}
+                      disabled={loading}
+                      data-testid="backups-btn"
+                      className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs"
+                    >
+                      <Database className="w-3 h-3 mr-1" />
+                      Backups
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowResetDialog(true)}
+                      disabled={loading || !hasData}
+                      data-testid="reset-stock-btn"
+                      className="border-red-600 text-red-600 hover:bg-red-50 text-xs"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Reset Stock
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
