@@ -2214,9 +2214,22 @@ async def download_backup(backup_id: str):
         
         # Convert UTC timestamp to IST (India Standard Time, UTC+5:30)
         from datetime import timedelta
-        ist_offset = timedelta(hours=5, minutes=30)
+        import pytz
+        
+        # Get backup timestamp and ensure it's a datetime object
         backup_timestamp_utc = backup['backup_timestamp']
-        backup_timestamp_ist = backup_timestamp_utc + ist_offset
+        
+        # If it's a string, parse it to datetime
+        if isinstance(backup_timestamp_utc, str):
+            backup_timestamp_utc = datetime.fromisoformat(backup_timestamp_utc.replace('Z', '+00:00'))
+        
+        # Ensure it's timezone-aware UTC
+        if backup_timestamp_utc.tzinfo is None:
+            backup_timestamp_utc = backup_timestamp_utc.replace(tzinfo=timezone.utc)
+        
+        # Convert to IST timezone
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        backup_timestamp_ist = backup_timestamp_utc.astimezone(ist_timezone)
         backup_date = backup_timestamp_ist.strftime("%Y%m%d_%H%M%S")
         filename = f"stock_backup_{backup_date}.xlsx"
         
