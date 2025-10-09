@@ -2208,7 +2208,28 @@ async def download_backup(backup_id: str):
             raise HTTPException(status_code=404, detail="Backup not found")
         
         # Create Excel file
-        df = pd.DataFrame(backup['data_snapshot'])
+        data_snapshot = backup['data_snapshot']
+        
+        # Convert timestamp fields to IST before creating DataFrame
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        
+        for record in data_snapshot:
+            if 'upload_timestamp' in record and record['upload_timestamp']:
+                try:
+                    # Parse UTC timestamp
+                    utc_timestamp = record['upload_timestamp']
+                    if isinstance(utc_timestamp, str):
+                        utc_timestamp = datetime.fromisoformat(utc_timestamp.replace('Z', '+00:00'))
+                        if utc_timestamp.tzinfo is None:
+                            utc_timestamp = utc_timestamp.replace(tzinfo=timezone.utc)
+                    
+                    # Convert to IST and format as readable string
+                    ist_timestamp = utc_timestamp.astimezone(ist_timezone)
+                    record['upload_timestamp'] = ist_timestamp.strftime('%Y-%m-%d %H:%M:%S IST')
+                except Exception as e:
+                    logging.warning(f"Could not convert upload_timestamp for record {record.get('id', 'unknown')}: {e}")
+        
+        df = pd.DataFrame(data_snapshot)
         
         # Reorder columns: id, index_number, brand_name, then rest
         if 'id' in df.columns and 'index_number' in df.columns and 'brand_name' in df.columns:
