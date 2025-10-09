@@ -2195,6 +2195,16 @@ async def download_backup(backup_id: str):
         # Create Excel file
         df = pd.DataFrame(backup['data_snapshot'])
         
+        # Reorder columns: id, index_number, brand_name, then rest
+        if 'id' in df.columns and 'index_number' in df.columns and 'brand_name' in df.columns:
+            # Get all columns
+            all_cols = df.columns.tolist()
+            # Remove the three columns we want to reorder
+            remaining_cols = [col for col in all_cols if col not in ['id', 'index_number', 'brand_name']]
+            # Create new column order
+            new_order = ['id', 'index_number', 'brand_name'] + remaining_cols
+            df = df[new_order]
+        
         # Create Excel in memory
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -2202,7 +2212,12 @@ async def download_backup(backup_id: str):
         
         output.seek(0)
         
-        backup_date = backup['backup_timestamp'].strftime("%Y%m%d_%H%M%S")
+        # Convert UTC timestamp to IST (India Standard Time, UTC+5:30)
+        from datetime import timedelta
+        ist_offset = timedelta(hours=5, minutes=30)
+        backup_timestamp_utc = backup['backup_timestamp']
+        backup_timestamp_ist = backup_timestamp_utc + ist_offset
+        backup_date = backup_timestamp_ist.strftime("%Y%m%d_%H%M%S")
         filename = f"stock_backup_{backup_date}.xlsx"
         
         return StreamingResponse(
