@@ -1117,6 +1117,33 @@ function App() {
                     <DollarSign className="w-3 h-3 mr-1" />
                     Update Rates
                   </Button>
+
+                  {/* Module 3: Stock Reset & Backup Buttons */}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      fetchBackups();
+                      setShowBackupsDialog(true);
+                    }}
+                    disabled={loading}
+                    data-testid="backups-btn"
+                    className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs"
+                  >
+                    <Database className="w-3 h-3 mr-1" />
+                    Backups
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowResetDialog(true)}
+                    disabled={loading || !hasData}
+                    data-testid="reset-stock-btn"
+                    className="border-red-600 text-red-600 hover:bg-red-50 text-xs"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Reset Stock
+                  </Button>
                 </div>
               </div>
             </div>
