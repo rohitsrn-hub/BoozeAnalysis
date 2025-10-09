@@ -162,6 +162,21 @@ backend:
         agent: "testing"
         comment: "TESTED: Trends tab chronological ordering fix working perfectly. ✅ /api/analytics returns sales_trends in correct chronological order: 20-Sep-25 → 21-Sep → 22-Sep → 26-Sep → 28-Sep-25 → 29-Sep-25 → 30-Sep-25 → 01-Oct-25 → 03-Oct-25 ✅ parse_date_for_sorting() function correctly handles dates without years (21-Sep, 22-Sep, 26-Sep) by defaulting to 2025 ✅ All date formats (21-Sep, 20-Sep-25, 01-Oct-25) parsed and sorted correctly ✅ Data completeness verified - all 9 dates from database included in sales_trends ✅ Today's Data upload impact tested - new dates would maintain chronological ordering"
 
+  - task: "Test backup functionality with IST timestamp fix"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "Testing backup functionality specifically focusing on IST timestamp conversion in Excel backup filename generation"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Backup functionality with IST timestamp conversion working perfectly. ✅ POST /api/stock/backup successfully creates backup (62 records) ✅ GET /api/stock/backups lists backups correctly ✅ GET /api/stock/backup/{backup_id}/download downloads valid Excel file (16,655 bytes) ✅ CRITICAL: IST timestamp conversion working correctly - UTC time 2025-10-09T22:54:05+00:00 correctly converted to IST filename stock_backup_20251010_042405.xlsx (2025-10-10 04:24:05 IST) ✅ Filename format YYYYMMDD_HHMMSS verified ✅ Timezone conversion UTC+5:30 working accurately ✅ Excel file format validation passed. The timestamp fix ensures backup files have correct IST timestamps instead of UTC timestamps in filenames."
+
 frontend:
   - task: "Fix tab styling to show initial colors"
     implemented: true
