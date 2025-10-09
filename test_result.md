@@ -201,8 +201,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Fix Trends tab chronological date ordering"
-    - "Fix Recent Stock Trends to show all dates"
+    - "Test backup functionality with IST timestamp fix"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
