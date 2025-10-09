@@ -579,12 +579,13 @@ function App() {
   const formatDate = (dateString) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("en-IN", {
+      return date.toLocaleString("en-IN", {
         year: "numeric",
         month: "short",
         day: "numeric",
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
+        timeZone: "Asia/Kolkata"
       });
     } catch {
       return dateString;
