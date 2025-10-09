@@ -2092,6 +2092,176 @@ async def update_rates_from_excel(file: UploadFile = File(...)):
         logging.error(f"Error updating rates: {e}")
         raise HTTPException(status_code=500, detail=f"Error updating rates: {str(e)}")
 
+# ========================================
+# MODULE 2: Upload History Auto-Cleanup (60 days)
+# ========================================
+
+@api_router.delete("/upload-history/cleanup")
+async def cleanup_old_upload_history():
+    """Delete upload history records older than 60 days"""
+    try:
+        sixty_days_ago = datetime.now(timezone.utc) - timedelta(days=60)
+        
+        result = await db.upload_history.delete_many({
+            "upload_timestamp": {"$lt": sixty_days_ago}
+        })
+        
+        return {
+            "deleted_count": result.deleted_count,
+            "message": f"Cleaned up {result.deleted_count} old upload history records"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error cleaning up upload history: {e}")
+        raise HTTPException(status_code=500, detail=f"Error cleaning up upload history: {str(e)}")
+
+# ========================================
+# MODULE 3: Stock Reset & Backup APIs
+# ========================================
+
+@api_router.post("/stock/backup")
+async def create_stock_backup(reason: str = "manual_backup"):
+    """Create a backup of all current stock data"""
+    try:
+        # Fetch all liquor data
+        liquor_records = await db.liquor_data.find().to_list(10000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data to backup")
+        
+        # Remove MongoDB _id field for clean backup
+        for record in liquor_records:
+            if '_id' in record:
+                del record['_id']
+        
+        # Create backup record
+        backup = StockBackup(
+            total_records=len(liquor_records),
+            backup_reason=reason,
+            data_snapshot=liquor_records
+        )
+        
+        # Store backup
+        await db.stock_backups.insert_one(backup.dict())
+        
+        logging.info(f"Created stock backup: {backup.id} with {len(liquor_records)} records")
+        
+        return {
+            "backup_id": backup.id,
+            "total_records": len(liquor_records),
+            "backup_timestamp": backup.backup_timestamp,
+            "message": "Backup created successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error creating backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creating backup: {str(e)}")
+
+@api_router.get("/stock/backups")
+async def list_stock_backups():
+    """Get list of all stock backups"""
+    try:
+        backups = await db.stock_backups.find().sort("backup_timestamp", -1).to_list(100)
+        
+        backup_list = []
+        for backup in backups:
+            backup_list.append({
+                "id": backup.get("id"),
+                "backup_timestamp": backup.get("backup_timestamp"),
+                "total_records": backup.get("total_records"),
+                "backup_reason": backup.get("backup_reason"),
+                "created_by": backup.get("created_by")
+            })
+        
+        return backup_list
+        
+    except Exception as e:
+        logging.error(f"Error fetching backups: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching backups: {str(e)}")
+
+@api_router.get("/stock/backup/{backup_id}/download")
+async def download_backup(backup_id: str):
+    """Download a specific backup as Excel file"""
+    try:
+        # Find backup
+        backup = await db.stock_backups.find_one({"id": backup_id})
+        
+        if not backup:
+            raise HTTPException(status_code=404, detail="Backup not found")
+        
+        # Create Excel file
+        df = pd.DataFrame(backup['data_snapshot'])
+        
+        # Create Excel in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Stock Backup')
+        
+        output.seek(0)
+        
+        backup_date = backup['backup_timestamp'].strftime("%Y%m%d_%H%M%S")
+        filename = f"stock_backup_{backup_date}.xlsx"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error downloading backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error downloading backup: {str(e)}")
+
+@api_router.post("/stock/reset")
+async def reset_stock_data():
+    """Reset all date-wise stock data after creating backup"""
+    try:
+        # First, create automatic backup
+        liquor_records = await db.liquor_data.find().to_list(10000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data to reset")
+        
+        # Remove MongoDB _id for backup
+        backup_data = []
+        for record in liquor_records:
+            record_copy = record.copy()
+            if '_id' in record_copy:
+                del record_copy['_id']
+            backup_data.append(record_copy)
+        
+        # Create backup
+        backup = StockBackup(
+            total_records=len(backup_data),
+            backup_reason="pre_reset_backup",
+            data_snapshot=backup_data
+        )
+        
+        await db.stock_backups.insert_one(backup.dict())
+        
+        # Now delete all liquor data
+        delete_result = await db.liquor_data.delete_many({})
+        
+        logging.info(f"Reset completed: Backed up and deleted {delete_result.deleted_count} records")
+        
+        return {
+            "backup_id": backup.id,
+            "records_backed_up": len(backup_data),
+            "records_deleted": delete_result.deleted_count,
+            "message": "Stock data reset successfully. Backup created.",
+            "next_upload_becomes_d1": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error resetting stock data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error resetting stock data: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
