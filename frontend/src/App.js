@@ -2607,6 +2607,187 @@ function App() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Module 4: PDF Report Generation Modal */}
+      <Dialog open={showReportModal} onOpenChange={setShowReportModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-indigo-600" />
+              Generate PDF Report
+            </DialogTitle>
+            <DialogDescription>
+              Configure your monthly sales analytics report parameters
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Report Title */}
+            <div className="space-y-2">
+              <Label htmlFor="reportTitle">Report Title</Label>
+              <Input
+                id="reportTitle"
+                value={reportParameters.report_title}
+                onChange={(e) => handleReportParameterChange('report_title', e.target.value)}
+                placeholder="Monthly Sales Analytics Report"
+                className="w-full"
+              />
+            </div>
+
+            {/* Report Sections */}
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Report Sections</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="executive_summary"
+                    checked={reportParameters.include_executive_summary}
+                    onChange={(e) => handleReportParameterChange('include_executive_summary', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="executive_summary" className="text-sm font-medium">
+                    📊 Executive Summary
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="top_sellers"
+                    checked={reportParameters.include_top_sellers}
+                    onChange={(e) => handleReportParameterChange('include_top_sellers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="top_sellers" className="text-sm font-medium">
+                    🏆 Top Sellers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="slow_sellers"
+                    checked={reportParameters.include_slow_sellers}
+                    onChange={(e) => handleReportParameterChange('include_slow_sellers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="slow_sellers" className="text-sm font-medium">
+                    🐌 Slow Sellers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="capital_blockers"
+                    checked={reportParameters.include_capital_blockers}
+                    onChange={(e) => handleReportParameterChange('include_capital_blockers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="capital_blockers" className="text-sm font-medium">
+                    💰 Capital Blockers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="revenue_analysis"
+                    checked={reportParameters.include_revenue_analysis}
+                    onChange={(e) => handleReportParameterChange('include_revenue_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="revenue_analysis" className="text-sm font-medium">
+                    📈 Revenue Analysis
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="demand_forecast"
+                    checked={reportParameters.include_demand_forecast}
+                    onChange={(e) => handleReportParameterChange('include_demand_forecast', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="demand_forecast" className="text-sm font-medium">
+                    🎯 Demand Forecast
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="profit_analysis"
+                    checked={reportParameters.include_profit_analysis}
+                    onChange={(e) => handleReportParameterChange('include_profit_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="profit_analysis" className="text-sm font-medium">
+                    💹 Profit Analysis
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="recommendations"
+                    checked={reportParameters.include_recommendations}
+                    onChange={(e) => handleReportParameterChange('include_recommendations', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="recommendations" className="text-sm font-medium">
+                    💡 Recommendations
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="datewise_analysis"
+                    checked={reportParameters.include_datewise_analysis}
+                    onChange={(e) => handleReportParameterChange('include_datewise_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="datewise_analysis" className="text-sm font-medium">
+                    📅 Date-wise Analysis
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowReportModal(false)}
+                disabled={generatingReport}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGeneratePDFReport}
+                disabled={generatingReport}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {generatingReport ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating PDF...
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Generate PDF Report
+                  </div>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
