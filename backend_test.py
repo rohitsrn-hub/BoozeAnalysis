@@ -1262,9 +1262,10 @@ class BackendTester:
         print(f"Backend URL: {self.base_url}")
         print("=" * 60)
         
-        # Test results tracking - PRIORITY: Module 4 Monthly Report Generation
+        # Test results tracking - PRIORITY: Module 4 Date-wise Analysis Testing
         test_functions = [
             ("Root Endpoint", self.test_root_endpoint),
+            ("Date-wise Analysis Functionality (PRIORITY)", self.test_datewise_analysis_functionality),
             ("Module 4 Reports Data Endpoint (PRIORITY)", self.test_module4_reports_data_endpoint),
             ("Module 4 Excel Report Generation (PRIORITY)", self.test_module4_excel_report_generation),
             ("Module 4 PDF Report Generation (PRIORITY)", self.test_module4_pdf_report_generation),
