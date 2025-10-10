@@ -560,8 +560,8 @@ class BackendTester:
         return True
     
     def test_module4_excel_report_generation(self):
-        """PRIORITY TEST: Test Module 4 POST /api/reports/generate-excel endpoint"""
-        print("\n📈 Testing Module 4 Excel Report Generation (PRIORITY)")
+        """PRIORITY TEST: Test Module 4 POST /api/reports/generate-excel endpoint with Date-wise Analysis"""
+        print("\n📈 Testing Module 4 Excel Report Generation with Date-wise Analysis (PRIORITY)")
         
         # Record test start time for IST timestamp verification
         import pytz
@@ -646,7 +646,7 @@ class BackendTester:
                 self.log_test("Module 4 Excel Generation", "FAIL", "Invalid Excel file format", f"File signature: {excel_signature}")
                 return False
             
-            # Try to parse Excel content to verify multiple sheets
+            # Try to parse Excel content to verify multiple sheets including Date-wise Sales
             try:
                 import pandas as pd
                 import io
@@ -654,11 +654,44 @@ class BackendTester:
                 excel_data = pd.ExcelFile(io.BytesIO(response.content))
                 sheet_names = excel_data.sheet_names
                 
-                expected_sheets = ['Executive Summary', 'Top Revenue Generators', 'Top Volume Movers', 'Slow Sellers', 'Capital Blockers', 'Demand Forecast', 'Profit Analysis']
+                expected_sheets = ['Executive Summary', 'Top Revenue Generators', 'Top Volume Movers', 'Slow Sellers', 'Capital Blockers', 'Demand Forecast', 'Profit Analysis', 'Date-wise Sales']
                 missing_sheets = [sheet for sheet in expected_sheets if sheet not in sheet_names]
                 
                 if missing_sheets:
                     self.log_test("Module 4 Excel Generation", "FAIL", f"Missing Excel sheets: {missing_sheets}", f"Available sheets: {sheet_names}")
+                    return False
+                
+                # CRITICAL: Verify Date-wise Sales sheet structure
+                if 'Date-wise Sales' in sheet_names:
+                    datewise_df = pd.read_excel(io.BytesIO(response.content), sheet_name='Date-wise Sales')
+                    
+                    if datewise_df.empty:
+                        self.log_test("Module 4 Excel Date-wise Analysis", "FAIL", "Date-wise Sales sheet is empty", "No data in date-wise analysis sheet")
+                        return False
+                    
+                    # Verify required columns in Date-wise Sales sheet
+                    required_columns = ['Index', 'Brand Name', 'Wholesale Rate (₹)', 'Retail Rate (₹)']
+                    missing_columns = [col for col in required_columns if col not in datewise_df.columns]
+                    
+                    if missing_columns:
+                        self.log_test("Module 4 Excel Date-wise Analysis", "FAIL", f"Missing required columns in Date-wise Sales sheet: {missing_columns}", f"Available columns: {list(datewise_df.columns)}")
+                        return False
+                    
+                    # Check for date columns (D1, D2, D3, etc.)
+                    date_columns = [col for col in datewise_df.columns if col.startswith('D') and col not in ['DL_date', 'D1_date']]
+                    
+                    if not date_columns:
+                        self.log_test("Module 4 Excel Date-wise Analysis", "FAIL", "No date columns found in Date-wise Sales sheet", f"Available columns: {list(datewise_df.columns)}")
+                        return False
+                    
+                    self.log_test(
+                        "Module 4 Excel Date-wise Analysis", 
+                        "PASS", 
+                        f"Date-wise Sales sheet structure verified successfully",
+                        f"Rows: {len(datewise_df)}, Required columns: ✓, Date columns: {len(date_columns)} ({date_columns[:5]})"
+                    )
+                else:
+                    self.log_test("Module 4 Excel Date-wise Analysis", "FAIL", "Date-wise Sales sheet not found", f"Available sheets: {sheet_names}")
                     return False
                 
                 # Verify at least one sheet has data
@@ -674,7 +707,7 @@ class BackendTester:
             self.log_test(
                 "Module 4 Excel Generation", 
                 "PASS", 
-                f"Excel report generated successfully with IST timestamp",
+                f"Excel report with Date-wise Analysis generated successfully",
                 f"Filename: {filename}, Size: {len(response.content)} bytes, Sheets: {len(sheet_names)}, IST time diff: {time_diff:.1f}s"
             )
             return True
