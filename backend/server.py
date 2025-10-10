@@ -2744,6 +2744,8 @@ async def generate_excel_report():
             pd.DataFrame(profit_data).to_excel(writer, sheet_name='Profit Analysis', index=False)
             
             # Sheet 8: Date-wise Sales Analysis
+            # Fetch liquor records for date-wise analysis
+            liquor_records = await db.liquor_data.find().to_list(1000)
             datewise_data = []
             for record in liquor_records:
                 row_data = {
