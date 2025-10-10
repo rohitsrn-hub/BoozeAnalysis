@@ -3053,22 +3053,20 @@ async def generate_pdf_report(params: ReportParameters):
         # Brand-wise Sale Analysis (if requested)
         if params.include_datewise_analysis:
             story.append(PageBreak())  # New page for brand-wise analysis
-            story.append(Paragraph("📊 Brand-Wise Sale Analysis", heading_style))
+            story.append(Paragraph("📊 Brand-Wise Sale Analysis (Landscape View)", heading_style))
             
-            # Get first 12 brands for PDF A4 page fitting
-            liquor_records = await db.liquor_data.find().to_list(12)
+            # Get first 15 brands for PDF landscape page fitting
+            liquor_records = await db.liquor_data.find().to_list(15)
             
             if liquor_records:
-                # Split into two tables for A4 page fitting
+                # Single comprehensive table for landscape orientation
+                brandwise_header = [
+                    'Index', 'Brand Name', 'D1 Stock', 'DL Stock', 'Wholesale Rate (₹)', 
+                    'Selling Rate (₹)', 'Monthly Sale Value (₹)', 'Monthly Profit (₹)',
+                    'Retail Stock Value (₹)', 'Multiplier', 'Status'
+                ]
                 
-                # First Table: Basic Info + Stock Data
-                story.append(Paragraph("<b>Stock & Rate Analysis</b>", normal_style))
-                table1_header = ['Idx', 'Brand Name', 'D1 Stock', 'DL Stock', 'WS Rate', 'Retail Rate']
-                table1_data = [table1_header]
-                
-                # Second Table: Financial Analysis + Status
-                table2_header = ['Idx', 'Sale Value', 'Profit', 'Retail Stock Value', 'Multiplier', 'Status']
-                table2_data = [table2_header]
+                brandwise_data = [brandwise_header]
                 
                 total_sale_value = 0
                 total_profit = 0
@@ -3092,42 +3090,41 @@ async def generate_pdf_report(params: ReportParameters):
                     # Determine status based on stock ratio
                     stock_ratio = record.get('stock_ratio', 0)
                     if stock_ratio > multiplier_value:
-                        status = "OVER"
+                        status = "OVERSTOCKED"
                     elif stock_ratio < 0.5:
-                        status = "LOW"
+                        status = "LOW STOCK"
                     else:
-                        status = "OK"
+                        status = "NORMAL"
                     
                     # Add to totals
                     total_sale_value += monthly_sale_value
                     total_profit += monthly_profit
                     total_stock_value += current_stock_value
                     
-                    # Table 1 data (Stock & Rates)
-                    table1_row = [
-                        str(record.get('index_number', ''))[:3],  # Truncate index
-                        record['brand_name'][:10],  # Truncate brand name for A4 fitting
+                    row = [
+                        str(record.get('index_number', '')),  # Full index number
+                        record['brand_name'][:18],  # Longer brand name for landscape
                         f"{d1_stock:.0f}",
                         f"{dl_stock:.0f}",
                         f"₹{wholesale_rate:.0f}",
-                        f"₹{selling_rate:.0f}"
-                    ]
-                    table1_data.append(table1_row)
-                    
-                    # Table 2 data (Financial & Status)
-                    table2_row = [
-                        str(record.get('index_number', ''))[:3],  # Truncate index
+                        f"₹{selling_rate:.0f}",
                         f"₹{monthly_sale_value:.0f}",
                         f"₹{monthly_profit:.0f}",
                         f"₹{current_stock_value:.0f}",
                         f"{multiplier_value:.1f}x",
                         status
                     ]
-                    table2_data.append(table2_row)
+                    
+                    brandwise_data.append(row)
                 
-                # Add total row to Table 2
-                table2_data.append([
+                # Add total row
+                brandwise_data.append([
                     'TOTAL',
+                    '-',
+                    '-',
+                    '-',
+                    '-',
+                    '-',
                     f"₹{total_sale_value:.0f}",
                     f"₹{total_profit:.0f}",
                     f"₹{total_stock_value:.0f}",
@@ -3135,49 +3132,47 @@ async def generate_pdf_report(params: ReportParameters):
                     '-'
                 ])
                 
-                # Create Table 1 with A4 optimized styling
-                table1 = Table(table1_data, colWidths=[0.7*inch, 1.4*inch, 0.8*inch, 0.8*inch, 0.9*inch, 0.9*inch])
-                table1.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#3b82f6')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-                    ('BACKGROUND', (0, 1), (-1, -1), HexColor('#eff6ff')),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
-                ]))
-                story.append(table1)
-                story.append(Spacer(1, 15))
+                # Create table with landscape-optimized column widths
+                landscape_colwidths = [
+                    0.6*inch,   # Index
+                    1.8*inch,   # Brand Name (wider)
+                    0.7*inch,   # D1 Stock
+                    0.7*inch,   # DL Stock
+                    0.9*inch,   # Wholesale Rate
+                    0.9*inch,   # Selling Rate
+                    1.1*inch,   # Monthly Sale Value
+                    1.0*inch,   # Monthly Profit
+                    1.2*inch,   # Retail Stock Value
+                    0.7*inch,   # Multiplier
+                    1.0*inch    # Status
+                ]
                 
-                # Create Table 2 with A4 optimized styling and totals
-                story.append(Paragraph("<b>Financial Performance Analysis</b>", normal_style))
-                table2 = Table(table2_data, colWidths=[0.7*inch, 1.2*inch, 1.0*inch, 1.4*inch, 0.9*inch, 0.6*inch])
-                table2.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#059669')),
+                table = Table(brandwise_data, colWidths=landscape_colwidths)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#8b5cf6')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),  # Slightly larger header font
+                    ('FONTSIZE', (0, 1), (-1, -2), 8),  # Data rows
                     ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
                     ('TOPPADDING', (0, 0), (-1, -1), 4),
                     ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-                    ('BACKGROUND', (0, 1), (-1, -2), HexColor('#f0fdf4')),
+                    ('BACKGROUND', (0, 1), (-1, -2), HexColor('#f3f4f6')),
                     # Total row styling
                     ('BACKGROUND', (0, -1), (-1, -1), HexColor('#16a34a')),
                     ('TEXTCOLOR', (0, -1), (-1, -1), colors.whitesmoke),
                     ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, -1), (-1, -1), 9),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
                 ]))
-                story.append(table2)
-                story.append(Spacer(1, 10))
+                story.append(table)
+                story.append(Spacer(1, 15))
                 
                 # Summary paragraph
                 story.append(Paragraph(f"<b>Analysis Summary:</b> Total Sale Value: ₹{total_sale_value:,.0f} | Total Profit: ₹{total_profit:,.0f} | Total Stock Value: ₹{total_stock_value:,.0f}", normal_style))
                 story.append(Spacer(1, 10))
-                story.append(Paragraph("<i>Note: Showing first 12 brands optimized for A4 page. Complete analysis available in Excel export.</i>", normal_style))
+                story.append(Paragraph("<i>Note: Brand-Wise Sale Analysis displayed in landscape orientation for optimal readability. Complete analysis available in Excel export.</i>", normal_style))
             
             story.append(Spacer(1, 15))
         
