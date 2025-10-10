@@ -3053,21 +3053,36 @@ async def generate_pdf_report(params: ReportParameters):
         # Brand-wise Sale Analysis (if requested)
         if params.include_datewise_analysis:
             story.append(PageBreak())  # New page for brand-wise analysis
-            story.append(Paragraph("📊 Brand-Wise Sale Analysis (Landscape View)", heading_style))
+            story.append(Paragraph("📊 Brand-Wise Sale Analysis (All Brands - Landscape View)", heading_style))
             
-            # Get first 15 brands for PDF landscape page fitting
-            liquor_records = await db.liquor_data.find().to_list(15)
+            # Get ALL brands for complete analysis
+            liquor_records = await db.liquor_data.find().to_list(1000)  # Get all records
             
             if liquor_records:
-                # Single comprehensive table for landscape orientation
+                # Define table header
                 brandwise_header = [
                     'Index', 'Brand Name', 'D1 Stock', 'DL Stock', 'Wholesale Rate (₹)', 
                     'Selling Rate (₹)', 'Monthly Sale Value (₹)', 'Monthly Profit (₹)',
                     'Retail Stock Value (₹)', 'Multiplier', 'Status'
                 ]
                 
-                brandwise_data = [brandwise_header]
+                # Calculate landscape-optimized column widths
+                landscape_colwidths = [
+                    0.5*inch,   # Index (reduced)
+                    1.6*inch,   # Brand Name 
+                    0.6*inch,   # D1 Stock (reduced)
+                    0.6*inch,   # DL Stock (reduced)
+                    0.8*inch,   # Wholesale Rate (reduced)
+                    0.8*inch,   # Selling Rate (reduced)
+                    1.0*inch,   # Monthly Sale Value (reduced)
+                    0.9*inch,   # Monthly Profit (reduced)
+                    1.1*inch,   # Retail Stock Value (reduced)
+                    0.6*inch,   # Multiplier (reduced)
+                    0.9*inch    # Status (reduced)
+                ]
                 
+                # Prepare all brand data
+                all_brand_data = []
                 total_sale_value = 0
                 total_profit = 0
                 total_stock_value = 0
@@ -3090,11 +3105,11 @@ async def generate_pdf_report(params: ReportParameters):
                     # Determine status based on stock ratio
                     stock_ratio = record.get('stock_ratio', 0)
                     if stock_ratio > multiplier_value:
-                        status = "OVERSTOCKED"
+                        status = "OVER"  # Shortened for space
                     elif stock_ratio < 0.5:
-                        status = "LOW STOCK"
+                        status = "LOW"
                     else:
-                        status = "NORMAL"
+                        status = "OK"
                     
                     # Add to totals
                     total_sale_value += monthly_sale_value
@@ -3102,8 +3117,8 @@ async def generate_pdf_report(params: ReportParameters):
                     total_stock_value += current_stock_value
                     
                     row = [
-                        str(record.get('index_number', '')),  # Full index number
-                        record['brand_name'][:18],  # Longer brand name for landscape
+                        str(record.get('index_number', '')),
+                        record['brand_name'][:16],  # Slightly shorter to fit better
                         f"{d1_stock:.0f}",
                         f"{dl_stock:.0f}",
                         f"₹{wholesale_rate:.0f}",
@@ -3115,64 +3130,79 @@ async def generate_pdf_report(params: ReportParameters):
                         status
                     ]
                     
-                    brandwise_data.append(row)
+                    all_brand_data.append(row)
                 
-                # Add total row
-                brandwise_data.append([
-                    'TOTAL',
-                    '-',
-                    '-',
-                    '-',
-                    '-',
-                    '-',
-                    f"₹{total_sale_value:.0f}",
-                    f"₹{total_profit:.0f}",
-                    f"₹{total_stock_value:.0f}",
-                    '-',
-                    '-'
-                ])
+                # Split data into chunks for multiple pages (25 rows per page for landscape)
+                brands_per_page = 25
+                total_pages = (len(all_brand_data) + brands_per_page - 1) // brands_per_page
                 
-                # Create table with landscape-optimized column widths
-                landscape_colwidths = [
-                    0.6*inch,   # Index
-                    1.8*inch,   # Brand Name (wider)
-                    0.7*inch,   # D1 Stock
-                    0.7*inch,   # DL Stock
-                    0.9*inch,   # Wholesale Rate
-                    0.9*inch,   # Selling Rate
-                    1.1*inch,   # Monthly Sale Value
-                    1.0*inch,   # Monthly Profit
-                    1.2*inch,   # Retail Stock Value
-                    0.7*inch,   # Multiplier
-                    1.0*inch    # Status
+                for page_num in range(total_pages):
+                    # Add page break for subsequent pages
+                    if page_num > 0:
+                        story.append(PageBreak())
+                    
+                    # Add page indicator
+                    if total_pages > 1:
+                        story.append(Paragraph(f"<b>Brand-Wise Analysis - Page {page_num + 1} of {total_pages}</b>", normal_style))
+                        story.append(Spacer(1, 10))
+                    
+                    # Get data for this page
+                    start_idx = page_num * brands_per_page
+                    end_idx = min(start_idx + brands_per_page, len(all_brand_data))
+                    page_data = all_brand_data[start_idx:end_idx]
+                    
+                    # Create table data with header
+                    table_data = [brandwise_header] + page_data
+                    
+                    # Create table for this page
+                    table = Table(table_data, colWidths=landscape_colwidths, repeatRows=1)  # repeatRows=1 repeats header
+                    table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), HexColor('#8b5cf6')),
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, 0), 8),  # Reduced header font
+                        ('FONTSIZE', (0, 1), (-1, -1), 7),  # Reduced data font
+                        ('TOPPADDING', (0, 0), (-1, -1), 2),  # Reduced padding
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),  # Reduced padding
+                        ('LEFTPADDING', (0, 0), (-1, -1), 3),  # Reduced padding
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 3),  # Reduced padding
+                        ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f8fafc')),
+                        ('GRID', (0, 0), (-1, -1), 0.3, colors.black),  # Thinner grid lines
+                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), HexColor('#f8fafc')])  # Alternating rows
+                    ]))
+                    
+                    story.append(table)
+                    story.append(Spacer(1, 10))
+                
+                # Add total row on last page only
+                story.append(Paragraph("<b>Summary Totals:</b>", normal_style))
+                
+                # Create summary table
+                summary_data = [
+                    ['Metric', 'Total Amount'],
+                    ['Total Sale Value', f"₹{total_sale_value:,.0f}"],
+                    ['Total Profit', f"₹{total_profit:,.0f}"],
+                    ['Total Retail Stock Value', f"₹{total_stock_value:,.0f}"],
+                    ['Total Brands Analyzed', f"{len(all_brand_data)}"]
                 ]
                 
-                table = Table(brandwise_data, colWidths=landscape_colwidths)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#8b5cf6')),
+                summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+                summary_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#16a34a')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 9),  # Slightly larger header font
-                    ('FONTSIZE', (0, 1), (-1, -2), 8),  # Data rows
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4),
-                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
-                    ('BACKGROUND', (0, 1), (-1, -2), HexColor('#f3f4f6')),
-                    # Total row styling
-                    ('BACKGROUND', (0, -1), (-1, -1), HexColor('#16a34a')),
-                    ('TEXTCOLOR', (0, -1), (-1, -1), colors.whitesmoke),
-                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, -1), (-1, -1), 9),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('TOPPADDING', (0, 0), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f0fdf4')),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
                 ]))
-                story.append(table)
-                story.append(Spacer(1, 15))
                 
-                # Summary paragraph
-                story.append(Paragraph(f"<b>Analysis Summary:</b> Total Sale Value: ₹{total_sale_value:,.0f} | Total Profit: ₹{total_profit:,.0f} | Total Stock Value: ₹{total_stock_value:,.0f}", normal_style))
+                story.append(summary_table)
                 story.append(Spacer(1, 10))
-                story.append(Paragraph("<i>Note: Brand-Wise Sale Analysis displayed in landscape orientation for optimal readability. Complete analysis available in Excel export.</i>", normal_style))
+                story.append(Paragraph(f"<i>Complete Brand-Wise Sale Analysis across {total_pages} pages in landscape orientation. All {len(all_brand_data)} brands included with detailed financial metrics.</i>", normal_style))
             
             story.append(Spacer(1, 15))
         
