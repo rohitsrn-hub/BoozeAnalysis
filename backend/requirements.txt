@@ -14,6 +14,7 @@ email-validator==2.3.0
 et_xmlfile==2.0.0
 fastapi==0.110.1
 flake8==7.3.0
+gunicorn==23.0.0
 h11==0.16.0
 idna==3.10
 iniconfig==2.1.0
@@ -33,6 +34,7 @@ packaging==25.0
 pandas==2.3.2
 passlib==1.7.4
 pathspec==0.12.1
+pillow==11.3.0
 platformdirs==4.4.0
 pluggy==1.6.0
 pyasn1==0.6.1
@@ -51,6 +53,7 @@ python-jose==3.5.0
 python-multipart==0.0.20
 pytokens==0.1.10
 pytz==2025.2
+reportlab==4.4.4
 requests==2.32.5
 requests-oauthlib==2.0.0
 rich==14.1.0
@@ -69,4 +72,4 @@ urllib3==2.5.0
 uvicorn==0.25.0
 watchfiles==1.1.0
 xlrd==2.0.2
-gunicorn
+zipp==3.23.0
