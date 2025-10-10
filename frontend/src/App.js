@@ -1280,6 +1280,33 @@ function App() {
                       Reset Stock
                     </Button>
                   </div>
+
+                  {/* Third Row: Report Generation Buttons */}
+                  <div className="flex items-center space-x-2">
+                    {/* Module 4: Report Generation Buttons */}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleGenerateExcelReport}
+                      disabled={loading || !hasData || generatingReport}
+                      data-testid="excel-report-btn"
+                      className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs"
+                    >
+                      <FileSpreadsheet className="w-3 h-3 mr-1" />
+                      {generatingReport ? 'Generating...' : 'Export Excel'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowReportModal(true)}
+                      disabled={loading || !hasData || generatingReport}
+                      data-testid="pdf-report-btn"
+                      className="border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-xs"
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      Generate PDF
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
