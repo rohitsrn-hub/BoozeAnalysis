@@ -185,6 +185,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "SPECIFIC BACKUP FILENAME FORMAT VERIFICATION COMPLETED: ✅ GET /api/stock/backups successfully lists all backups (6 total) ✅ Most recent backup identified (ID: 68b28d8c-b919-4a9f-bcac-252058e066d7, 62 records) ✅ GET /api/stock/backup/{backup_id}/download successful (16,576 bytes Excel file) ✅ CRITICAL SUCCESS: Content-Disposition header contains correct filename format 'stock_backup_20251010_045711.xlsx' ✅ Filename format verification: stock_backup_YYYYMMDD_HHMMSS.xlsx ✅ NO DASHES in filename (correct format, not 'stock_backup_2025-10-09.xlsx') ✅ Date component: 20251010 (IST date 2025-10-10, not UTC 2025-10-09) ✅ Time component: 045711 (04:57:11 IST) ✅ File extension: .xlsx ✅ All comprehensive backend tests passed (10/10, 100% success rate). The backup filename format is working correctly with proper IST timestamp conversion, addressing the user's concern about incorrect filename format with dashes and missing time component."
+      - working: true
+        agent: "testing"
+        comment: "FOCUSED BACKUP TIMESTAMP TEST COMPLETED: ✅ Backup creation successful (ID: e74edfb5-25fc-4b6b-a4f4-f2955e4bb6ff, 62 records) ✅ Backup download successful (16,934 bytes Excel file) ✅ CRITICAL VERIFICATION: Filename format stock_backup_20251010_075921.xlsx is CORRECT ✅ NO dashes in filename confirmed ✅ Time component included and correct (075921 = 07:59:21 IST) ✅ IST timestamp conversion working perfectly (0.9s accuracy) ✅ Excel file format validation passed (PK ZIP signature) ✅ All requirements from review request fulfilled: correct IST timestamp format, no dashes, time component included. The backup timestamp test from review request passed successfully."
 
   - task: "Module 4 Monthly Report Generation - GET /api/reports/data endpoint"
     implemented: true
