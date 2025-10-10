@@ -601,6 +601,95 @@ function App() {
     }
   };
 
+  // Module 4: Report Generation Handlers
+  const handleGenerateExcelReport = async () => {
+    try {
+      setGeneratingReport(true);
+      
+      const response = await axios.post(`${API}/reports/generate-excel`, {}, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'monthly_report.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Excel report generated successfully!");
+      
+    } catch (error) {
+      console.error("Error generating Excel report:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to generate Excel report";
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleGeneratePDFReport = async () => {
+    try {
+      setGeneratingReport(true);
+      
+      const response = await axios.post(`${API}/reports/generate-pdf`, reportParameters, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'monthly_report.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("PDF report generated successfully!");
+      setShowReportModal(false);
+      
+    } catch (error) {
+      console.error("Error generating PDF report:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to generate PDF report";
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleReportParameterChange = (key, value) => {
+    setReportParameters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
   // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
