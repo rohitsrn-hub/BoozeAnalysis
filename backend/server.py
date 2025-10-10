@@ -2755,15 +2755,20 @@ async def generate_excel_report():
                     'Retail Rate (₹)': record.get('selling_rate', record.get('rate', 0))
                 }
                 
-                # Add all date columns from the record
-                for key, value in record.items():
-                    if key.startswith('D') and key != 'DL_date' and key != 'D1_date':
-                        # Convert date key to readable format if possible
-                        try:
-                            if key in ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13', 'D14', 'DL']:
-                                row_data[key] = value if value is not None else 0
-                        except:
-                            row_data[key] = value if value is not None else 0
+                # Add date-wise sales data from daily_sales field
+                daily_sales = record.get('daily_sales', {})
+                if daily_sales:
+                    # Sort dates chronologically for consistent column order
+                    sorted_dates = sorted(daily_sales.keys())
+                    for i, date_key in enumerate(sorted_dates, 1):
+                        column_name = f"D{i}" if i <= 14 else date_key  # Use D1, D2, D3... format or actual date
+                        row_data[column_name] = daily_sales[date_key] if daily_sales[date_key] is not None else 0
+                
+                # Also add D1 and DL stock values if available
+                if record.get('D1_stock') is not None:
+                    row_data['D1_Stock'] = record['D1_stock']
+                if record.get('DL_stock') is not None:
+                    row_data['DL_Stock'] = record['DL_stock']
                 
                 datewise_data.append(row_data)
             
