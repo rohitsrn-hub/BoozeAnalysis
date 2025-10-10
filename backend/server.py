@@ -3005,18 +3005,24 @@ async def generate_pdf_report(params: ReportParameters):
             story.append(PageBreak())  # New page for brand-wise analysis
             story.append(Paragraph("📊 Brand-Wise Sale Analysis", heading_style))
             
-            # Get first 15 brands for PDF (to avoid too large tables)
-            liquor_records = await db.liquor_data.find().to_list(15)
+            # Get first 12 brands for PDF A4 page fitting
+            liquor_records = await db.liquor_data.find().to_list(12)
             
             if liquor_records:
-                # Create table header using calculation verify tab structure
-                brandwise_header = [
-                    'Index', 'Brand Name', 'D1 Stock', 'DL Stock', 'Wholesale Rate (₹)', 
-                    'Selling Rate (₹)', 'Monthly Sale Value (₹)', 'Monthly Profit (₹)',
-                    'Current Stock Value (₹)', 'Multiplier Value', 'Status'
-                ]
+                # Split into two tables for A4 page fitting
                 
-                brandwise_data = [brandwise_header]
+                # First Table: Basic Info + Stock Data
+                story.append(Paragraph("<b>Stock & Rate Analysis</b>", normal_style))
+                table1_header = ['Idx', 'Brand Name', 'D1 Stock', 'DL Stock', 'WS Rate', 'Retail Rate']
+                table1_data = [table1_header]
+                
+                # Second Table: Financial Analysis + Status
+                table2_header = ['Idx', 'Sale Value', 'Profit', 'Retail Stock Value', 'Multiplier', 'Status']
+                table2_data = [table2_header]
+                
+                total_sale_value = 0
+                total_profit = 0
+                total_stock_value = 0
                 
                 for record in liquor_records:
                     # Calculate values
@@ -3036,44 +3042,92 @@ async def generate_pdf_report(params: ReportParameters):
                     # Determine status based on stock ratio
                     stock_ratio = record.get('stock_ratio', 0)
                     if stock_ratio > multiplier_value:
-                        status = "OVERSTOCKED"
+                        status = "OVER"
                     elif stock_ratio < 0.5:
-                        status = "LOW STOCK"
+                        status = "LOW"
                     else:
-                        status = "NORMAL"
+                        status = "OK"
                     
-                    row = [
-                        str(record.get('index_number', '')),
-                        record['brand_name'][:12],  # Truncate for PDF readability
+                    # Add to totals
+                    total_sale_value += monthly_sale_value
+                    total_profit += monthly_profit
+                    total_stock_value += current_stock_value
+                    
+                    # Table 1 data (Stock & Rates)
+                    table1_row = [
+                        str(record.get('index_number', ''))[:3],  # Truncate index
+                        record['brand_name'][:10],  # Truncate brand name for A4 fitting
                         f"{d1_stock:.0f}",
                         f"{dl_stock:.0f}",
                         f"₹{wholesale_rate:.0f}",
-                        f"₹{selling_rate:.0f}",
+                        f"₹{selling_rate:.0f}"
+                    ]
+                    table1_data.append(table1_row)
+                    
+                    # Table 2 data (Financial & Status)
+                    table2_row = [
+                        str(record.get('index_number', ''))[:3],  # Truncate index
                         f"₹{monthly_sale_value:.0f}",
                         f"₹{monthly_profit:.0f}",
                         f"₹{current_stock_value:.0f}",
                         f"{multiplier_value:.1f}x",
                         status
                     ]
-                    
-                    brandwise_data.append(row)
+                    table2_data.append(table2_row)
                 
-                # Create table with smaller font for readability
-                table = Table(brandwise_data)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#8b5cf6')),
+                # Add total row to Table 2
+                table2_data.append([
+                    'TOTAL',
+                    f"₹{total_sale_value:.0f}",
+                    f"₹{total_profit:.0f}",
+                    f"₹{total_stock_value:.0f}",
+                    '-',
+                    '-'
+                ])
+                
+                # Create Table 1 with A4 optimized styling
+                table1 = Table(table1_data, colWidths=[0.7*inch, 1.4*inch, 0.8*inch, 0.8*inch, 0.9*inch, 0.9*inch])
+                table1.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#3b82f6')),
                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 7),  # Very small font for many columns
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-                    ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f3f4f6')),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                    ('BACKGROUND', (0, 1), (-1, -1), HexColor('#eff6ff')),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
                 ]))
-                story.append(table)
+                story.append(table1)
+                story.append(Spacer(1, 15))
+                
+                # Create Table 2 with A4 optimized styling and totals
+                story.append(Paragraph("<b>Financial Performance Analysis</b>", normal_style))
+                table2 = Table(table2_data, colWidths=[0.7*inch, 1.2*inch, 1.0*inch, 1.4*inch, 0.9*inch, 0.6*inch])
+                table2.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#059669')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+                    ('BACKGROUND', (0, 1), (-1, -2), HexColor('#f0fdf4')),
+                    # Total row styling
+                    ('BACKGROUND', (0, -1), (-1, -1), HexColor('#16a34a')),
+                    ('TEXTCOLOR', (0, -1), (-1, -1), colors.whitesmoke),
+                    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+                ]))
+                story.append(table2)
                 story.append(Spacer(1, 10))
                 
-                story.append(Paragraph("<i>Note: Showing first 15 brands from calculation verify tab. Complete analysis available in Excel export.</i>", normal_style))
+                # Summary paragraph
+                story.append(Paragraph(f"<b>Analysis Summary:</b> Total Sale Value: ₹{total_sale_value:,.0f} | Total Profit: ₹{total_profit:,.0f} | Total Stock Value: ₹{total_stock_value:,.0f}", normal_style))
+                story.append(Spacer(1, 10))
+                story.append(Paragraph("<i>Note: Showing first 12 brands optimized for A4 page. Complete analysis available in Excel export.</i>", normal_style))
             
             story.append(Spacer(1, 15))
         
