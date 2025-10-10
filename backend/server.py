@@ -2742,6 +2742,30 @@ async def generate_excel_report():
                     'Sales Value (₹)': brand['sales_value']
                 })
             pd.DataFrame(profit_data).to_excel(writer, sheet_name='Profit Analysis', index=False)
+            
+            # Sheet 8: Date-wise Sales Analysis
+            datewise_data = []
+            for record in liquor_records:
+                row_data = {
+                    'Index': record.get('index_number', ''),
+                    'Brand Name': record['brand_name'],
+                    'Wholesale Rate (₹)': record.get('wholesale_rate', 0),
+                    'Retail Rate (₹)': record.get('selling_rate', record.get('rate', 0))
+                }
+                
+                # Add all date columns from the record
+                for key, value in record.items():
+                    if key.startswith('D') and key != 'DL_date' and key != 'D1_date':
+                        # Convert date key to readable format if possible
+                        try:
+                            if key in ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13', 'D14', 'DL']:
+                                row_data[key] = value if value is not None else 0
+                        except:
+                            row_data[key] = value if value is not None else 0
+                
+                datewise_data.append(row_data)
+            
+            pd.DataFrame(datewise_data).to_excel(writer, sheet_name='Date-wise Sales', index=False)
         
         output.seek(0)
         
