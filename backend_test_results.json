@@ -1,177 +1,205 @@
 {
   "summary": {
-    "passed": 13,
-    "total": 13,
-    "success_rate": 100.0,
-    "timestamp": "2025-10-10T00:18:05.743946"
+    "passed": 12,
+    "total": 14,
+    "success_rate": 85.71428571428571,
+    "timestamp": "2025-10-10T01:37:06.371492"
   },
   "detailed_results": [
     {
       "test_name": "Root Endpoint",
       "status": "PASS",
       "message": "API root accessible",
-      "timestamp": "2025-10-10T00:18:04.091747",
+      "timestamp": "2025-10-10T01:37:05.287306",
       "details": "{'message': 'Liquor Sales Analysis Dashboard API'}"
+    },
+    {
+      "test_name": "Date-wise Analysis Excel",
+      "status": "FAIL",
+      "message": "Excel generation failed with status 500",
+      "timestamp": "2025-10-10T01:37:05.738785",
+      "details": "{\"detail\":\"Error generating Excel report: name 'liquor_records' is not defined\"}"
+    },
+    {
+      "test_name": "Date-wise Analysis PDF",
+      "status": "PASS",
+      "message": "PDF with Date-wise Analysis generated successfully",
+      "timestamp": "2025-10-10T01:37:05.815824",
+      "details": "Size: 3875 bytes, Content-Type: application/pdf"
+    },
+    {
+      "test_name": "Date-wise Analysis PDF Comparison",
+      "status": "PASS",
+      "message": "PDF with date-wise analysis is larger than without",
+      "timestamp": "2025-10-10T01:37:05.834080",
+      "details": "With: 3875 bytes, Without: 2271 bytes"
     },
     {
       "test_name": "Module 4 Reports Data",
       "status": "PASS",
       "message": "Report data structure validated successfully",
-      "timestamp": "2025-10-10T00:18:04.101665",
+      "timestamp": "2025-10-10T01:37:05.845408",
       "details": "Revenue: \u20b91,620,837, Profit: \u20b9769,898, Margin: 47.5%, Top sellers: 10, Slow: 15, Blockers: 12, Demand: 16"
     },
     {
       "test_name": "Module 4 Excel Generation",
-      "status": "PASS",
-      "message": "Excel report generated successfully with IST timestamp",
-      "timestamp": "2025-10-10T00:18:05.208622",
-      "details": "Filename: monthly_report_20251010_054804.xlsx, Size: 12048 bytes, Sheets: 7, IST time diff: 0.1s"
+      "status": "FAIL",
+      "message": "Excel generation failed with status 500",
+      "timestamp": "2025-10-10T01:37:05.888560",
+      "details": "{'detail': \"Error generating Excel report: name 'liquor_records' is not defined\"}"
     },
     {
-      "test_name": "Module 4 PDF Generation - Full Report",
+      "test_name": "Module 4 PDF Generation - Full Report with Date-wise Analysis",
       "status": "PASS",
       "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-10T00:18:05.241396",
-      "details": "Filename: monthly_report_20251010_054805.pdf, Size: 6886 bytes, IST time diff: 0.2s"
+      "timestamp": "2025-10-10T01:37:05.922203",
+      "details": "Filename: monthly_report_20251010_070705.pdf, Size: 8926 bytes, IST time diff: 0.9s"
     },
     {
       "test_name": "Module 4 PDF Generation - Executive Summary Only",
       "status": "PASS",
       "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-10T00:18:05.299484",
-      "details": "Filename: monthly_report_20251010_054805.pdf, Size: 2265 bytes, IST time diff: 0.2s"
+      "timestamp": "2025-10-10T01:37:05.941004",
+      "details": "Filename: monthly_report_20251010_070705.pdf, Size: 2265 bytes, IST time diff: 0.9s"
+    },
+    {
+      "test_name": "Module 4 PDF Generation - Date-wise Analysis Only",
+      "status": "PASS",
+      "message": "PDF report generated successfully with IST timestamp",
+      "timestamp": "2025-10-10T01:37:06.004794",
+      "details": "Filename: monthly_report_20251010_070705.pdf, Size: 3873 bytes, IST time diff: 0.9s"
     },
     {
       "test_name": "Module 4 PDF Generation - Sales Focus Report",
       "status": "PASS",
       "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-10T00:18:05.326865",
-      "details": "Filename: monthly_report_20251010_054805.pdf, Size: 4516 bytes, IST time diff: 0.3s"
+      "timestamp": "2025-10-10T01:37:06.030403",
+      "details": "Filename: monthly_report_20251010_070706.pdf, Size: 4516 bytes, IST time diff: 0.0s"
     },
     {
       "test_name": "Backup Creation",
       "status": "PASS",
-      "message": "Backup created successfully with ID: a55eb9d7-59e1-4092-bdc7-6b3e09551fee",
-      "timestamp": "2025-10-10T00:18:05.354441",
-      "details": "Records: 62, Timestamp: 2025-10-10T00:18:05.336725+00:00"
+      "message": "Backup created successfully with ID: c6df0d5f-0c6a-4bbe-9f74-8e44ded6461f",
+      "timestamp": "2025-10-10T01:37:06.057944",
+      "details": "Records: 62, Timestamp: 2025-10-10T01:37:06.038249+00:00"
     },
     {
       "test_name": "Backup Listing",
       "status": "PASS",
-      "message": "Backup found in list (8 total backups)",
-      "timestamp": "2025-10-10T00:18:05.372179",
-      "details": "Backup timestamp: 2025-10-10T00:18:05.336000+00:00"
+      "message": "Backup found in list (9 total backups)",
+      "timestamp": "2025-10-10T01:37:06.071274",
+      "details": "Backup timestamp: 2025-10-10T01:37:06.038000+00:00"
     },
     {
       "test_name": "Backup IST Timestamp",
       "status": "PASS",
       "message": "IST timestamp conversion working correctly",
-      "timestamp": "2025-10-10T00:18:05.451904",
-      "details": "Filename: stock_backup_20251010_054805.xlsx, IST time: 2025-10-10 05:48:05 IST, Diff: 0.3s"
+      "timestamp": "2025-10-10T01:37:06.130746",
+      "details": "Filename: stock_backup_20251010_070706.xlsx, IST time: 2025-10-10 07:07:06 IST, Diff: 0.0s"
     },
     {
       "test_name": "Backup Download",
       "status": "PASS",
       "message": "Excel file downloaded successfully",
-      "timestamp": "2025-10-10T00:18:05.451934",
+      "timestamp": "2025-10-10T01:37:06.130777",
       "details": "Size: 16934 bytes, Format: Valid Excel"
     },
     {
       "test_name": "Trends Chronological Ordering",
       "status": "PASS",
       "message": "Sales trends dates are in chronological order (9 dates)",
-      "timestamp": "2025-10-10T00:18:05.463753",
+      "timestamp": "2025-10-10T01:37:06.142756",
       "details": "Sample order: 20-Sep-25 (2025-09-20) \u2192 21-Sep (2025-09-21) \u2192 22-Sep (2025-09-22) \u2192 26-Sep (2025-09-26) \u2192 28-Sep-25 (2025-09-28)"
     },
     {
       "test_name": "Date Parsing Function",
       "status": "PASS",
       "message": "All 9 date formats recognized and parseable",
-      "timestamp": "2025-10-10T00:18:05.474741",
+      "timestamp": "2025-10-10T01:37:06.154099",
       "details": "Format breakdown: day_month_year: 9"
     },
     {
       "test_name": "Data Completeness",
       "status": "PASS",
       "message": "All 9 dates from database included in sales_trends",
-      "timestamp": "2025-10-10T00:18:05.502623",
+      "timestamp": "2025-10-10T01:37:06.182643",
       "details": "Perfect match between database dates and trends data"
     },
     {
       "test_name": "Refresh Analytics",
       "status": "PASS",
       "message": "Successfully refreshed 62 records",
-      "timestamp": "2025-10-10T00:18:05.579015",
+      "timestamp": "2025-10-10T01:37:06.212678",
       "details": "D1 dates: ['20-Sep-25'], DL dates: ['03-Oct-25']"
     },
     {
       "test_name": "Demand Recommendations",
       "status": "PASS",
       "message": "Found 16 recommendations with proper float values",
-      "timestamp": "2025-10-10T00:18:05.588962",
+      "timestamp": "2025-10-10T01:37:06.223347",
       "details": "Sample recommended_qty: 846.0 (type: float)"
     },
     {
       "test_name": "DL Date Verification",
       "status": "PASS",
       "message": "DL dates are present in analytics",
-      "timestamp": "2025-10-10T00:18:05.603758",
+      "timestamp": "2025-10-10T01:37:06.238508",
       "details": "Sample DL_date: 03-Oct-25"
     },
     {
       "test_name": "DL Date Consistency",
       "status": "PASS",
       "message": "DL dates consistent across endpoints",
-      "timestamp": "2025-10-10T00:18:05.616084",
+      "timestamp": "2025-10-10T01:37:06.250996",
       "details": "Both show: 03-Oct-25"
     },
     {
       "test_name": "Analytics - Analytics with overstock multiplier",
       "status": "PASS",
       "message": "Returned valid data (4401 items/chars)",
-      "timestamp": "2025-10-10T00:18:05.626821",
+      "timestamp": "2025-10-10T01:37:06.262133",
       "details": null
     },
     {
       "test_name": "Analytics - Charts data",
       "status": "PASS",
       "message": "Returned valid data (4209 items/chars)",
-      "timestamp": "2025-10-10T00:18:05.638191",
+      "timestamp": "2025-10-10T01:37:06.272805",
       "details": null
     },
     {
       "test_name": "Analytics - Calculation details",
       "status": "PASS",
       "message": "Returned valid data (62 items/chars)",
-      "timestamp": "2025-10-10T00:18:05.654006",
+      "timestamp": "2025-10-10T01:37:06.283964",
       "details": null
     },
     {
       "test_name": "Analytics - Database view",
       "status": "PASS",
       "message": "Returned valid data (52003 items/chars)",
-      "timestamp": "2025-10-10T00:18:05.670977",
+      "timestamp": "2025-10-10T01:37:06.299752",
       "details": null
     },
     {
       "test_name": "Analytics - Upload history",
       "status": "PASS",
       "message": "Returned valid data (5 items/chars)",
-      "timestamp": "2025-10-10T00:18:05.681644",
+      "timestamp": "2025-10-10T01:37:06.350253",
       "details": null
     },
     {
       "test_name": "Upload - Full Monthly Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-10T00:18:05.693491",
+      "timestamp": "2025-10-10T01:37:06.362475",
       "details": "Returns proper validation error when no file provided"
     },
     {
       "test_name": "Upload - Today's Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-10T00:18:05.743069",
+      "timestamp": "2025-10-10T01:37:06.371340",
       "details": "Returns proper validation error when no file provided"
     }
   ]
