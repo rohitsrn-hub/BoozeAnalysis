@@ -2747,6 +2747,24 @@ async def generate_excel_report():
             # Fetch liquor records for date-wise analysis
             liquor_records = await db.liquor_data.find().to_list(1000)
             datewise_data = []
+            
+            # Extract actual date range from first record to create proper column headers
+            date_columns = []
+            if liquor_records:
+                sample_record = liquor_records[0]
+                d1_date = sample_record.get('D1_date', '20-Sep-25')
+                dl_date = sample_record.get('DL_date', '03-Oct-25')
+                
+                # Create actual date columns based on daily_sales data structure
+                daily_sales = sample_record.get('daily_sales', {})
+                if daily_sales:
+                    # Use actual dates as column headers, sorted chronologically
+                    sorted_dates = sorted(daily_sales.keys())
+                    date_columns = sorted_dates
+                else:
+                    # Fallback to static date range if daily_sales is not available
+                    date_columns = ['20-Sep', '22-Sep', '26-Sep', '28-Sep-25', '29-Sep-25', '30-Sep-25', '01-Oct-25', '03-Oct-25']
+            
             for record in liquor_records:
                 row_data = {
                     'Index': record.get('index_number', ''),
@@ -2755,20 +2773,11 @@ async def generate_excel_report():
                     'Retail Rate (₹)': record.get('selling_rate', record.get('rate', 0))
                 }
                 
-                # Add date-wise sales data from daily_sales field
+                # Add date-wise sales data with actual dates as column headers
                 daily_sales = record.get('daily_sales', {})
-                if daily_sales:
-                    # Sort dates chronologically for consistent column order
-                    sorted_dates = sorted(daily_sales.keys())
-                    for i, date_key in enumerate(sorted_dates, 1):
-                        column_name = f"D{i}" if i <= 14 else date_key  # Use D1, D2, D3... format or actual date
-                        row_data[column_name] = daily_sales[date_key] if daily_sales[date_key] is not None else 0
-                
-                # Also add D1 and DL stock values if available
-                if record.get('D1_stock') is not None:
-                    row_data['D1_Stock'] = record['D1_stock']
-                if record.get('DL_stock') is not None:
-                    row_data['DL_Stock'] = record['DL_stock']
+                for date_col in date_columns:
+                    sales_value = daily_sales.get(date_col, 0) if daily_sales else 0
+                    row_data[date_col] = sales_value if sales_value is not None else 0
                 
                 datewise_data.append(row_data)
             
