@@ -1170,26 +1170,20 @@ function App() {
                   </Button>
                 </div>
 
-                {/* Action Buttons - Two Rows Layout */}
-                <div className="flex flex-col space-y-2">
-                  {/* First Row: Upload & Management Buttons */}
-                  <div className="flex items-center space-x-2">
-                    {/* Full Monthly Data Upload */}
+                {/* Upload Buttons and Controls */}
+                <div className="flex flex-col space-y-4">
+                  {/* Row 1: Upload & Brand Management */}
+                  <div className="flex items-center justify-center space-x-3">
                     <Button 
-                      variant="default" 
+                      variant="outline" 
                       size="sm"
-                      className="bg-green-600 hover:bg-green-700 cursor-pointer transition-all duration-200 text-xs"
+                      onClick={() => document.getElementById('full-monthly-upload').click()}
                       disabled={loading}
-                      data-testid="upload-full-monthly-btn"
-                      onClick={() => {
-                        const fileInput = document.getElementById('full-monthly-upload');
-                        if (fileInput) {
-                          fileInput.click();
-                        }
-                      }}
+                      data-testid="full-monthly-btn"
+                      className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs font-medium"
                     >
-                      <Database className="w-3 h-3 mr-1" />
-                      {loading ? 'Processing...' : 'Full Monthly'}
+                      <Upload className="w-3 h-3 mr-1" />
+                      Full Monthly
                     </Button>
                     <Input
                       id="full-monthly-upload"
@@ -1199,23 +1193,16 @@ function App() {
                       className="hidden"
                       data-testid="full-monthly-file-input"
                     />
-
-                    {/* Today's Data Upload */}
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 cursor-pointer transition-all duration-200 text-xs"
+                      onClick={() => document.getElementById('todays-data-upload').click()}
                       disabled={loading}
-                      data-testid="upload-todays-btn"
-                      onClick={() => {
-                        const fileInput = document.getElementById('todays-data-upload');
-                        if (fileInput) {
-                          fileInput.click();
-                        }
-                      }}
+                      data-testid="todays-data-btn"
+                      className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs font-medium"
                     >
-                      <RefreshCw className="w-3 h-3 mr-1" />
-                      {loading ? 'Processing...' : "Today's Data"}
+                      <Calendar className="w-3 h-3 mr-1" />
+                      Today's Data
                     </Button>
                     <Input
                       id="todays-data-upload"
@@ -1225,15 +1212,13 @@ function App() {
                       className="hidden"
                       data-testid="todays-data-file-input"
                     />
-
-                    {/* Module 1: Brand Management Buttons */}
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={() => setShowBrandModal(true)}
                       disabled={loading}
                       data-testid="add-brand-btn"
-                      className="border-green-600 text-green-600 hover:bg-green-50 text-xs"
+                      className="border-teal-600 text-teal-600 hover:bg-teal-50 text-xs font-medium"
                     >
                       <Package className="w-3 h-3 mr-1" />
                       Add Brand
@@ -1244,16 +1229,15 @@ function App() {
                       onClick={() => setShowRatesModal(true)}
                       disabled={loading}
                       data-testid="update-rates-btn"
-                      className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs"
+                      className="border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-xs font-medium"
                     >
                       <DollarSign className="w-3 h-3 mr-1" />
                       Update Rates
                     </Button>
                   </div>
 
-                  {/* Second Row: Backup & Reset Buttons + Report Buttons */}
-                  <div className="flex items-center space-x-2">
-                    {/* Module 3: Stock Reset & Backup Buttons */}
+                  {/* Row 2: Operations & Report Management */}
+                  <div className="flex items-center justify-center space-x-3">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -1263,7 +1247,7 @@ function App() {
                       }}
                       disabled={loading}
                       data-testid="backups-btn"
-                      className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs"
+                      className="border-violet-600 text-violet-600 hover:bg-violet-50 text-xs font-medium"
                     >
                       <Database className="w-3 h-3 mr-1" />
                       Backups
@@ -1274,20 +1258,18 @@ function App() {
                       onClick={() => setShowResetDialog(true)}
                       disabled={loading || !hasData}
                       data-testid="reset-stock-btn"
-                      className="border-red-600 text-red-600 hover:bg-red-50 text-xs"
+                      className="border-red-600 text-red-600 hover:bg-red-50 text-xs font-medium"
                     >
                       <RefreshCw className="w-3 h-3 mr-1" />
                       Reset Stock
                     </Button>
-                    
-                    {/* Module 4: Report Generation Buttons */}
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={handleGenerateExcelReport}
                       disabled={loading || !hasData || generatingReport}
                       data-testid="excel-report-btn"
-                      className="border-orange-600 text-orange-600 hover:bg-orange-50 text-xs"
+                      className="border-amber-600 text-amber-600 hover:bg-amber-50 text-xs font-medium"
                     >
                       <FileSpreadsheet className="w-3 h-3 mr-1" />
                       {generatingReport ? 'Generating...' : 'Export Excel'}
@@ -1298,7 +1280,7 @@ function App() {
                       onClick={() => setShowReportModal(true)}
                       disabled={loading || !hasData || generatingReport}
                       data-testid="pdf-report-btn"
-                      className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs"
+                      className="border-rose-600 text-rose-600 hover:bg-rose-50 text-xs font-medium"
                     >
                       <FileText className="w-3 h-3 mr-1" />
                       Generate PDF
