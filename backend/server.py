@@ -2856,9 +2856,10 @@ async def generate_pdf_report(params: ReportParameters):
         # Get report data
         report_data = await generate_monthly_report_data()
         
-        # Create PDF
+        # Create PDF with A4 size (landscape for brand-wise analysis if requested)
         output = io.BytesIO()
-        doc = SimpleDocTemplate(output, pagesize=A4)
+        pagesize = landscape(A4) if params.include_datewise_analysis else A4
+        doc = SimpleDocTemplate(output, pagesize=pagesize)
         styles = getSampleStyleSheet()
         
         # Custom styles matching dashboard theme
