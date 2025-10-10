@@ -233,6 +233,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "LATEST UPDATE VERIFICATION COMPLETED: ✅ PDF Brand-Wise Sale Analysis section successfully generated with include_datewise_analysis=true parameter ✅ PDF generation working: 5,023 bytes, valid PDF format, correct content-type ✅ Backend code confirmed: Section titled 'Brand-Wise Sale Analysis' (not 'Date-wise Sales Analysis') ✅ Table structure includes expected headers: Index, Brand Name, D1 Stock, DL Stock, Wholesale Rate, Selling Rate, Monthly Sale Value, Monthly Profit, Current Stock Value, Multiplier Value, Status ✅ Monthly profit calculation formula verified: (selling_rate - wholesale_rate) * total_sales_qty ✅ Profit margin calculation uses per-unit margin: (profit_per_unit / selling_rate) * 100 (which is correct) ✅ All requirements from review request fulfilled: correct section naming, proper table structure, accurate calculations. The PDF report generation with Brand-Wise Sale Analysis meets all specified requirements."
+      - working: true
+        agent: "testing"
+        comment: "FOCUSED A4 PDF FORMATTING TEST COMPLETED: ✅ PDF A4 formatting with Brand-Wise Sale Analysis tested successfully ✅ include_datewise_analysis=true parameter working correctly ✅ PDF generated successfully (5,406 bytes) with proper A4 format ✅ Content-Type: application/pdf verified ✅ PDF file signature validation passed ✅ Filename format verified: monthly_report_YYYYMMDD_HHMMSS.pdf ✅ Full report comparison: 10,422 bytes vs date-wise only: 5,406 bytes ✅ Brand-Wise Sale Analysis fits properly in A4 page format ✅ All content fits within A4 page boundaries as required. The PDF A4 formatting test from review request passed successfully."
 
   - task: "Module 4 Date-wise Analysis Feature Testing"
     implemented: true
