@@ -2984,6 +2984,66 @@ async def generate_pdf_report(params: ReportParameters):
             
             story.append(Spacer(1, 15))
         
+        # Date-wise Analysis (if requested)
+        if params.include_datewise_analysis:
+            story.append(PageBreak())  # New page for date-wise analysis
+            story.append(Paragraph("📅 Date-wise Sales Analysis", heading_style))
+            
+            # Get first 15 brands for PDF (to avoid too large tables)
+            liquor_records = await db.liquor_data.find().to_list(15)
+            
+            if liquor_records:
+                # Create table header - start with basic columns
+                date_header = ['Index', 'Brand Name', 'Wholesale (₹)', 'Retail (₹)']
+                
+                # Add date columns that exist in data
+                sample_record = liquor_records[0]
+                date_columns = []
+                for key in sample_record.keys():
+                    if key.startswith('D') and key not in ['DL_date', 'D1_date']:
+                        if key in ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'D13', 'D14', 'DL']:
+                            date_columns.append(key)
+                
+                # Sort date columns properly
+                date_columns.sort()
+                date_header.extend(date_columns[:10])  # Limit to first 10 date columns for PDF readability
+                
+                datewise_data = [date_header]
+                
+                for record in liquor_records:
+                    row = [
+                        str(record.get('index_number', '')),
+                        record['brand_name'][:15],  # Truncate long names for PDF
+                        f"₹{record.get('wholesale_rate', 0):.0f}",
+                        f"₹{record.get('selling_rate', record.get('rate', 0)):.0f}"
+                    ]
+                    
+                    # Add date values
+                    for date_col in date_columns[:10]:
+                        value = record.get(date_col, 0)
+                        row.append(f"{value:.0f}" if isinstance(value, (int, float)) and value > 0 else "0")
+                    
+                    datewise_data.append(row)
+                
+                # Create table with smaller font for readability
+                table = Table(datewise_data)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#6366f1')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),  # Smaller font for date-wise data
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f1f5f9')),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.black)
+                ]))
+                story.append(table)
+                story.append(Spacer(1, 10))
+                
+                story.append(Paragraph("<i>Note: Showing first 15 brands and 10 date columns for PDF readability. Complete data available in Excel export.</i>", normal_style))
+            
+            story.append(Spacer(1, 15))
+        
         # Build PDF
         doc.build(story)
         output.seek(0)
