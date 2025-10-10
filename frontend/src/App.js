@@ -2749,7 +2749,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="datewise_analysis" className="text-sm font-medium">
-                    📅 Date-wise Analysis
+                    📊 Brand-Wise Sale Analysis
                   </label>
                 </div>
               </div>
