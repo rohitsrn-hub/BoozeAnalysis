@@ -54,6 +54,23 @@ function App() {
   const [backupsList, setBackupsList] = useState([]);
   const [resetting, setResetting] = useState(false);
 
+  // Module 4: Monthly Report Generation state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportParameters, setReportParameters] = useState({
+    include_executive_summary: true,
+    include_top_sellers: true,
+    include_slow_sellers: true,
+    include_capital_blockers: true,
+    include_revenue_analysis: true,
+    include_demand_forecast: true,
+    include_profit_analysis: true,
+    include_recommendations: true,
+    include_datewise_analysis: false,
+    report_title: "Monthly Sales Analytics Report",
+    report_period: ""
+  });
+  const [generatingReport, setGeneratingReport] = useState(false);
+
   // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
