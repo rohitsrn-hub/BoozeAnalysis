@@ -2748,6 +2748,54 @@ async def generate_excel_report():
             liquor_records = await db.liquor_data.find().to_list(1000)
             datewise_data = []
             
+            # Define date parsing function for proper chronological sorting
+            def parse_date_for_sorting_excel(date_str):
+                """Parse various date formats for chronological sorting"""
+                try:
+                    import re
+                    from datetime import datetime
+                    
+                    if not date_str:
+                        return datetime.min
+                    
+                    date_str = str(date_str).strip()
+                    
+                    # Parse various date formats - handle dates with and without years
+                    
+                    # First try: dates with year (21-Sep-25, 01-Oct-25)
+                    match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
+                    if match:
+                        day, month_name, year = match.groups()
+                        year = f"20{year}" if len(year) == 2 else year
+                        full_date = f"{day}-{month_name}-{year}"
+                        return datetime.strptime(full_date, "%d-%b-%Y")
+                    
+                    # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                    match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
+                    if match:
+                        day, month_name = match.groups()
+                        year = "2025"  # Default to 2025 for dates without year
+                        full_date = f"{day}-{month_name}-{year}"
+                        return datetime.strptime(full_date, "%d-%b-%Y")
+                    
+                    # Third try: ISO format (2025-10-04)
+                    match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
+                    if match:
+                        return datetime.strptime(match.group(0), "%Y-%m-%d")
+                    
+                    # Fourth try: numeric dates (04-10-25, 04/10/2025)
+                    match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
+                    if match:
+                        day, month, year = match.groups()
+                        year = f"20{year}" if len(year) == 2 else year
+                        return datetime(int(year), int(month), int(day))
+                            
+                except Exception as e:
+                    print(f"Warning: Could not parse date '{date_str}': {e}")
+                    return datetime.min
+                
+                return datetime.min
+            
             # Extract actual date range from first record to create proper column headers
             date_columns = []
             if liquor_records:
@@ -2758,12 +2806,13 @@ async def generate_excel_report():
                 # Create actual date columns based on daily_sales data structure
                 daily_sales = sample_record.get('daily_sales', {})
                 if daily_sales:
-                    # Use actual dates as column headers, sorted chronologically
-                    sorted_dates = sorted(daily_sales.keys())
+                    # Use actual dates as column headers, sorted chronologically using proper date parsing
+                    sorted_dates = sorted(daily_sales.keys(), key=parse_date_for_sorting_excel)
                     date_columns = sorted_dates
                 else:
-                    # Fallback to static date range if daily_sales is not available
-                    date_columns = ['20-Sep', '22-Sep', '26-Sep', '28-Sep-25', '29-Sep-25', '30-Sep-25', '01-Oct-25', '03-Oct-25']
+                    # Fallback to static date range if daily_sales is not available, properly sorted
+                    fallback_dates = ['20-Sep', '22-Sep', '26-Sep', '28-Sep-25', '29-Sep-25', '30-Sep-25', '01-Oct-25', '03-Oct-25']
+                    date_columns = sorted(fallback_dates, key=parse_date_for_sorting_excel)
             
             for record in liquor_records:
                 row_data = {
