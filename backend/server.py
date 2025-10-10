@@ -2422,6 +2422,563 @@ async def reset_stock_data():
         logging.error(f"Error resetting stock data: {e}")
         raise HTTPException(status_code=500, detail=f"Error resetting stock data: {str(e)}")
 
+# MODULE 4: Monthly Report Generation APIs
+
+async def generate_monthly_report_data() -> MonthlyReportData:
+    """Generate comprehensive monthly report data"""
+    try:
+        # Get all liquor data
+        liquor_records = await db.liquor_data.find().to_list(1000)
+        
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        # Extract date range from first record for report period
+        sample_record = liquor_records[0]
+        d1_date = sample_record.get('D1_date', 'N/A')
+        dl_date = sample_record.get('DL_date', 'N/A') 
+        report_period = f"Sep-Oct 2025 Sales Period ({d1_date} to {dl_date})"
+        
+        # Convert to working format
+        data_list = []
+        for record in liquor_records:
+            data_list.append({
+                'brand_name': record['brand_name'],
+                'wholesale_rate': record.get('wholesale_rate', 0),
+                'selling_rate': record.get('selling_rate', record['rate']),
+                'current_stock_qty': record.get('current_stock_qty', 0),
+                'total_sales_qty': record.get('total_sales_qty', 0),
+                'monthly_sale_value': record['monthly_sale_value'],
+                'monthly_sales_qty': record.get('monthly_sales_qty', 0),
+                'stock_value_today': record['stock_value_today'],
+                'stock_available_days': record['stock_available_days'],
+                'stock_ratio': record.get('stock_ratio', 0),
+                'avg_daily_sales_qty': record.get('avg_daily_sales_qty', 0)
+            })
+        
+        # 1. TOP SELLERS - Revenue and Volume
+        # Revenue-wise top sellers
+        revenue_sorted = sorted(data_list, key=lambda x: x['monthly_sale_value'], reverse=True)[:10]
+        top_sellers_revenue = []
+        for item in revenue_sorted:
+            profit_per_unit = item['selling_rate'] - item['wholesale_rate']
+            total_profit = profit_per_unit * item['total_sales_qty']
+            profit_margin = (profit_per_unit / item['selling_rate'] * 100) if item['selling_rate'] > 0 else 0
+            
+            top_sellers_revenue.append(TopSeller(
+                brand_name=item['brand_name'],
+                revenue=item['monthly_sale_value'],
+                volume=item['total_sales_qty'],
+                profit=total_profit,
+                profit_margin=profit_margin
+            ))
+        
+        # Volume-wise top sellers
+        volume_sorted = sorted(data_list, key=lambda x: x['total_sales_qty'], reverse=True)[:10]
+        top_sellers_volume = []
+        for item in volume_sorted:
+            profit_per_unit = item['selling_rate'] - item['wholesale_rate']
+            total_profit = profit_per_unit * item['total_sales_qty']
+            profit_margin = (profit_per_unit / item['selling_rate'] * 100) if item['selling_rate'] > 0 else 0
+            
+            top_sellers_volume.append(TopSeller(
+                brand_name=item['brand_name'],
+                revenue=item['monthly_sale_value'],
+                volume=item['total_sales_qty'],
+                profit=total_profit,
+                profit_margin=profit_margin
+            ))
+        
+        # 2. SLOW SELLERS (low sales with high stock days)
+        slow_sellers = []
+        for item in data_list:
+            if item['stock_available_days'] > 60 or item['monthly_sale_value'] < 1000:
+                slow_sellers.append(SlowSeller(
+                    brand_name=item['brand_name'],
+                    revenue=item['monthly_sale_value'],
+                    volume=item['total_sales_qty'],
+                    stock_days=item['stock_available_days'],
+                    stock_value=item['stock_value_today']
+                ))
+        
+        slow_sellers = sorted(slow_sellers, key=lambda x: x.stock_days, reverse=True)[:15]
+        
+        # 3. CAPITAL BLOCKERS (overstocked items)
+        capital_blockers = []
+        for item in data_list:
+            if item['stock_ratio'] > 3.0:  # More than 3 months of stock
+                overstocked_ratio = item['stock_ratio']
+                capital_blockers.append(CapitalBlocker(
+                    brand_name=item['brand_name'],
+                    stock_value=item['stock_value_today'],
+                    stock_quantity=item['current_stock_qty'],
+                    stock_days=item['stock_available_days'],
+                    overstocked_ratio=overstocked_ratio
+                ))
+        
+        capital_blockers = sorted(capital_blockers, key=lambda x: x.stock_value, reverse=True)[:15]
+        
+        # 4. DEMAND FORECAST WITH COSTS
+        demand_forecast = []
+        total_demand_cost = 0
+        
+        for item in data_list:
+            monthly_sales_qty = item.get('monthly_sales_qty', 0)
+            current_stock = item['current_stock_qty']
+            
+            if monthly_sales_qty > 0:
+                recommended_qty = max(0, monthly_sales_qty - current_stock)
+                if recommended_qty > 0:
+                    total_cost = recommended_qty * item['wholesale_rate']
+                    total_demand_cost += total_cost
+                    
+                    # Determine urgency
+                    if item['stock_available_days'] < 10:
+                        urgency = "HIGH"
+                    elif item['stock_available_days'] < 20:
+                        urgency = "MEDIUM"
+                    else:
+                        urgency = "LOW"
+                    
+                    demand_forecast.append(DemandForecastItem(
+                        brand_name=item['brand_name'],
+                        current_stock=current_stock,
+                        recommended_qty=recommended_qty,
+                        wholesale_rate=item['wholesale_rate'],
+                        total_cost=total_cost,
+                        urgency_level=urgency
+                    ))
+        
+        # Sort by urgency and cost
+        urgency_order = {"HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        demand_forecast = sorted(demand_forecast, key=lambda x: (urgency_order.get(x.urgency_level, 4), -x.total_cost))
+        
+        # 5. PROFIT ANALYSIS
+        total_revenue = sum(item['monthly_sale_value'] for item in data_list)
+        total_cost = sum((item['wholesale_rate'] * item['total_sales_qty']) for item in data_list)
+        total_profit = total_revenue - total_cost
+        avg_profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+        
+        # Top profit generating brands
+        profit_brands = []
+        for item in data_list:
+            brand_profit = (item['selling_rate'] - item['wholesale_rate']) * item['total_sales_qty']
+            if brand_profit > 0:
+                profit_brands.append({
+                    'brand_name': item['brand_name'],
+                    'profit': brand_profit,
+                    'profit_margin': ((item['selling_rate'] - item['wholesale_rate']) / item['selling_rate'] * 100) if item['selling_rate'] > 0 else 0,
+                    'sales_value': item['monthly_sale_value']
+                })
+        
+        top_profit_brands = sorted(profit_brands, key=lambda x: x['profit'], reverse=True)[:10]
+        
+        profit_analysis = ProfitAnalysis(
+            total_revenue=total_revenue,
+            total_cost=total_cost,
+            total_profit=total_profit,
+            average_profit_margin=avg_profit_margin,
+            top_profit_brands=top_profit_brands
+        )
+        
+        # 6. EXECUTIVE SUMMARY DATA
+        total_brands = len(data_list)
+        overstocked_count = len(capital_blockers)
+        slow_moving_count = len(slow_sellers)
+        high_demand_count = len([f for f in demand_forecast if f.urgency_level == "HIGH"])
+        
+        executive_summary = {
+            "total_brands_analyzed": total_brands,
+            "report_period": report_period,
+            "total_revenue": total_revenue,
+            "total_profit": total_profit,
+            "profit_margin": avg_profit_margin,
+            "overstocked_brands": overstocked_count,
+            "slow_moving_brands": slow_moving_count,
+            "high_demand_brands": high_demand_count,
+            "total_demand_investment": total_demand_cost,
+            "key_insights": [
+                f"Generated ₹{total_profit:,.0f} profit from ₹{total_revenue:,.0f} revenue",
+                f"{overstocked_count} brands are overstocked, blocking capital",
+                f"{slow_moving_count} brands are slow-moving and need attention",
+                f"{high_demand_count} brands need urgent restocking"
+            ]
+        }
+        
+        # 7. RECOMMENDATIONS
+        recommendations = [
+            f"Focus on top revenue generators: {', '.join([b.brand_name for b in top_sellers_revenue[:3]])}",
+            f"Address {overstocked_count} overstocked brands to free up ₹{sum(cb.stock_value for cb in capital_blockers):,.0f}",
+            f"Implement promotion strategy for {slow_moving_count} slow-moving brands",
+            f"Prioritize restocking of {high_demand_count} high-demand brands requiring ₹{total_demand_cost:,.0f} investment",
+            f"Improve profit margin from current {avg_profit_margin:.1f}% through better wholesale negotiations"
+        ]
+        
+        return MonthlyReportData(
+            report_period=report_period,
+            total_brands=total_brands,
+            executive_summary=executive_summary,
+            top_sellers_revenue=top_sellers_revenue,
+            top_sellers_volume=top_sellers_volume,
+            slow_sellers=slow_sellers,
+            capital_blockers=capital_blockers,
+            demand_forecast=demand_forecast,
+            profit_analysis=profit_analysis,
+            recommendations=recommendations
+        )
+        
+    except Exception as e:
+        logging.error(f"Error generating report data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating report data: {str(e)}")
+
+@api_router.get("/reports/data", response_model=MonthlyReportData)
+async def get_monthly_report_data():
+    """Get structured monthly report data"""
+    return await generate_monthly_report_data()
+
+@api_router.post("/reports/generate-excel")
+async def generate_excel_report():
+    """Generate comprehensive Excel report with all data"""
+    try:
+        # Get report data
+        report_data = await generate_monthly_report_data()
+        
+        # Create Excel file with multiple sheets
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Sheet 1: Executive Summary
+            summary_data = {
+                'Metric': [
+                    'Report Period', 'Total Brands', 'Total Revenue', 'Total Profit', 
+                    'Profit Margin %', 'Overstocked Brands', 'Slow Moving Brands', 'High Demand Brands'
+                ],
+                'Value': [
+                    report_data.report_period,
+                    report_data.total_brands,
+                    f"₹{report_data.profit_analysis.total_revenue:,.0f}",
+                    f"₹{report_data.profit_analysis.total_profit:,.0f}",
+                    f"{report_data.profit_analysis.average_profit_margin:.1f}%",
+                    len(report_data.capital_blockers),
+                    len(report_data.slow_sellers),
+                    len([f for f in report_data.demand_forecast if f.urgency_level == "HIGH"])
+                ]
+            }
+            pd.DataFrame(summary_data).to_excel(writer, sheet_name='Executive Summary', index=False)
+            
+            # Sheet 2: Top Sellers Revenue
+            if report_data.top_sellers_revenue:
+                revenue_data = []
+                for seller in report_data.top_sellers_revenue:
+                    revenue_data.append({
+                        'Brand Name': seller.brand_name,
+                        'Revenue (₹)': seller.revenue,
+                        'Volume Sold': seller.volume,
+                        'Profit (₹)': seller.profit,
+                        'Profit Margin (%)': seller.profit_margin
+                    })
+                pd.DataFrame(revenue_data).to_excel(writer, sheet_name='Top Revenue Generators', index=False)
+            
+            # Sheet 3: Top Sellers Volume
+            if report_data.top_sellers_volume:
+                volume_data = []
+                for seller in report_data.top_sellers_volume:
+                    volume_data.append({
+                        'Brand Name': seller.brand_name,
+                        'Volume Sold': seller.volume,
+                        'Revenue (₹)': seller.revenue,
+                        'Profit (₹)': seller.profit,
+                        'Profit Margin (%)': seller.profit_margin
+                    })
+                pd.DataFrame(volume_data).to_excel(writer, sheet_name='Top Volume Movers', index=False)
+            
+            # Sheet 4: Slow Sellers
+            if report_data.slow_sellers:
+                slow_data = []
+                for seller in report_data.slow_sellers:
+                    slow_data.append({
+                        'Brand Name': seller.brand_name,
+                        'Revenue (₹)': seller.revenue,
+                        'Volume Sold': seller.volume,
+                        'Stock Days': seller.stock_days,
+                        'Stock Value (₹)': seller.stock_value
+                    })
+                pd.DataFrame(slow_data).to_excel(writer, sheet_name='Slow Sellers', index=False)
+            
+            # Sheet 5: Capital Blockers
+            if report_data.capital_blockers:
+                capital_data = []
+                for blocker in report_data.capital_blockers:
+                    capital_data.append({
+                        'Brand Name': blocker.brand_name,
+                        'Stock Value (₹)': blocker.stock_value,
+                        'Stock Quantity': blocker.stock_quantity,
+                        'Stock Days': blocker.stock_days,
+                        'Overstock Ratio': blocker.overstocked_ratio
+                    })
+                pd.DataFrame(capital_data).to_excel(writer, sheet_name='Capital Blockers', index=False)
+            
+            # Sheet 6: Demand Forecast
+            if report_data.demand_forecast:
+                demand_data = []
+                for item in report_data.demand_forecast:
+                    demand_data.append({
+                        'Brand Name': item.brand_name,
+                        'Current Stock': item.current_stock,
+                        'Recommended Qty': item.recommended_qty,
+                        'Wholesale Rate (₹)': item.wholesale_rate,
+                        'Total Cost (₹)': item.total_cost,
+                        'Urgency': item.urgency_level
+                    })
+                pd.DataFrame(demand_data).to_excel(writer, sheet_name='Demand Forecast', index=False)
+            
+            # Sheet 7: Profit Analysis
+            profit_data = []
+            for brand in report_data.profit_analysis.top_profit_brands:
+                profit_data.append({
+                    'Brand Name': brand['brand_name'],
+                    'Profit (₹)': brand['profit'],
+                    'Profit Margin (%)': brand['profit_margin'],
+                    'Sales Value (₹)': brand['sales_value']
+                })
+            pd.DataFrame(profit_data).to_excel(writer, sheet_name='Profit Analysis', index=False)
+        
+        output.seek(0)
+        
+        # Generate filename with IST timestamp
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist_timezone)
+        filename = f"monthly_report_{current_time.strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logging.error(f"Error generating Excel report: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating Excel report: {str(e)}")
+
+@api_router.post("/reports/generate-pdf")
+async def generate_pdf_report(params: ReportParameters):
+    """Generate beautified PDF report with selected sections"""
+    try:
+        # Get report data
+        report_data = await generate_monthly_report_data()
+        
+        # Create PDF
+        output = io.BytesIO()
+        doc = SimpleDocTemplate(output, pagesize=A4)
+        styles = getSampleStyleSheet()
+        
+        # Custom styles matching dashboard theme
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30,
+            textColor=HexColor('#1e40af'),
+            alignment=1  # Center alignment
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=16,
+            spaceAfter=12,
+            textColor=HexColor('#1e40af'),
+            borderWidth=1,
+            borderColor=HexColor('#3b82f6'),
+            borderPadding=8,
+            backColor=HexColor('#eff6ff')
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=6
+        )
+        
+        story = []
+        
+        # Title
+        report_title = params.report_title or "Monthly Sales Analytics Report"
+        story.append(Paragraph(report_title, title_style))
+        story.append(Paragraph(f"<b>Period:</b> {report_data.report_period}", normal_style))
+        story.append(Spacer(1, 20))
+        
+        # Executive Summary
+        if params.include_executive_summary:
+            story.append(Paragraph("📊 Executive Summary", heading_style))
+            
+            summary = report_data.executive_summary
+            story.append(Paragraph(f"<b>Total Brands Analyzed:</b> {summary['total_brands_analyzed']}", normal_style))
+            story.append(Paragraph(f"<b>Total Revenue:</b> ₹{summary['total_revenue']:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Profit:</b> ₹{summary['total_profit']:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Average Profit Margin:</b> {summary['profit_margin']:.1f}%", normal_style))
+            
+            story.append(Paragraph("<b>Key Insights:</b>", normal_style))
+            for insight in summary['key_insights']:
+                story.append(Paragraph(f"• {insight}", normal_style))
+            
+            story.append(Spacer(1, 15))
+        
+        # Top Revenue Sellers
+        if params.include_top_sellers and report_data.top_sellers_revenue:
+            story.append(Paragraph("🏆 Top Revenue Generators", heading_style))
+            
+            revenue_data = [['Brand Name', 'Revenue (₹)', 'Volume', 'Profit (₹)', 'Margin %']]
+            for seller in report_data.top_sellers_revenue[:5]:
+                revenue_data.append([
+                    seller.brand_name,
+                    f"₹{seller.revenue:,.0f}",
+                    f"{seller.volume:.0f}",
+                    f"₹{seller.profit:,.0f}",
+                    f"{seller.profit_margin:.1f}%"
+                ])
+            
+            table = Table(revenue_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#3b82f6')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f8fafc')),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 15))
+        
+        # Slow Sellers
+        if params.include_slow_sellers and report_data.slow_sellers:
+            story.append(Paragraph("🐌 Slow Moving Brands", heading_style))
+            
+            slow_data = [['Brand Name', 'Revenue (₹)', 'Stock Days', 'Stock Value (₹)']]
+            for seller in report_data.slow_sellers[:5]:
+                slow_data.append([
+                    seller.brand_name,
+                    f"₹{seller.revenue:,.0f}",
+                    f"{seller.stock_days:.0f}",
+                    f"₹{seller.stock_value:,.0f}"
+                ])
+            
+            table = Table(slow_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#dc2626')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor('#fef2f2')),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 15))
+        
+        # Capital Blockers
+        if params.include_capital_blockers and report_data.capital_blockers:
+            story.append(Paragraph("💰 Capital Blocking Brands", heading_style))
+            
+            capital_data = [['Brand Name', 'Stock Value (₹)', 'Stock Days', 'Overstock Ratio']]
+            for blocker in report_data.capital_blockers[:5]:
+                capital_data.append([
+                    blocker.brand_name,
+                    f"₹{blocker.stock_value:,.0f}",
+                    f"{blocker.stock_days:.0f}",
+                    f"{blocker.overstocked_ratio:.1f}x"
+                ])
+            
+            table = Table(capital_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#f59e0b')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor('#fffbeb')),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 15))
+        
+        # Profit Analysis
+        if params.include_profit_analysis:
+            story.append(Paragraph("💹 Profit Analysis", heading_style))
+            
+            profit = report_data.profit_analysis
+            story.append(Paragraph(f"<b>Total Revenue:</b> ₹{profit.total_revenue:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Profit:</b> ₹{profit.total_profit:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Average Profit Margin:</b> {profit.average_profit_margin:.1f}%", normal_style))
+            story.append(Spacer(1, 15))
+        
+        # Demand Forecast
+        if params.include_demand_forecast and report_data.demand_forecast:
+            story.append(PageBreak())  # New page for demand forecast
+            story.append(Paragraph("📈 Demand Forecast & Investment Requirements", heading_style))
+            
+            total_investment = sum(item.total_cost for item in report_data.demand_forecast)
+            story.append(Paragraph(f"<b>Total Investment Required:</b> ₹{total_investment:,.0f}", normal_style))
+            story.append(Spacer(1, 10))
+            
+            demand_data = [['Brand Name', 'Current Stock', 'Recommended Qty', 'Cost (₹)', 'Urgency']]
+            for item in report_data.demand_forecast[:10]:
+                urgency_color = "🔴" if item.urgency_level == "HIGH" else "🟡" if item.urgency_level == "MEDIUM" else "🟢"
+                demand_data.append([
+                    item.brand_name,
+                    f"{item.current_stock:.0f}",
+                    f"{item.recommended_qty:.0f}",
+                    f"₹{item.total_cost:,.0f}",
+                    f"{urgency_color} {item.urgency_level}"
+                ])
+            
+            table = Table(demand_data)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#059669')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f0fdf4')),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 15))
+        
+        # Recommendations
+        if params.include_recommendations:
+            story.append(Paragraph("💡 Strategic Recommendations", heading_style))
+            
+            for i, rec in enumerate(report_data.recommendations, 1):
+                story.append(Paragraph(f"{i}. {rec}", normal_style))
+            
+            story.append(Spacer(1, 15))
+        
+        # Build PDF
+        doc.build(story)
+        output.seek(0)
+        
+        # Generate filename with IST timestamp
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist_timezone)
+        filename = f"monthly_report_{current_time.strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        return StreamingResponse(
+            output,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logging.error(f"Error generating PDF report: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating PDF report: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -2443,13 +3000,3 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
-from fastapi import UploadFile, File
-
-@api_router.post("/upload-full-monthly-data")
-async def upload_full_monthly_data(file: UploadFile = File(...)):
-    # Minimal: acknowledge file upload, implement logic as needed
-    content = await file.read()
-    return {"success": True, "filename": file.filename}
-
-# Make sure this line is present once, near the end:
-app.include_router(api_router)
