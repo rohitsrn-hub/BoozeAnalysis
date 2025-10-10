@@ -212,6 +212,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "RE-TESTED WITH DATE-WISE ANALYSIS: Module 4 Excel generation with new Date-wise Sales functionality working perfectly. ✅ Fixed critical bug: liquor_records variable not defined in Excel generation function ✅ Excel report now includes 8 sheets (added 'Date-wise Sales' sheet) ✅ Date-wise Sales sheet structure verified: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) columns ✅ Date columns properly extracted from daily_sales data (11 date columns: D1, D2, D3, D4, D5, etc.) ✅ 62 brand records included in date-wise analysis ✅ File size increased to 17,432 bytes indicating additional date-wise content ✅ All date-wise sales data properly formatted and accessible. The new date-wise analysis feature is fully functional and integrated into Excel reports."
+      - working: true
+        agent: "testing"
+        comment: "LATEST UPDATE VERIFICATION COMPLETED: ✅ CRITICAL SUCCESS: Excel Date-wise Sales sheet now uses ACTUAL DATES as column headers instead of D1, D2, D3 format ✅ Verified actual date headers: '01-Oct-25', '03-Oct-25', '20-Sep-25', '21-Sep', '22-Sep', '26-Sep', '28-Sep-25', '29-Sep-25', '30-Sep-25' (9 date columns total) ✅ Proper column structure confirmed: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) + actual date columns ✅ Data is correctly populated under real date headers ✅ No old D1/D2/D3 format columns found ✅ All requirements from review request fulfilled: actual dates as headers, proper structure, correct data population. The Excel report generation with updated date-wise analysis meets all specified requirements."
 
   - task: "Module 4 Monthly Report Generation - POST /api/reports/generate-pdf endpoint"
     implemented: true
