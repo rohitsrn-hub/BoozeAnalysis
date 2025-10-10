@@ -479,9 +479,378 @@ class BackendTester:
             )
             return False
     
+    def test_module4_reports_data_endpoint(self):
+        """PRIORITY TEST: Test Module 4 GET /api/reports/data endpoint"""
+        print("\n📊 Testing Module 4 Reports Data Endpoint (PRIORITY)")
+        
+        success, data, error = self.test_endpoint("GET", "/reports/data", 200)
+        
+        if not success:
+            self.log_test("Module 4 Reports Data", "FAIL", "Reports data endpoint failed", error)
+            return False
+        
+        if not isinstance(data, dict):
+            self.log_test("Module 4 Reports Data", "FAIL", "Invalid response format", f"Expected dict, got {type(data)}")
+            return False
+        
+        # Verify required fields in the response
+        required_fields = [
+            'report_period', 'total_brands', 'executive_summary', 
+            'top_sellers_revenue', 'top_sellers_volume', 'slow_sellers',
+            'capital_blockers', 'demand_forecast', 'profit_analysis', 'recommendations'
+        ]
+        
+        missing_fields = []
+        for field in required_fields:
+            if field not in data:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            self.log_test("Module 4 Reports Data", "FAIL", f"Missing required fields: {missing_fields}", f"Available fields: {list(data.keys())}")
+            return False
+        
+        # Verify executive summary structure
+        exec_summary = data.get('executive_summary', {})
+        exec_required = ['total_brands_analyzed', 'total_revenue', 'total_profit', 'profit_margin', 'key_insights']
+        exec_missing = [field for field in exec_required if field not in exec_summary]
+        
+        if exec_missing:
+            self.log_test("Module 4 Reports Data", "FAIL", f"Executive summary missing fields: {exec_missing}", f"Available: {list(exec_summary.keys())}")
+            return False
+        
+        # Verify profit analysis structure
+        profit_analysis = data.get('profit_analysis', {})
+        profit_required = ['total_revenue', 'total_cost', 'total_profit', 'average_profit_margin', 'top_profit_brands']
+        profit_missing = [field for field in profit_required if field not in profit_analysis]
+        
+        if profit_missing:
+            self.log_test("Module 4 Reports Data", "FAIL", f"Profit analysis missing fields: {profit_missing}", f"Available: {list(profit_analysis.keys())}")
+            return False
+        
+        # Verify mathematical calculations
+        total_revenue = profit_analysis.get('total_revenue', 0)
+        total_cost = profit_analysis.get('total_cost', 0)
+        total_profit = profit_analysis.get('total_profit', 0)
+        calculated_profit = total_revenue - total_cost
+        
+        if abs(total_profit - calculated_profit) > 0.01:  # Allow small floating point differences
+            self.log_test("Module 4 Reports Data", "FAIL", f"Profit calculation incorrect", f"Expected: {calculated_profit}, Got: {total_profit}")
+            return False
+        
+        # Verify profit margin calculation
+        expected_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+        actual_margin = profit_analysis.get('average_profit_margin', 0)
+        
+        if abs(expected_margin - actual_margin) > 0.1:  # Allow 0.1% difference
+            self.log_test("Module 4 Reports Data", "FAIL", f"Profit margin calculation incorrect", f"Expected: {expected_margin:.2f}%, Got: {actual_margin:.2f}%")
+            return False
+        
+        # Verify data completeness
+        top_sellers_count = len(data.get('top_sellers_revenue', []))
+        slow_sellers_count = len(data.get('slow_sellers', []))
+        capital_blockers_count = len(data.get('capital_blockers', []))
+        demand_forecast_count = len(data.get('demand_forecast', []))
+        
+        self.log_test(
+            "Module 4 Reports Data", 
+            "PASS", 
+            f"Report data structure validated successfully",
+            f"Revenue: ₹{total_revenue:,.0f}, Profit: ₹{total_profit:,.0f}, Margin: {actual_margin:.1f}%, Top sellers: {top_sellers_count}, Slow: {slow_sellers_count}, Blockers: {capital_blockers_count}, Demand: {demand_forecast_count}"
+        )
+        return True
+    
+    def test_module4_excel_report_generation(self):
+        """PRIORITY TEST: Test Module 4 POST /api/reports/generate-excel endpoint"""
+        print("\n📈 Testing Module 4 Excel Report Generation (PRIORITY)")
+        
+        # Record test start time for IST timestamp verification
+        import pytz
+        from datetime import datetime
+        
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        test_start_time_ist = datetime.now(ist_timezone)
+        
+        # Test Excel report generation
+        url = f"{self.base_url}/reports/generate-excel"
+        
+        try:
+            response = self.session.post(url, timeout=60)  # Longer timeout for report generation
+            
+            if response.status_code != 200:
+                try:
+                    error_data = response.json()
+                    self.log_test("Module 4 Excel Generation", "FAIL", f"Excel generation failed with status {response.status_code}", str(error_data))
+                except:
+                    self.log_test("Module 4 Excel Generation", "FAIL", f"Excel generation failed with status {response.status_code}", response.text[:200])
+                return False
+            
+            # Verify Content-Type header
+            content_type = response.headers.get('Content-Type', '')
+            expected_content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            
+            if expected_content_type not in content_type:
+                self.log_test("Module 4 Excel Generation", "FAIL", f"Incorrect content type", f"Expected: {expected_content_type}, Got: {content_type}")
+                return False
+            
+            # Verify Content-Disposition header and filename format
+            content_disposition = response.headers.get('Content-Disposition', '')
+            
+            if 'filename=' not in content_disposition:
+                self.log_test("Module 4 Excel Generation", "FAIL", "No filename in Content-Disposition header", f"Header: {content_disposition}")
+                return False
+            
+            # Extract filename and verify IST timestamp format
+            import re
+            filename_match = re.search(r'filename=([^;]+)', content_disposition)
+            if not filename_match:
+                self.log_test("Module 4 Excel Generation", "FAIL", "Could not extract filename", f"Content-Disposition: {content_disposition}")
+                return False
+            
+            filename = filename_match.group(1).strip('"')
+            
+            # Verify filename format: monthly_report_YYYYMMDD_HHMMSS.xlsx
+            filename_pattern = r'monthly_report_(\d{8})_(\d{6})\.xlsx'
+            match = re.match(filename_pattern, filename)
+            
+            if not match:
+                self.log_test("Module 4 Excel Generation", "FAIL", f"Filename format incorrect", f"Expected: monthly_report_YYYYMMDD_HHMMSS.xlsx, Got: {filename}")
+                return False
+            
+            date_part, time_part = match.groups()
+            
+            # Parse and verify IST timestamp
+            try:
+                filename_datetime_str = f"{date_part}_{time_part}"
+                filename_datetime = datetime.strptime(filename_datetime_str, "%Y%m%d_%H%M%S")
+                filename_datetime_ist = ist_timezone.localize(filename_datetime)
+                
+                # Verify timestamp is reasonable (within 5 minutes)
+                time_diff = abs((filename_datetime_ist - test_start_time_ist).total_seconds())
+                
+                if time_diff > 300:  # 5 minutes tolerance
+                    self.log_test("Module 4 Excel Generation", "FAIL", f"IST timestamp difference too large: {time_diff:.1f} seconds", f"Expected around: {test_start_time_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                    return False
+                
+            except ValueError as e:
+                self.log_test("Module 4 Excel Generation", "FAIL", f"Could not parse IST timestamp from filename", f"Timestamp: {date_part}_{time_part}, Error: {e}")
+                return False
+            
+            # Verify file content is valid Excel
+            if not response.content or len(response.content) < 1000:  # Excel files should be reasonably large
+                self.log_test("Module 4 Excel Generation", "FAIL", "Excel file too small or empty", f"Size: {len(response.content)} bytes")
+                return False
+            
+            # Check Excel file signature
+            excel_signature = response.content[:4]
+            if excel_signature != b'PK\x03\x04':  # ZIP signature (Excel files are ZIP-based)
+                self.log_test("Module 4 Excel Generation", "FAIL", "Invalid Excel file format", f"File signature: {excel_signature}")
+                return False
+            
+            # Try to parse Excel content to verify multiple sheets
+            try:
+                import pandas as pd
+                import io
+                
+                excel_data = pd.ExcelFile(io.BytesIO(response.content))
+                sheet_names = excel_data.sheet_names
+                
+                expected_sheets = ['Executive Summary', 'Top Revenue Generators', 'Top Volume Movers', 'Slow Sellers', 'Capital Blockers', 'Demand Forecast', 'Profit Analysis']
+                missing_sheets = [sheet for sheet in expected_sheets if sheet not in sheet_names]
+                
+                if missing_sheets:
+                    self.log_test("Module 4 Excel Generation", "FAIL", f"Missing Excel sheets: {missing_sheets}", f"Available sheets: {sheet_names}")
+                    return False
+                
+                # Verify at least one sheet has data
+                summary_df = pd.read_excel(io.BytesIO(response.content), sheet_name='Executive Summary')
+                if summary_df.empty:
+                    self.log_test("Module 4 Excel Generation", "FAIL", "Executive Summary sheet is empty", "No data in main sheet")
+                    return False
+                
+            except Exception as e:
+                self.log_test("Module 4 Excel Generation", "FAIL", f"Could not parse Excel content: {str(e)}", "Excel file may be corrupted")
+                return False
+            
+            self.log_test(
+                "Module 4 Excel Generation", 
+                "PASS", 
+                f"Excel report generated successfully with IST timestamp",
+                f"Filename: {filename}, Size: {len(response.content)} bytes, Sheets: {len(sheet_names)}, IST time diff: {time_diff:.1f}s"
+            )
+            return True
+            
+        except requests.exceptions.Timeout:
+            self.log_test("Module 4 Excel Generation", "FAIL", "Request timeout (60s)", "Report generation taking too long")
+            return False
+        except requests.exceptions.ConnectionError:
+            self.log_test("Module 4 Excel Generation", "FAIL", "Connection error", "Backend may be down")
+            return False
+        except Exception as e:
+            self.log_test("Module 4 Excel Generation", "FAIL", f"Unexpected error: {str(e)}", "Excel generation failed")
+            return False
+    
+    def test_module4_pdf_report_generation(self):
+        """PRIORITY TEST: Test Module 4 POST /api/reports/generate-pdf endpoint with various parameters"""
+        print("\n📄 Testing Module 4 PDF Report Generation (PRIORITY)")
+        
+        # Test different parameter combinations
+        test_scenarios = [
+            {
+                "name": "Full Report",
+                "params": {
+                    "include_executive_summary": True,
+                    "include_top_sellers": True,
+                    "include_slow_sellers": True,
+                    "include_capital_blockers": True,
+                    "include_revenue_analysis": True,
+                    "include_demand_forecast": True,
+                    "include_profit_analysis": True,
+                    "include_recommendations": True,
+                    "report_title": "Complete Monthly Sales Analytics Report",
+                    "report_period": "September-October 2025"
+                }
+            },
+            {
+                "name": "Executive Summary Only",
+                "params": {
+                    "include_executive_summary": True,
+                    "include_top_sellers": False,
+                    "include_slow_sellers": False,
+                    "include_capital_blockers": False,
+                    "include_revenue_analysis": False,
+                    "include_demand_forecast": False,
+                    "include_profit_analysis": False,
+                    "include_recommendations": False,
+                    "report_title": "Executive Summary Report"
+                }
+            },
+            {
+                "name": "Sales Focus Report",
+                "params": {
+                    "include_executive_summary": True,
+                    "include_top_sellers": True,
+                    "include_slow_sellers": True,
+                    "include_capital_blockers": False,
+                    "include_revenue_analysis": True,
+                    "include_demand_forecast": False,
+                    "include_profit_analysis": True,
+                    "include_recommendations": True,
+                    "report_title": "Sales Performance Report"
+                }
+            }
+        ]
+        
+        import pytz
+        from datetime import datetime
+        
+        ist_timezone = pytz.timezone('Asia/Kolkata')
+        all_tests_passed = True
+        
+        for scenario in test_scenarios:
+            print(f"  Testing scenario: {scenario['name']}")
+            test_start_time_ist = datetime.now(ist_timezone)
+            
+            url = f"{self.base_url}/reports/generate-pdf"
+            
+            try:
+                response = self.session.post(url, json=scenario['params'], timeout=60)
+                
+                if response.status_code != 200:
+                    try:
+                        error_data = response.json()
+                        self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"PDF generation failed with status {response.status_code}", str(error_data))
+                    except:
+                        self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"PDF generation failed with status {response.status_code}", response.text[:200])
+                    all_tests_passed = False
+                    continue
+                
+                # Verify Content-Type
+                content_type = response.headers.get('Content-Type', '')
+                if 'application/pdf' not in content_type:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"Incorrect content type", f"Expected: application/pdf, Got: {content_type}")
+                    all_tests_passed = False
+                    continue
+                
+                # Verify filename with IST timestamp
+                content_disposition = response.headers.get('Content-Disposition', '')
+                
+                if 'filename=' not in content_disposition:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "No filename in Content-Disposition header", f"Header: {content_disposition}")
+                    all_tests_passed = False
+                    continue
+                
+                import re
+                filename_match = re.search(r'filename=([^;]+)', content_disposition)
+                if not filename_match:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "Could not extract filename", f"Content-Disposition: {content_disposition}")
+                    all_tests_passed = False
+                    continue
+                
+                filename = filename_match.group(1).strip('"')
+                
+                # Verify filename format: monthly_report_YYYYMMDD_HHMMSS.pdf
+                filename_pattern = r'monthly_report_(\d{8})_(\d{6})\.pdf'
+                match = re.match(filename_pattern, filename)
+                
+                if not match:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"Filename format incorrect", f"Expected: monthly_report_YYYYMMDD_HHMMSS.pdf, Got: {filename}")
+                    all_tests_passed = False
+                    continue
+                
+                # Verify IST timestamp
+                date_part, time_part = match.groups()
+                try:
+                    filename_datetime_str = f"{date_part}_{time_part}"
+                    filename_datetime = datetime.strptime(filename_datetime_str, "%Y%m%d_%H%M%S")
+                    filename_datetime_ist = ist_timezone.localize(filename_datetime)
+                    
+                    time_diff = abs((filename_datetime_ist - test_start_time_ist).total_seconds())
+                    
+                    if time_diff > 300:  # 5 minutes tolerance
+                        self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"IST timestamp difference too large: {time_diff:.1f} seconds", f"Expected around: {test_start_time_ist.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                        all_tests_passed = False
+                        continue
+                        
+                except ValueError as e:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"Could not parse IST timestamp", f"Timestamp: {date_part}_{time_part}, Error: {e}")
+                    all_tests_passed = False
+                    continue
+                
+                # Verify PDF content
+                if not response.content or len(response.content) < 1000:
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "PDF file too small or empty", f"Size: {len(response.content)} bytes")
+                    all_tests_passed = False
+                    continue
+                
+                # Check PDF signature
+                pdf_signature = response.content[:4]
+                if pdf_signature != b'%PDF':
+                    self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "Invalid PDF file format", f"File signature: {pdf_signature}")
+                    all_tests_passed = False
+                    continue
+                
+                self.log_test(
+                    f"Module 4 PDF Generation - {scenario['name']}", 
+                    "PASS", 
+                    f"PDF report generated successfully with IST timestamp",
+                    f"Filename: {filename}, Size: {len(response.content)} bytes, IST time diff: {time_diff:.1f}s"
+                )
+                
+            except requests.exceptions.Timeout:
+                self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "Request timeout (60s)", "PDF generation taking too long")
+                all_tests_passed = False
+            except requests.exceptions.ConnectionError:
+                self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", "Connection error", "Backend may be down")
+                all_tests_passed = False
+            except Exception as e:
+                self.log_test(f"Module 4 PDF Generation - {scenario['name']}", "FAIL", f"Unexpected error: {str(e)}", "PDF generation failed")
+                all_tests_passed = False
+        
+        return all_tests_passed
+    
     def test_backup_functionality_with_ist_timestamp(self):
-        """PRIORITY TEST: Test backup functionality with IST timestamp verification"""
-        print("\n💾 Testing Backup Functionality with IST Timestamp (PRIORITY)")
+        """Test backup functionality with IST timestamp verification"""
+        print("\n💾 Testing Backup Functionality with IST Timestamp")
         
         # Record the test start time in IST for comparison
         import pytz
