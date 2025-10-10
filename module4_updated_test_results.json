@@ -1,0 +1,67 @@
+{
+  "summary": {
+    "passed": 1,
+    "total": 4,
+    "success_rate": 25.0,
+    "timestamp": "2025-10-10T02:08:14.514458",
+    "test_focus": "Module 4 Updated Report Generation Features"
+  },
+  "detailed_results": [
+    {
+      "test_name": "Excel Actual Date Headers",
+      "status": "PASS",
+      "message": "Excel Date-wise Sales sheet uses actual dates as column headers (NOT D1/D2/D3)",
+      "timestamp": "2025-10-10T02:08:12.394952",
+      "details": "Found 9 actual date columns: ['01-Oct-25', '03-Oct-25', '20-Sep-25', '21-Sep', '22-Sep']. Structure: Index, Brand Name, Wholesale Rate, Retail Rate + 9 date columns"
+    },
+    {
+      "test_name": "Excel Date Data Population",
+      "status": "PASS",
+      "message": "Data is properly populated under actual date headers",
+      "timestamp": "2025-10-10T02:08:12.395107",
+      "details": "Sample data: 01-Oct-25: 0, 03-Oct-25: 0, 20-Sep-25: 2"
+    },
+    {
+      "test_name": "PDF Brand-Wise Analysis",
+      "status": "FAIL",
+      "message": "Section name incorrect - should be 'Brand-Wise Sale Analysis'",
+      "timestamp": "2025-10-10T02:08:12.418139",
+      "details": "Found: 'Neither section name found' instead of 'Brand-Wise Sale Analysis'"
+    },
+    {
+      "test_name": "PDF Profit Calculations",
+      "status": "FAIL",
+      "message": "Profit calculation errors found in 3 brands",
+      "timestamp": "2025-10-10T02:08:12.429505",
+      "details": "Errors: ['Royal stag: Margin calculation error - Expected: 5.83%, Got: 10.00%', 'OLD MUNK: Margin calculation error - Expected: 5.83%, Got: 10.00%']"
+    },
+    {
+      "test_name": "Excel Actual Date Headers",
+      "status": "PASS",
+      "message": "Excel Date-wise Sales sheet uses actual dates as column headers (NOT D1/D2/D3)",
+      "timestamp": "2025-10-10T02:08:12.483793",
+      "details": "Found 9 actual date columns: ['01-Oct-25', '03-Oct-25', '20-Sep-25', '21-Sep', '22-Sep']. Structure: Index, Brand Name, Wholesale Rate, Retail Rate + 9 date columns"
+    },
+    {
+      "test_name": "Excel Date Data Population",
+      "status": "PASS",
+      "message": "Data is properly populated under actual date headers",
+      "timestamp": "2025-10-10T02:08:12.483905",
+      "details": "Sample data: 01-Oct-25: 0, 03-Oct-25: 0, 20-Sep-25: 2"
+    },
+    {
+      "test_name": "PDF Brand-Wise Analysis",
+      "status": "FAIL",
+      "message": "Section name incorrect - should be 'Brand-Wise Sale Analysis'",
+      "timestamp": "2025-10-10T02:08:14.514317",
+      "details": "Found: 'Neither section name found' instead of 'Brand-Wise Sale Analysis'"
+    },
+    {
+      "test_name": "Both Reports Updated Structure",
+      "status": "FAIL",
+      "message": "Some reports do not reflect updated structure: PDF",
+      "timestamp": "2025-10-10T02:08:14.514349",
+      "details": "Check individual test results above for specific issues"
+    }
+  ]
+}
