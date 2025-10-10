@@ -137,6 +137,70 @@ class BackupListResponse(BaseModel):
     backup_reason: str
     created_by: str
 
+# Module 4: Monthly Report Generation Models
+class ReportParameters(BaseModel):
+    """Parameters for PDF report generation"""
+    include_executive_summary: bool = True
+    include_top_sellers: bool = True
+    include_slow_sellers: bool = True
+    include_capital_blockers: bool = True
+    include_revenue_analysis: bool = True
+    include_demand_forecast: bool = True
+    include_profit_analysis: bool = True
+    include_recommendations: bool = True
+    include_datewise_analysis: bool = False
+    report_title: str = "Monthly Sales Analytics Report"
+    report_period: str = ""
+
+class TopSeller(BaseModel):
+    brand_name: str
+    revenue: float
+    volume: float
+    profit: float
+    profit_margin: float
+
+class SlowSeller(BaseModel):
+    brand_name: str
+    revenue: float
+    volume: float
+    stock_days: float
+    stock_value: float
+
+class CapitalBlocker(BaseModel):
+    brand_name: str
+    stock_value: float
+    stock_quantity: float
+    stock_days: float
+    overstocked_ratio: float
+
+class DemandForecastItem(BaseModel):
+    brand_name: str
+    current_stock: float
+    recommended_qty: float
+    wholesale_rate: float
+    total_cost: float
+    urgency_level: str
+
+class ProfitAnalysis(BaseModel):
+    total_revenue: float
+    total_cost: float
+    total_profit: float
+    average_profit_margin: float
+    top_profit_brands: List[Dict[str, Any]]
+
+class MonthlyReportData(BaseModel):
+    """Complete monthly report data structure"""
+    report_period: str
+    total_brands: int
+    executive_summary: Dict[str, Any]
+    top_sellers_revenue: List[TopSeller]
+    top_sellers_volume: List[TopSeller]
+    slow_sellers: List[SlowSeller]
+    capital_blockers: List[CapitalBlocker]
+    demand_forecast: List[DemandForecastItem]
+    profit_analysis: ProfitAnalysis
+    recommendations: List[str]
+
 # Helper functions
 async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], filename: str):
     """Check if the uploaded data contains dates that already exist in the database"""
