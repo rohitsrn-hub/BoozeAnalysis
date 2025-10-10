@@ -1058,10 +1058,13 @@ class BackendTester:
         print(f"Backend URL: {self.base_url}")
         print("=" * 60)
         
-        # Test results tracking - PRIORITY: Backup functionality with IST timestamp
+        # Test results tracking - PRIORITY: Module 4 Monthly Report Generation
         test_functions = [
             ("Root Endpoint", self.test_root_endpoint),
-            ("Backup Functionality with IST Timestamp (PRIORITY)", self.test_backup_functionality_with_ist_timestamp),
+            ("Module 4 Reports Data Endpoint (PRIORITY)", self.test_module4_reports_data_endpoint),
+            ("Module 4 Excel Report Generation (PRIORITY)", self.test_module4_excel_report_generation),
+            ("Module 4 PDF Report Generation (PRIORITY)", self.test_module4_pdf_report_generation),
+            ("Backup Functionality with IST Timestamp", self.test_backup_functionality_with_ist_timestamp),
             ("Trends Chronological Ordering", self.test_trends_chronological_ordering),
             ("Date Parsing Function", self.test_date_parsing_function),
             ("Data Completeness", self.test_data_completeness),
