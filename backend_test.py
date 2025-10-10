@@ -726,10 +726,10 @@ class BackendTester:
         """PRIORITY TEST: Test Module 4 POST /api/reports/generate-pdf endpoint with various parameters"""
         print("\n📄 Testing Module 4 PDF Report Generation (PRIORITY)")
         
-        # Test different parameter combinations
+        # Test different parameter combinations including Date-wise Analysis
         test_scenarios = [
             {
-                "name": "Full Report",
+                "name": "Full Report with Date-wise Analysis",
                 "params": {
                     "include_executive_summary": True,
                     "include_top_sellers": True,
@@ -739,7 +739,8 @@ class BackendTester:
                     "include_demand_forecast": True,
                     "include_profit_analysis": True,
                     "include_recommendations": True,
-                    "report_title": "Complete Monthly Sales Analytics Report",
+                    "include_datewise_analysis": True,
+                    "report_title": "Complete Monthly Sales Analytics Report with Date-wise Analysis",
                     "report_period": "September-October 2025"
                 }
             },
@@ -754,7 +755,23 @@ class BackendTester:
                     "include_demand_forecast": False,
                     "include_profit_analysis": False,
                     "include_recommendations": False,
+                    "include_datewise_analysis": False,
                     "report_title": "Executive Summary Report"
+                }
+            },
+            {
+                "name": "Date-wise Analysis Only",
+                "params": {
+                    "include_executive_summary": False,
+                    "include_top_sellers": False,
+                    "include_slow_sellers": False,
+                    "include_capital_blockers": False,
+                    "include_revenue_analysis": False,
+                    "include_demand_forecast": False,
+                    "include_profit_analysis": False,
+                    "include_recommendations": False,
+                    "include_datewise_analysis": True,
+                    "report_title": "Date-wise Sales Analysis Report"
                 }
             },
             {
@@ -768,6 +785,7 @@ class BackendTester:
                     "include_demand_forecast": False,
                     "include_profit_analysis": True,
                     "include_recommendations": True,
+                    "include_datewise_analysis": False,
                     "report_title": "Sales Performance Report"
                 }
             }
