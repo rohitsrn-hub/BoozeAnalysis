@@ -899,6 +899,159 @@ class BackendTester:
         
         return all_tests_passed
     
+    def test_datewise_analysis_functionality(self):
+        """PRIORITY TEST: Test Date-wise Analysis functionality in both Excel and PDF reports"""
+        print("\n📊 Testing Date-wise Analysis Functionality (PRIORITY)")
+        
+        all_tests_passed = True
+        
+        # Test 1: Excel report with Date-wise Analysis
+        print("  Testing Excel report with Date-wise Analysis...")
+        url = f"{self.base_url}/reports/generate-excel"
+        
+        try:
+            response = self.session.post(url, timeout=60)
+            
+            if response.status_code != 200:
+                self.log_test("Date-wise Analysis Excel", "FAIL", f"Excel generation failed with status {response.status_code}", response.text[:200])
+                all_tests_passed = False
+            else:
+                # Parse Excel and verify Date-wise Sales sheet
+                try:
+                    import pandas as pd
+                    import io
+                    
+                    excel_data = pd.ExcelFile(io.BytesIO(response.content))
+                    
+                    if 'Date-wise Sales' not in excel_data.sheet_names:
+                        self.log_test("Date-wise Analysis Excel", "FAIL", "Date-wise Sales sheet not found", f"Available sheets: {excel_data.sheet_names}")
+                        all_tests_passed = False
+                    else:
+                        datewise_df = pd.read_excel(io.BytesIO(response.content), sheet_name='Date-wise Sales')
+                        
+                        # Verify column structure
+                        expected_columns = ['Index', 'Brand Name', 'Wholesale Rate (₹)', 'Retail Rate (₹)']
+                        missing_columns = [col for col in expected_columns if col not in datewise_df.columns]
+                        
+                        if missing_columns:
+                            self.log_test("Date-wise Analysis Excel", "FAIL", f"Missing columns: {missing_columns}", f"Available: {list(datewise_df.columns)}")
+                            all_tests_passed = False
+                        else:
+                            # Check for date columns (D1, D2, D3, etc.)
+                            date_columns = [col for col in datewise_df.columns if col.startswith('D') and col not in ['DL_date', 'D1_date']]
+                            
+                            if len(date_columns) == 0:
+                                self.log_test("Date-wise Analysis Excel", "FAIL", "No date columns found", f"Columns: {list(datewise_df.columns)}")
+                                all_tests_passed = False
+                            else:
+                                self.log_test(
+                                    "Date-wise Analysis Excel", 
+                                    "PASS", 
+                                    f"Excel Date-wise Sales sheet structure verified",
+                                    f"Rows: {len(datewise_df)}, Date columns: {len(date_columns)} ({date_columns[:3]}...)"
+                                )
+                        
+                except Exception as e:
+                    self.log_test("Date-wise Analysis Excel", "FAIL", f"Could not parse Excel: {str(e)}", "Excel parsing error")
+                    all_tests_passed = False
+        
+        except Exception as e:
+            self.log_test("Date-wise Analysis Excel", "FAIL", f"Excel request error: {str(e)}", "Request failed")
+            all_tests_passed = False
+        
+        # Test 2: PDF report with Date-wise Analysis enabled
+        print("  Testing PDF report with Date-wise Analysis enabled...")
+        url = f"{self.base_url}/reports/generate-pdf"
+        
+        params = {
+            "include_executive_summary": False,
+            "include_top_sellers": False,
+            "include_slow_sellers": False,
+            "include_capital_blockers": False,
+            "include_revenue_analysis": False,
+            "include_demand_forecast": False,
+            "include_profit_analysis": False,
+            "include_recommendations": False,
+            "include_datewise_analysis": True,
+            "report_title": "Date-wise Analysis Test Report"
+        }
+        
+        try:
+            response = self.session.post(url, json=params, timeout=60)
+            
+            if response.status_code != 200:
+                self.log_test("Date-wise Analysis PDF", "FAIL", f"PDF generation failed with status {response.status_code}", response.text[:200])
+                all_tests_passed = False
+            else:
+                # Verify PDF content type and size
+                content_type = response.headers.get('Content-Type', '')
+                if 'application/pdf' not in content_type:
+                    self.log_test("Date-wise Analysis PDF", "FAIL", f"Incorrect content type: {content_type}", "Expected PDF")
+                    all_tests_passed = False
+                elif len(response.content) < 1000:
+                    self.log_test("Date-wise Analysis PDF", "FAIL", f"PDF too small: {len(response.content)} bytes", "May not contain date-wise analysis")
+                    all_tests_passed = False
+                else:
+                    # Check PDF signature
+                    pdf_signature = response.content[:4]
+                    if pdf_signature != b'%PDF':
+                        self.log_test("Date-wise Analysis PDF", "FAIL", f"Invalid PDF signature: {pdf_signature}", "Not a valid PDF")
+                        all_tests_passed = False
+                    else:
+                        self.log_test(
+                            "Date-wise Analysis PDF", 
+                            "PASS", 
+                            f"PDF with Date-wise Analysis generated successfully",
+                            f"Size: {len(response.content)} bytes, Content-Type: {content_type}"
+                        )
+        
+        except Exception as e:
+            self.log_test("Date-wise Analysis PDF", "FAIL", f"PDF request error: {str(e)}", "Request failed")
+            all_tests_passed = False
+        
+        # Test 3: PDF report with Date-wise Analysis disabled (should be smaller)
+        print("  Testing PDF report with Date-wise Analysis disabled...")
+        
+        params_no_datewise = {
+            "include_executive_summary": True,
+            "include_top_sellers": False,
+            "include_slow_sellers": False,
+            "include_capital_blockers": False,
+            "include_revenue_analysis": False,
+            "include_demand_forecast": False,
+            "include_profit_analysis": False,
+            "include_recommendations": False,
+            "include_datewise_analysis": False,
+            "report_title": "Executive Summary Only Report"
+        }
+        
+        try:
+            response_no_datewise = self.session.post(url, json=params_no_datewise, timeout=60)
+            
+            if response_no_datewise.status_code == 200:
+                size_with_datewise = len(response.content) if 'response' in locals() else 0
+                size_without_datewise = len(response_no_datewise.content)
+                
+                if size_with_datewise > size_without_datewise:
+                    self.log_test(
+                        "Date-wise Analysis PDF Comparison", 
+                        "PASS", 
+                        f"PDF with date-wise analysis is larger than without",
+                        f"With: {size_with_datewise} bytes, Without: {size_without_datewise} bytes"
+                    )
+                else:
+                    self.log_test(
+                        "Date-wise Analysis PDF Comparison", 
+                        "WARN", 
+                        f"PDF sizes unexpected",
+                        f"With: {size_with_datewise} bytes, Without: {size_without_datewise} bytes"
+                    )
+            
+        except Exception as e:
+            self.log_test("Date-wise Analysis PDF Comparison", "WARN", f"Could not compare PDF sizes: {str(e)}", "Comparison failed")
+        
+        return all_tests_passed
+    
     def test_backup_functionality_with_ist_timestamp(self):
         """Test backup functionality with IST timestamp verification"""
         print("\n💾 Testing Backup Functionality with IST Timestamp")
