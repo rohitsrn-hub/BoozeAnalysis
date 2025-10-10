@@ -215,6 +215,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "LATEST UPDATE VERIFICATION COMPLETED: ✅ CRITICAL SUCCESS: Excel Date-wise Sales sheet now uses ACTUAL DATES as column headers instead of D1, D2, D3 format ✅ Verified actual date headers: '01-Oct-25', '03-Oct-25', '20-Sep-25', '21-Sep', '22-Sep', '26-Sep', '28-Sep-25', '29-Sep-25', '30-Sep-25' (9 date columns total) ✅ Proper column structure confirmed: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) + actual date columns ✅ Data is correctly populated under real date headers ✅ No old D1/D2/D3 format columns found ✅ All requirements from review request fulfilled: actual dates as headers, proper structure, correct data population. The Excel report generation with updated date-wise analysis meets all specified requirements."
+      - working: true
+        agent: "testing"
+        comment: "FOCUSED EXCEL DATE SORTING TEST COMPLETED: ✅ Excel Date-wise Sales sheet chronological date sorting verified successfully ✅ Date columns in correct chronological order: 20-Sep-25 → 21-Sep → 22-Sep → 26-Sep → 28-Sep-25 → 29-Sep-25 → 30-Sep-25 → 01-Oct-25 → 03-Oct-25 ✅ Total of 9 date columns properly sorted using parse_date_for_sorting function ✅ Specific test dates from review request confirmed in correct sequence: 22-Sep → 26-Sep → 28-Sep-25 → 29-Sep-25 → 30-Sep-25 → 01-Oct-25 → 03-Oct-25 ✅ Date-wise Sales sheet structure verified: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) + actual date columns ✅ All dates appear in correct chronological order as required. The Excel date sorting test from review request passed successfully."
 
   - task: "Module 4 Monthly Report Generation - POST /api/reports/generate-pdf endpoint"
     implemented: true
