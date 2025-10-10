@@ -1251,7 +1251,7 @@ function App() {
                     </Button>
                   </div>
 
-                  {/* Second Row: Backup & Reset Buttons */}
+                  {/* Second Row: Backup & Reset Buttons + Report Buttons */}
                   <div className="flex items-center space-x-2">
                     {/* Module 3: Stock Reset & Backup Buttons */}
                     <Button 
@@ -1279,10 +1279,7 @@ function App() {
                       <RefreshCw className="w-3 h-3 mr-1" />
                       Reset Stock
                     </Button>
-                  </div>
-
-                  {/* Third Row: Report Generation Buttons */}
-                  <div className="flex items-center space-x-2">
+                    
                     {/* Module 4: Report Generation Buttons */}
                     <Button 
                       variant="outline" 
