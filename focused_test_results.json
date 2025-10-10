@@ -1,0 +1,67 @@
+{
+  "summary": {
+    "passed": 3,
+    "total": 3,
+    "success_rate": 100.0,
+    "timestamp": "2025-10-10T02:29:21.937939",
+    "test_type": "focused_review_request"
+  },
+  "detailed_results": [
+    {
+      "test_name": "PDF A4 Brand-Wise Analysis",
+      "status": "PASS",
+      "message": "PDF with Brand-Wise Sale Analysis generated successfully for A4 format",
+      "timestamp": "2025-10-10T02:29:21.652973",
+      "details": "Size: 5406 bytes, Content-Type: application/pdf, include_datewise_analysis=true processed"
+    },
+    {
+      "test_name": "PDF A4 Brand-Wise Analysis Size Verification",
+      "status": "PASS",
+      "message": "Full report with Brand-Wise Analysis generated",
+      "timestamp": "2025-10-10T02:29:21.687912",
+      "details": "Full report: 10422 bytes, Date-wise only: 5406 bytes"
+    },
+    {
+      "test_name": "Excel Date Sorting",
+      "status": "PASS",
+      "message": "Date-wise Sales sheet dates are in correct chronological order",
+      "timestamp": "2025-10-10T02:29:21.842729",
+      "details": "Total dates: 9, Sample order: 20-Sep-25 (2025-09-20) \u2192 21-Sep (2025-09-21) \u2192 22-Sep (2025-09-22) \u2192 26-Sep (2025-09-26) \u2192 28-Sep-25 (2025-09-28)"
+    },
+    {
+      "test_name": "Excel Date Sorting - Specific Dates",
+      "status": "PASS",
+      "message": "Specific test dates are in correct chronological order",
+      "timestamp": "2025-10-10T02:29:21.842811",
+      "details": "Order: 22-Sep \u2192 26-Sep \u2192 28-Sep-25 \u2192 29-Sep-25 \u2192 30-Sep-25 \u2192 01-Oct-25 \u2192 03-Oct-25"
+    },
+    {
+      "test_name": "Backup Creation",
+      "status": "PASS",
+      "message": "Backup created successfully",
+      "timestamp": "2025-10-10T02:29:21.875178",
+      "details": "ID: e74edfb5-25fc-4b6b-a4f4-f2955e4bb6ff, Records: 62"
+    },
+    {
+      "test_name": "Backup Filename Format",
+      "status": "PASS",
+      "message": "Filename format is correct: stock_backup_YYYYMMDD_HHMMSS.xlsx",
+      "timestamp": "2025-10-10T02:29:21.937775",
+      "details": "Filename: stock_backup_20251010_075921.xlsx, No dashes: \u2713, Time component: \u2713 (075921)"
+    },
+    {
+      "test_name": "Backup IST Timestamp",
+      "status": "PASS",
+      "message": "IST timestamp conversion working correctly",
+      "timestamp": "2025-10-10T02:29:21.937813",
+      "details": "IST time: 2025-10-10 07:59:21 IST, Accuracy: 0.9s difference"
+    },
+    {
+      "test_name": "Backup File Download",
+      "status": "PASS",
+      "message": "Excel backup file downloaded successfully",
+      "timestamp": "2025-10-10T02:29:21.937820",
+      "details": "Size: 16934 bytes, Format: Valid Excel (.xlsx)"
+    }
+  ]
+}
