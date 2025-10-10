@@ -209,6 +209,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "TESTED: Module 4 POST /api/reports/generate-excel endpoint working perfectly. ✅ Excel report generation successful with proper content type (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) ✅ IST timestamp in filename working correctly (monthly_report_20251010_054804.xlsx) ✅ Filename format verified: monthly_report_YYYYMMDD_HHMMSS.xlsx ✅ Excel file size appropriate (12,048 bytes) indicating proper content ✅ File signature validation passed (PK ZIP format for Excel) ✅ Multiple sheets verified: 7 sheets including Executive Summary, Top Revenue Generators, Top Volume Movers, Slow Sellers, Capital Blockers, Demand Forecast, Profit Analysis ✅ Executive Summary sheet contains data (not empty) ✅ IST timestamp accuracy verified (0.1s difference from test time). The Excel report generation is fully functional with proper IST timestamps and comprehensive multi-sheet structure."
+      - working: true
+        agent: "testing"
+        comment: "RE-TESTED WITH DATE-WISE ANALYSIS: Module 4 Excel generation with new Date-wise Sales functionality working perfectly. ✅ Fixed critical bug: liquor_records variable not defined in Excel generation function ✅ Excel report now includes 8 sheets (added 'Date-wise Sales' sheet) ✅ Date-wise Sales sheet structure verified: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) columns ✅ Date columns properly extracted from daily_sales data (11 date columns: D1, D2, D3, D4, D5, etc.) ✅ 62 brand records included in date-wise analysis ✅ File size increased to 17,432 bytes indicating additional date-wise content ✅ All date-wise sales data properly formatted and accessible. The new date-wise analysis feature is fully functional and integrated into Excel reports."
 
   - task: "Module 4 Monthly Report Generation - POST /api/reports/generate-pdf endpoint"
     implemented: true
