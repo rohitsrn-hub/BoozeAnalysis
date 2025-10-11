@@ -2191,6 +2191,40 @@ function App() {
         ) : null}
       </div>
 
+      {/* Overstock Multiplier Configuration - Bottom Left */}
+      {hasData && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+          <div className="flex justify-start">
+            <div className="flex items-center space-x-2 bg-white p-3 rounded-lg shadow-sm border">
+              <Label htmlFor="multiplier-bottom" className="text-xs font-medium text-gray-700">
+                Overstock Multiplier:
+              </Label>
+              <Input
+                id="multiplier-bottom"
+                type="number"
+                step="0.1"
+                min="1"
+                max="10"
+                value={overstockMultiplier}
+                onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                className="w-16 text-xs"
+                data-testid="overstock-multiplier-input-bottom"
+              />
+              <Button
+                onClick={handleMultiplierChange}
+                size="sm"
+                variant="outline"
+                disabled={!hasData || loading}
+                data-testid="update-multiplier-btn-bottom"
+                className="text-xs"
+              >
+                Update
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Module 1: Add Brand Modal */}
       <Dialog open={showBrandModal} onOpenChange={setShowBrandModal}>
         <DialogContent className="sm:max-w-[500px]" data-testid="add-brand-modal">
