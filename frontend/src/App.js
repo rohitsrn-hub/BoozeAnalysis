@@ -2740,36 +2740,6 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      {/* Overstock Multiplier - Bottom Left Position */}
-      <div className="fixed bottom-4 left-4 bg-white border border-gray-200 rounded-lg p-3 shadow-lg">
-        <div className="flex items-center space-x-2">
-          <Label htmlFor="multiplier-bottom" className="text-xs font-medium text-gray-700">
-            Overstock Multiplier:
-          </Label>
-          <Input
-            id="multiplier-bottom"
-            type="number"
-            step="0.1"
-            min="1"
-            max="10"
-            value={overstockMultiplier}
-            onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
-            className="w-16 text-xs"
-            data-testid="overstock-multiplier-bottom-input"
-          />
-          <Button
-            onClick={handleMultiplierChange}
-            size="sm"
-            variant="outline"
-            disabled={!hasData || loading}
-            data-testid="update-multiplier-bottom-btn"
-            className="text-xs"
-          >
-            Update
-          </Button>
-        </div>
-      </div>
-      
       {/* Duplicate Date Error Dialog */}
       <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
         <DialogContent className="max-w-md">
