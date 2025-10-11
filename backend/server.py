@@ -3066,19 +3066,19 @@ async def generate_pdf_report(params: ReportParameters):
                     'Retail Stock Value (₹)', 'Multiplier', 'Status'
                 ]
                 
-                # Calculate landscape-optimized column widths
+                # Calculate compact landscape-optimized column widths for 3-page fit
                 landscape_colwidths = [
-                    0.5*inch,   # Index (reduced)
-                    1.6*inch,   # Brand Name 
-                    0.6*inch,   # D1 Stock (reduced)
-                    0.6*inch,   # DL Stock (reduced)
-                    0.8*inch,   # Wholesale Rate (reduced)
-                    0.8*inch,   # Selling Rate (reduced)
-                    1.0*inch,   # Monthly Sale Value (reduced)
-                    0.9*inch,   # Monthly Profit (reduced)
-                    1.1*inch,   # Retail Stock Value (reduced)
-                    0.6*inch,   # Multiplier (reduced)
-                    0.9*inch    # Status (reduced)
+                    0.4*inch,   # Index (more compact)
+                    1.3*inch,   # Brand Name (more compact)
+                    0.5*inch,   # D1 Stock (more compact)
+                    0.5*inch,   # DL Stock (more compact)
+                    0.7*inch,   # Wholesale Rate (more compact)
+                    0.7*inch,   # Selling Rate (more compact)
+                    0.9*inch,   # Monthly Sale Value (more compact)
+                    0.8*inch,   # Monthly Profit (more compact)
+                    1.0*inch,   # Retail Stock Value (more compact)
+                    0.5*inch,   # Multiplier (more compact)
+                    0.6*inch    # Status (more compact)
                 ]
                 
                 # Prepare all brand data
