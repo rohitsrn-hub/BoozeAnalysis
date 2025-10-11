@@ -896,187 +896,49 @@ function App() {
                 <BarChart3 className="h-8 w-8 text-indigo-600" />
               </div>
               <div>
-                <div className="flex items-center space-x-4">
+                <div>
                   <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
                   
-                  {/* Refresh, Help, and History buttons - moved inline with heading */}
-                  <div className="flex items-center space-x-2">
-                    {/* Refresh Button */}
-                    <Button
-                      onClick={handleManualRefresh}
-                      variant="outline"
-                      size="sm"
-                      className="bg-white hover:bg-gray-50 text-xs"
-                      disabled={loading}
-                      data-testid="refresh-analytics-btn"
-                    >
-                      <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                      {loading ? 'Refreshing...' : 'Refresh'}
-                    </Button>
+                  {/* Overstock Multiplier - Below main title as requested */}
+                  <div className="flex items-center space-x-4 mt-2">
+                    <p className="text-sm text-gray-600">D1=First Date Column | DL=Last Date Column</p>
+                    {currentDateRange && (
+                      <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-800">
+                          Current: D1={currentDateRange.d1_date} | DL={currentDateRange.dl_date}
+                        </span>
+                      </div>
+                    )}
                     
-                    {/* Help Guide */}
-                    <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
-                      <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="bg-white hover:bg-gray-50 text-xs"
-                          data-testid="help-guide-btn"
-                        >
-                          <HelpCircle className="w-3 h-3 mr-1" />
-                          Help
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center space-x-2">
-                            <Play className="w-5 h-5 text-indigo-600" />
-                            <span>{onboardingSteps[onboardingStep].title}</span>
-                          </DialogTitle>
-                          <DialogDescription>
-                            Step {onboardingStep + 1} of {onboardingSteps.length}
-                          </DialogDescription>
-                        </DialogHeader>
-                        
-                        <div className="mt-6">
-                          {onboardingSteps[onboardingStep].content}
-                        </div>
-                        
-                        <div className="flex justify-between items-center mt-8 pt-4 border-t">
-                          <Button
-                            onClick={() => setOnboardingStep(Math.max(0, onboardingStep - 1))}
-                            disabled={onboardingStep === 0}
-                            variant="outline"
-                            size="sm"
-                            data-testid="onboarding-prev-btn"
-                          >
-                            Previous
-                          </Button>
-                          
-                          <div className="flex space-x-2">
-                            {onboardingSteps.map((_, index) => (
-                              <div
-                                key={index}
-                                className={`w-2 h-2 rounded-full ${
-                                  index === onboardingStep ? 'bg-indigo-600' : 'bg-gray-300'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          
-                          {onboardingStep < onboardingSteps.length - 1 ? (
-                            <Button
-                              onClick={() => setOnboardingStep(Math.min(onboardingSteps.length - 1, onboardingStep + 1))}
-                              size="sm"
-                              data-testid="onboarding-next-btn"
-                            >
-                              Next
-                              <ArrowRight className="w-3 h-3 ml-1" />
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => setShowOnboarding(false)}
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              data-testid="onboarding-finish-btn"
-                            >
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Got it!
-                            </Button>
-                          )}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    {/* Upload History Button */}
-                    <Dialog open={showUploadHistory} onOpenChange={setShowUploadHistory}>
-                      <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="bg-white hover:bg-gray-50 text-xs"
-                          data-testid="upload-history-btn"
-                        >
-                          <History className="w-3 h-3 mr-1" />
-                          History
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center space-x-2">
-                            <History className="w-5 h-5 text-indigo-600" />
-                            <span>Upload History</span>
-                          </DialogTitle>
-                          <DialogDescription>
-                            Track all uploaded Excel files and data changes
-                          </DialogDescription>
-                        </DialogHeader>
-                        
-                        <div className="mt-6">
-                          {uploadHistory.length > 0 ? (
-                            <div className="space-y-4">
-                              {uploadHistory.map((upload, index) => (
-                                <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center space-x-3">
-                                      <div className={`p-2 rounded-lg ${
-                                        upload.upload_type === 'full_monthly' 
-                                          ? 'bg-green-100 text-green-600'
-                                          : 'bg-orange-100 text-orange-600'
-                                      }`}>
-                                        {upload.upload_type === 'full_monthly' ? <Database className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
-                                      </div>
-                                      <div>
-                                        <h4 className="font-semibold text-gray-900">{upload.filename}</h4>
-                                        <p className="text-sm text-gray-600">
-                                          {upload.upload_type === 'full_monthly' ? 'Full Monthly Data' : "Today's Data Update"}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
-                                      {upload.records_count} records
-                                    </Badge>
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
-                                    <div>
-                                      <span className="font-medium">Uploaded:</span>
-                                      <div>{formatDate(upload.upload_timestamp)}</div>
-                                    </div>
-                                    <div>
-                                      <span className="font-medium">File Size:</span>
-                                      <div>{formatFileSize(upload.file_size)}</div>
-                                    </div>
-                                    <div>
-                                      <span className="font-medium">Uploaded By:</span>
-                                      <div>{upload.uploaded_by}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-8">
-                              <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Upload History</h3>
-                              <p className="text-gray-600">Upload your first Excel file to see history</p>
-                            </div>
-                          )}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 mt-2">
-                  <p className="text-sm text-gray-600">D1=First Date Column | DL=Last Date Column</p>
-                  {currentDateRange && (
-                    <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg ml-2">
-                      <Calendar className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-medium text-blue-800">
-                        Current: D1={currentDateRange.d1_date} | DL={currentDateRange.dl_date}
-                      </span>
+                    {/* Overstock Multiplier Configuration */}
+                    <div className="flex items-center space-x-2 ml-4">
+                      <Label htmlFor="multiplier" className="text-xs font-medium text-gray-700">
+                        Overstock Multiplier:
+                      </Label>
+                      <Input
+                        id="multiplier"
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="10"
+                        value={overstockMultiplier}
+                        onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                        className="w-16 text-xs"
+                        data-testid="overstock-multiplier-input"
+                      />
+                      <Button
+                        onClick={handleMultiplierChange}
+                        size="sm"
+                        variant="outline"
+                        disabled={!hasData || loading}
+                        data-testid="update-multiplier-btn"
+                        className="text-xs"
+                      >
+                        Update
+                      </Button>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
