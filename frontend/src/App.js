@@ -1187,7 +1187,7 @@ function App() {
                       }}
                       disabled={loading}
                       data-testid="backups-btn"
-                      className="border-violet-600 text-violet-600 hover:bg-violet-50 text-xs font-medium"
+                      className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs font-medium"
                     >
                       <Database className="w-3 h-3 mr-1" />
                       Backups
