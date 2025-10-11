@@ -1081,11 +1081,10 @@ function App() {
               </div>
             </div>
             
-            <div className="flex justify-end">
-              {/* Upload Buttons and Controls */}
-              <div className="flex flex-col space-y-4">
-                {/* Row 1: Upload & Brand Management */}
-                <div className="flex items-center justify-center space-x-3">
+            {/* Upload Buttons and Controls */}
+            <div className="flex flex-col space-y-4">
+              {/* Row 1: Upload & Brand Management */}
+              <div className="flex items-center justify-center space-x-3">
                     <Button 
                       variant="outline" 
                       size="sm"
