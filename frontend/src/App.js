@@ -1209,7 +1209,7 @@ function App() {
                       onClick={handleGenerateExcelReport}
                       disabled={loading || !hasData || generatingReport}
                       data-testid="excel-report-btn"
-                      className="border-amber-600 text-amber-600 hover:bg-amber-50 text-xs font-medium"
+                      className="border-yellow-600 text-yellow-600 hover:bg-yellow-50 text-xs font-medium"
                     >
                       <FileSpreadsheet className="w-3 h-3 mr-1" />
                       {generatingReport ? 'Generating...' : 'Export Excel'}
