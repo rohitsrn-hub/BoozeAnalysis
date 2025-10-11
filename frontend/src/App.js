@@ -1198,8 +1198,6 @@ function App() {
                     </Button>
                   </div>
                 </div>
-              </div>
-            </div>
           </div>
           
           {/* Upload Progress */}
