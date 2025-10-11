@@ -1220,7 +1220,7 @@ function App() {
                       onClick={() => setShowReportModal(true)}
                       disabled={loading || !hasData || generatingReport}
                       data-testid="pdf-report-btn"
-                      className="border-rose-600 text-rose-600 hover:bg-rose-50 text-xs font-medium"
+                      className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs font-medium"
                     >
                       <FileText className="w-3 h-3 mr-1" />
                       Generate PDF
