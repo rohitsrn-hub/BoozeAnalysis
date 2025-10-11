@@ -1077,7 +1077,8 @@ function App() {
               </div>
             </div>
           </div>
-            
+          
+          <div className="flex justify-end mt-4">
             {/* Upload Buttons and Controls */}
             <div className="flex flex-col space-y-3">
               {/* Row 1: Upload & Brand Management */}
