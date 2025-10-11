@@ -71,7 +71,7 @@ function App() {
   });
   const [generatingReport, setGeneratingReport] = useState(false);
 
-  // Fetch all data
+  // Fetch all data sure
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
       setLoading(true);
