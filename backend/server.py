@@ -3132,8 +3132,8 @@ async def generate_pdf_report(params: ReportParameters):
                     
                     all_brand_data.append(row)
                 
-                # Split data into chunks for multiple pages (25 rows per page for landscape)
-                brands_per_page = 25
+                # Split data into chunks for multiple pages (20 rows per page to fit better in landscape)
+                brands_per_page = 20
                 total_pages = (len(all_brand_data) + brands_per_page - 1) // brands_per_page
                 
                 for page_num in range(total_pages):
