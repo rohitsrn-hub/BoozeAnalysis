@@ -278,6 +278,329 @@ function App() {
           
           // Show additional suggestions if available
           if (detail.suggestions && Array.isArray(detail.suggestions)) {
+            const suggestions = detail.suggestions.map(s => `â€¢ ${s}`).join('\n');
+            errorMessage += `\n\nSuggestions:\n${suggestions}`;
+          }
+        } else {
+          errorMessage = detail;
+        }
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle file upload (legacy - keeping for backward compatibility)
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Successfully uploaded ${response.data.total_records} records`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      
+      // Better error handling for file upload
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      // Show helpful error messages
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else if (errorMessage.includes("Insufficient numerical data")) {
+        toast.error("File format incorrect. Please check the data structure in your Excel file");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      // Clear file input
+      event.target.value = "";
+    }
+  };
+
+  // Handle multiplier change
+  const handleMultiplierChange = async () => {
+    if (hasData) {
+      await fetchAnalytics(overstockMultiplier);
+    }
+  };
+
+  // Handle manual refresh
+  const handleManualRefresh = async () => {
+    try {
+      setLoading(true);
+      toast.info("Refreshing all data...");
+      
+      // Call backend refresh endpoint first
+      await axios.post(`${API}/refresh-analytics`);
+      
+      // Then fetch ALL updated data sources
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+      toast.success("All data refreshed successfully!");
+    } catch (error) {
+      console.error("Error refreshing analytics:", error);
+      toast.error("Failed to refresh data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle demand forecast export
+  const handleExportDemandList = async () => {
+    try {
+      const response = await axios.get(`${API}/export-demand-list`, {
+        responseType: 'blob',
+      });
+      
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition'];
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+        : `liquor_demand_forecast_${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Demand forecast exported successfully!");
+    } catch (error) {
+      console.error("Error exporting demand forecast:", error);
+      toast.error("Failed to export demand forecast");
+    }
+  };
+
+  // Module 1: Brand Management handlers
+  const handleAddBrand = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/brands/add`, {
+        index_number: parseInt(brandFormData.index_number),
+        brand_name: brandFormData.brand_name,
+        wholesale_rate: parseFloat(brandFormData.wholesale_rate),
+        selling_rate: parseFloat(brandFormData.selling_rate),
+        initial_stock_qty: parseInt(brandFormData.initial_stock_qty) || 0
+      });
+      
+      toast.success(response.data.message);
+      setShowBrandModal(false);
+      
+      // Reset form
+      setBrandFormData({
+        index_number: '',
+        brand_name: '',
+        wholesale_rate: '',
+        selling_rate: '',
+        initial_stock_qty: 0
+      });
+      
+      // Refresh analytics if data exists
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error adding brand:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to add brand";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateRates = async (e) => {
+    e.preventDefault();
+    
+    if (!ratesFile) {
+      toast.error("Please select an Excel file");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const formData = new FormData();
+      formData.append("file", ratesFile);
+      
+      const response = await axios.post(`${API}/brands/update-rates`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      
+      const result = response.data;
+      
+      if (result.updated_count > 0) {
+        toast.success(`Successfully updated ${result.updated_count} brand(s)`);
+      }
+      
+      if (result.not_found_count > 0) {
+        toast.warning(`${result.not_found_count} brand(s) not found: ${result.not_found_brands.slice(0, 3).join(', ')}${result.not_found_brands.length > 3 ? '...' : ''}`);
+      }
+      
+      setShowRatesModal(false);
+      setRatesFile(null);
+      
+      // Refresh analytics
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error updating rates:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to update rates";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Module 3: Stock Reset & Backup handlers
+  const fetchBackups = async () => {
+    try {
+      const response = await axios.get(`${API}/stock/backups`);
+      setBackupsList(response.data);
+    } catch (error) {
+      console.error("Error fetching backups:", error);
+      toast.error("Failed to fetch backups");
+    }
+  };
+
+  const handleStockReset = async () => {
+    try {
+      setResetting(true);
+      
+      const response = await axios.post(`${API}/stock/reset`);
+      
+      toast.success(`Stock reset successful! ${response.data.records_deleted} records deleted. Backup ID: ${response.data.backup_id}`);
+      
+      setShowResetDialog(false);
+      setHasData(false);
+      
+      // Refresh backups list
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error resetting stock:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to reset stock";
+      toast.error(errorMessage);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleDownloadBackup = async (backupId, timestamp) => {
+    try {
+      const response = await axios.get(`${API}/stock/backup/${backupId}/download`, {
+        responseType: 'blob',
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const filename = `stock_backup_${new Date(timestamp).toISOString().split('T')[0]}.xlsx`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Backup downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading backup:", error);
+      toast.error("Failed to download backup");
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/stock/backup?reason=manual_backup`);
+      
+      toast.success(`Backup created! ${response.data.total_records} records backed up.`);
+      
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error uploading today's data:", error);
+      
+      let errorMessage = "Failed to upload today's data";
+      
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+
+        // Handle duplicate date error specially
+        if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
+          setDuplicateError({
+            duplicateDates: detail.duplicate_dates,
+            filename: detail.filename,
+            suggestion: detail.suggestion,
+            existing_dates_found: detail.existing_dates_found || []
+          });
+          setShowDuplicateDialog(true);
+          return; // Exit early for duplicate date error
+        }
+        
+        // Handle other errors
+        if (typeof detail === 'object') {
+          errorMessage = detail.message || errorMessage;
+          
+          // Show available columns if provided
+          if (detail.available_columns && Array.isArray(detail.available_columns)) {
+            const columns = detail.available_columns.join(', ');
+            errorMessage += `\n\nColumns found in your file: ${columns}`;
+          }
+          
+          // Show additional suggestions if available
+          if (detail.suggestions && Array.isArray(detail.suggestions)) {
             const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
             errorMessage += `\n\nSuggestions:\n${suggestions}`;
           }
