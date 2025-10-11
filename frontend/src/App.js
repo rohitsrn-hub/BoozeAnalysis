@@ -1145,55 +1145,86 @@ function App() {
                     </Button>
                   </div>
 
-                  {/* Row 2: Operations & Report Management */}
-                  <div className="flex items-center justify-center space-x-3">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        fetchBackups();
-                        setShowBackupsDialog(true);
-                      }}
-                      disabled={loading}
-                      data-testid="backups-btn"
-                      className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs font-medium"
-                    >
-                      <Database className="w-3 h-3 mr-1" />
-                      Backups
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowResetDialog(true)}
-                      disabled={loading || !hasData}
-                      data-testid="reset-stock-btn"
-                      className="border-red-600 text-red-600 hover:bg-red-50 text-xs font-medium"
-                    >
-                      <RefreshCw className="w-3 h-3 mr-1" />
-                      Reset Stock
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={handleGenerateExcelReport}
-                      disabled={loading || !hasData || generatingReport}
-                      data-testid="excel-report-btn"
-                      className="border-yellow-600 text-yellow-600 hover:bg-yellow-50 text-xs font-medium"
-                    >
-                      <FileSpreadsheet className="w-3 h-3 mr-1" />
-                      {generatingReport ? 'Generating...' : 'Export Excel'}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowReportModal(true)}
-                      disabled={loading || !hasData || generatingReport}
-                      data-testid="pdf-report-btn"
-                      className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs font-medium"
-                    >
-                      <FileText className="w-3 h-3 mr-1" />
-                      Generate PDF
-                    </Button>
+                  {/* Row 2: Operations & Report Management + Overstock Multiplier */}
+                  <div className="flex items-center justify-between">
+                    {/* Overstock Multiplier - aligned with second row buttons (blue arrow position) */}
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="multiplier" className="text-xs font-medium text-gray-700">
+                        Overstock Multiplier:
+                      </Label>
+                      <Input
+                        id="multiplier"
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="10"
+                        value={overstockMultiplier}
+                        onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                        className="w-16 text-xs"
+                        data-testid="overstock-multiplier-input"
+                      />
+                      <Button
+                        onClick={handleMultiplierChange}
+                        size="sm"
+                        variant="outline"
+                        disabled={!hasData || loading}
+                        data-testid="update-multiplier-btn"
+                        className="text-xs"
+                      >
+                        Update
+                      </Button>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex items-center space-x-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          fetchBackups();
+                          setShowBackupsDialog(true);
+                        }}
+                        disabled={loading}
+                        data-testid="backups-btn"
+                        className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs font-medium"
+                      >
+                        <Database className="w-3 h-3 mr-1" />
+                        Backups
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowResetDialog(true)}
+                        disabled={loading || !hasData}
+                        data-testid="reset-stock-btn"
+                        className="border-red-600 text-red-600 hover:bg-red-50 text-xs font-medium"
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" />
+                        Reset Stock
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleGenerateExcelReport}
+                        disabled={loading || !hasData || generatingReport}
+                        data-testid="excel-report-btn"
+                        className="border-yellow-600 text-yellow-600 hover:bg-yellow-50 text-xs font-medium"
+                      >
+                        <FileSpreadsheet className="w-3 h-3 mr-1" />
+                        {generatingReport ? 'Generating...' : 'Export Excel'}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowReportModal(true)}
+                        disabled={loading || !hasData || generatingReport}
+                        data-testid="pdf-report-btn"
+                        className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs font-medium"
+                      >
+                        <FileText className="w-3 h-3 mr-1" />
+                        Generate PDF
+                      </Button>
+                    </div>
                   </div>
                 </div>
           </div>
