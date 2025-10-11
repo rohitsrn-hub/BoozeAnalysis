@@ -1201,18 +1201,18 @@ function App() {
                 </div>
               </div>
             </div>
-          </div>
-          
-          {/* Upload Progress */}
-          {uploadProgress > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center space-x-2">
-                <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm text-gray-600">Uploading...</span>
+            
+            {/* Upload Progress */}
+            {uploadProgress > 0 && (
+              <div className="mt-4">
+                <div className="flex items-center space-x-2">
+                  <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                  <span className="text-sm text-gray-600">Uploading...</span>
+                </div>
+                <Progress value={uploadProgress} className="mt-2" data-testid="upload-progress" />
               </div>
-              <Progress value={uploadProgress} className="mt-2" data-testid="upload-progress" />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
