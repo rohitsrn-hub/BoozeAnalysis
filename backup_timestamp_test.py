@@ -19,7 +19,7 @@ import pandas as pd
 import io
 
 # Backend URL
-BACKEND_URL = "https://liquor-manager.preview.emergentagent.com/api"
+BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
 
 def test_backup_timestamp_functionality():
     """Test complete backup timestamp functionality"""

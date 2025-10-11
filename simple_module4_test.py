@@ -8,7 +8,7 @@ import pandas as pd
 import io
 import re
 
-BACKEND_URL = "https://liquor-manager.preview.emergentagent.com/api"
+BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
 
 def test_excel_actual_dates():
     """Test Excel Date-wise Sales sheet uses actual dates as headers"""
