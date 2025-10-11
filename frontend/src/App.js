@@ -2713,6 +2713,95 @@ function App() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Overstock Multiplier - Bottom Left Position */}
+      <div className="fixed bottom-4 left-4 bg-white border border-gray-200 rounded-lg p-3 shadow-lg">
+        <div className="flex items-center space-x-2">
+          <Label htmlFor="multiplier-bottom" className="text-xs font-medium text-gray-700">
+            Overstock Multiplier:
+          </Label>
+          <Input
+            id="multiplier-bottom"
+            type="number"
+            step="0.1"
+            min="1"
+            max="10"
+            value={overstockMultiplier}
+            onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+            className="w-16 text-xs"
+            data-testid="overstock-multiplier-bottom-input"
+          />
+          <Button
+            onClick={handleMultiplierChange}
+            size="sm"
+            variant="outline"
+            disabled={!hasData || loading}
+            data-testid="update-multiplier-bottom-btn"
+            className="text-xs"
+          >
+            Update
+          </Button>
+        </div>
+      </div>
+      
+      {/* Duplicate Date Error Dialog */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-orange-600">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Duplicate Date Detected</span>
+            </DialogTitle>
+            <DialogDescription>
+              The uploaded file contains dates that already exist in your database
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateError && (
+            <div className="mt-4 space-y-4">
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <h4 className="font-semibold text-orange-900 mb-2">📅 Duplicate Dates Found:</h4>
+                <div className="text-sm text-orange-800">
+                  <div className="font-medium">File: {duplicateError.filename}</div>
+                  <div className="mt-1">Dates: <span className="font-mono bg-white px-1 rounded">{duplicateError.duplicateDates.join(', ')}</span></div>
+                  {duplicateError.existing_dates_found && (
+                    <div className="mt-2">
+                      <div className="font-medium">Found in database:</div>
+                      <ul className="mt-1 ml-4 text-xs">
+                        {duplicateError.existing_dates_found.map((date, idx) => (
+                          <li key={idx} className="font-mono">• {date}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">💡 Solutions:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Upload data for a <strong>new date</strong> instead</li>
+                  <li>• Use <strong>"Full Monthly Data"</strong> to replace all existing data</li>
+                  <li>• Check your Excel file has the correct date columns</li>
+                </ul>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDuplicateDialog(false);
+                    setDuplicateError(null);
+                  }}
+                  data-testid="duplicate-dialog-ok-btn"
+                >
+                  Got it
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
