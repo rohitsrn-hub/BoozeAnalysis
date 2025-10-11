@@ -1215,8 +1215,8 @@ function App() {
         </div>
       </div>
 
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!hasData && !loading ? (
           <div className="text-center py-12">
             <div className="p-6 bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300">
