@@ -3161,14 +3161,14 @@ async def generate_pdf_report(params: ReportParameters):
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 8),  # Reduced header font
-                        ('FONTSIZE', (0, 1), (-1, -1), 7),  # Reduced data font
-                        ('TOPPADDING', (0, 0), (-1, -1), 2),  # Reduced padding
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),  # Reduced padding
-                        ('LEFTPADDING', (0, 0), (-1, -1), 3),  # Reduced padding
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 3),  # Reduced padding
+                        ('FONTSIZE', (0, 0), (-1, 0), 7),  # Further reduced header font
+                        ('FONTSIZE', (0, 1), (-1, -1), 6),  # Further reduced data font
+                        ('TOPPADDING', (0, 0), (-1, -1), 1),  # Minimal padding
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),  # Minimal padding
+                        ('LEFTPADDING', (0, 0), (-1, -1), 2),  # Minimal padding
+                        ('RIGHTPADDING', (0, 0), (-1, -1), 2),  # Minimal padding
                         ('BACKGROUND', (0, 1), (-1, -1), HexColor('#f8fafc')),
-                        ('GRID', (0, 0), (-1, -1), 0.3, colors.black),  # Thinner grid lines
+                        ('GRID', (0, 0), (-1, -1), 0.25, colors.black),  # Very thin grid lines
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), HexColor('#f8fafc')])  # Alternating rows
                     ]))
                     
