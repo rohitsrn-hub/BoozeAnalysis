@@ -884,9 +884,8 @@ function App() {
   }, []);
 
   return (
-    <>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <Toaster position="top-right" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <Toaster position="top-right" />
       
       {/* Header */}
       <div className="bg-white border-b shadow-sm">
