@@ -71,7 +71,7 @@ function App() {
   });
   const [generatingReport, setGeneratingReport] = useState(false);
 
-  // Fetch all data sure
+  // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
       setLoading(true);
@@ -569,285 +569,7 @@ function App() {
       
       await fetchBackups();
       
-    } catch (error) {
-      console.error("Error uploading today's data:", error);
-      
-      let errorMessage = "Failed to upload today's data";
-      
-      if (error.response?.data?.detail) {
-        const detail = error.response.data.detail;
-
-        // Handle duplicate date error specially
-        if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
-          setDuplicateError({
-            duplicateDates: detail.duplicate_dates,
-            filename: detail.filename,
-            suggestion: detail.suggestion,
-            existing_dates_found: detail.existing_dates_found || []
-          });
-          setShowDuplicateDialog(true);
-          return; // Exit early for duplicate date error
-        }
-        
-        // Handle other errors
-        if (typeof detail === 'object') {
-          errorMessage = detail.message || errorMessage;
-          
-          // Show available columns if provided
-          if (detail.available_columns && Array.isArray(detail.available_columns)) {
-            const columns = detail.available_columns.join(', ');
-            errorMessage += `\n\nColumns found in your file: ${columns}`;
-          }
-          
-          // Show additional suggestions if available
-          if (detail.suggestions && Array.isArray(detail.suggestions)) {
-            const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
-            errorMessage += `\n\nSuggestions:\n${suggestions}`;
-          }
-        } else {
-          errorMessage = detail;
-        }
-      }
-      
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-      setUploadProgress(0);
-      event.target.value = "";
-    }
-  };
-
-  // Handle file upload (legacy - keeping for backward compatibility)
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      setLoading(true);
-      setUploadProgress(10);
-      
-      const response = await axios.post(`${API}/upload-data`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent) => {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(progress);
-        },
-      });
-
-      setUploadProgress(100);
-      toast.success(`Successfully uploaded ${response.data.total_records} records`);
-      
-      // Fetch analytics and upload history after successful upload
-      await fetchAnalytics(overstockMultiplier);
-      await fetchUploadHistory();
-      
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      
-      // Better error handling for file upload
-      let errorMessage = "Failed to upload file";
-      
-      if (error.response?.data?.detail) {
-        if (typeof error.response.data.detail === 'object') {
-          errorMessage = error.response.data.detail.message || errorMessage;
-        } else {
-          errorMessage = error.response.data.detail;
-        }
-      }
-      
-      // Show helpful error messages
-      if (errorMessage.includes("Invalid file type")) {
-        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
-      } else if (errorMessage.includes("Insufficient numerical data")) {
-        toast.error("File format incorrect. Please check the data structure in your Excel file");
-      } else {
-        toast.error(errorMessage);
-      }
-    } finally {
-      setLoading(false);
-      setUploadProgress(0);
-      // Clear file input
-      event.target.value = "";
-    }
-  };
-
-  // Handle multiplier change
-  const handleMultiplierChange = async () => {
-    if (hasData) {
-      await fetchAnalytics(overstockMultiplier);
-    }
-  };
-
-  // Handle manual refresh
-  const handleManualRefresh = async () => {
-    try {
-      setLoading(true);
-      toast.info("Refreshing all data...");
-      
-      // Call backend refresh endpoint first
-      await axios.post(`${API}/refresh-analytics`);
-      
-      // Then fetch ALL updated data sources
-      await fetchAnalytics(overstockMultiplier);
-      await fetchUploadHistory();
-      
-      toast.success("All data refreshed successfully!");
-    } catch (error) {
-      console.error("Error refreshing analytics:", error);
-      toast.error("Failed to refresh data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle demand forecast export
-  const handleExportDemandList = async () => {
-    try {
-      const response = await axios.get(`${API}/export-demand-list`, {
-        responseType: 'blob',
-      });
-      
-      // Create blob link to download
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Get filename from response headers or use default
-      const contentDisposition = response.headers['content-disposition'];
-      const filename = contentDisposition 
-        ? contentDisposition.split('filename=')[1].replace(/"/g, '')
-        : `liquor_demand_forecast_${new Date().toISOString().split('T')[0]}.xlsx`;
-      
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("Demand forecast exported successfully!");
-    } catch (error) {
-      console.error("Error exporting demand forecast:", error);
-      toast.error("Failed to export demand forecast");
-    }
-  };
-
-  // Module 1: Brand Management handlers
-  const handleAddBrand = async (e) => {
-    e.preventDefault();
     
-    try {
-      setLoading(true);
-      
-      const response = await axios.post(`${API}/brands/add`, {
-        index_number: parseInt(brandFormData.index_number),
-        brand_name: brandFormData.brand_name,
-        wholesale_rate: parseFloat(brandFormData.wholesale_rate),
-        selling_rate: parseFloat(brandFormData.selling_rate),
-        initial_stock_qty: parseInt(brandFormData.initial_stock_qty) || 0
-      });
-      
-      toast.success(response.data.message);
-      setShowBrandModal(false);
-      
-      // Reset form
-      setBrandFormData({
-        index_number: '',
-        brand_name: '',
-        wholesale_rate: '',
-        selling_rate: '',
-        initial_stock_qty: 0
-      });
-      
-      // Refresh analytics if data exists
-      if (hasData) {
-        await fetchAnalytics(overstockMultiplier);
-      }
-      
-    } catch (error) {
-      console.error("Error adding brand:", error);
-      const errorMessage = error.response?.data?.detail || "Failed to add brand";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateRates = async (e) => {
-    e.preventDefault();
-    
-    if (!ratesFile) {
-      toast.error("Please select an Excel file");
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      
-      const formData = new FormData();
-      formData.append("file", ratesFile);
-      
-      const response = await axios.post(`${API}/brands/update-rates`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      
-      const result = response.data;
-      
-      if (result.updated_count > 0) {
-        toast.success(`Successfully updated ${result.updated_count} brand(s)`);
-      }
-      
-      if (result.not_found_count > 0) {
-        toast.warning(`${result.not_found_count} brand(s) not found: ${result.not_found_brands.slice(0, 3).join(', ')}${result.not_found_brands.length > 3 ? '...' : ''}`);
-      }
-      
-      setShowRatesModal(false);
-      setRatesFile(null);
-      
-      // Refresh analytics
-      if (hasData) {
-        await fetchAnalytics(overstockMultiplier);
-      }
-      
-    } catch (error) {
-      console.error("Error updating rates:", error);
-      const errorMessage = error.response?.data?.detail || "Failed to update rates";
-      toast.error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Module 3: Stock Reset & Backup handlers
-  const fetchBackups = async () => {
-    try {
-      const response = await axios.get(`${API}/stock/backups`);
-      setBackupsList(response.data);
-    } catch (error) {
-      console.error("Error fetching backups:", error);
-      toast.error("Failed to fetch backups");
-    }
-  };
-
-  const handleStockReset = async () => {
-    try {
-      setResetting(true);
-      
-      const response = await axios.post(`${API}/stock/reset`);
-      
-      toast.success(`Stock reset successful! ${response.data.records_deleted} records deleted. Backup ID: ${response.data.backup_id}`);
-      
-      setShowResetDialog(false);
-      setHasData(false);
-      
-      // Refresh backups list
-      await fetchBackups();
       
     } catch (error) {
       console.error("Error resetting stock:", error);
@@ -1062,7 +784,7 @@ function App() {
   // Onboarding content
   const onboardingSteps = [
     {
-      title: "Welcome to Liquor Sales Analytics! 🎯",
+      title: "Welcome to Liquor Sales Analytics! ðŸŽ¯",
       content: (
         <div className="space-y-4">
           <p className="text-gray-600 leading-relaxed">
@@ -1072,18 +794,18 @@ function App() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-semibold text-blue-900 mb-2">What you can do:</h4>
             <ul className="text-blue-800 space-y-1 text-sm">
-              <li>• Upload Excel/CSV files with sales data</li>
-              <li>• Track daily sales trends across all brands</li>
-              <li>• Identify overstocked items automatically</li>
-              <li>• Compare brand performance rankings</li>
-              <li>• Configure overstock thresholds (3x rule by default)</li>
+              <li>â€¢ Upload Excel/CSV files with sales data</li>
+              <li>â€¢ Track daily sales trends across all brands</li>
+              <li>â€¢ Identify overstocked items automatically</li>
+              <li>â€¢ Compare brand performance rankings</li>
+              <li>â€¢ Configure overstock thresholds (3x rule by default)</li>
             </ul>
           </div>
         </div>
       )
     },
     {
-      title: "Step 1: Upload Your Data 📊",
+      title: "Step 1: Upload Your Data ðŸ“Š",
       content: (
         <div className="space-y-4">
           <p className="text-gray-600">
@@ -1092,11 +814,11 @@ function App() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <h4 className="font-semibold text-green-900 mb-2">Required columns in your file:</h4>
             <ul className="text-green-800 space-y-1 text-sm">
-              <li>• <strong>Brand Name</strong> - Name of the liquor brand</li>
-              <li>• <strong>Rate</strong> - Price per unit</li>
-              <li>• <strong>Date columns</strong> - Daily sales quantities (e.g., 25-Aug-25, 26-Aug-25)</li>
-              <li>• <strong>Monthly Sale value (a)</strong> - Total monthly sales value</li>
-              <li>• <strong>Stock value Today</strong> - Current stock value</li>
+              <li>â€¢ <strong>Brand Name</strong> - Name of the liquor brand</li>
+              <li>â€¢ <strong>Rate</strong> - Price per unit</li>
+              <li>â€¢ <strong>Date columns</strong> - Daily sales quantities (e.g., 25-Aug-25, 26-Aug-25)</li>
+              <li>â€¢ <strong>Monthly Sale value (a)</strong> - Total monthly sales value</li>
+              <li>â€¢ <strong>Stock value Today</strong> - Current stock value</li>
             </ul>
           </div>
           <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -1107,7 +829,7 @@ function App() {
       )
     },
     {
-      title: "Step 2: Configure Overstock Settings ⚙️",
+      title: "Step 2: Configure Overstock Settings âš™ï¸",
       content: (
         <div className="space-y-4">
           <p className="text-gray-600">
@@ -1116,9 +838,9 @@ function App() {
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
             <h4 className="font-semibold text-orange-900 mb-2">How it works:</h4>
             <div className="text-orange-800 space-y-2 text-sm">
-              <p>• <strong>3x multiplier</strong>: Items with stock &gt; 3× monthly sales = overstocked</p>
-              <p>• <strong>2x multiplier</strong>: Items with stock &gt; 2× monthly sales = overstocked</p>
-              <p>• Lower multipliers = more brands flagged as overstocked</p>
+              <p>â€¢ <strong>3x multiplier</strong>: Items with stock &gt; 3Ã— monthly sales = overstocked</p>
+              <p>â€¢ <strong>2x multiplier</strong>: Items with stock &gt; 2Ã— monthly sales = overstocked</p>
+              <p>â€¢ Lower multipliers = more brands flagged as overstocked</p>
             </div>
           </div>
           <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -1129,7 +851,7 @@ function App() {
       )
     },
     {
-      title: "Step 3: Analyze Your Data 📈",
+      title: "Step 3: Analyze Your Data ðŸ“ˆ",
       content: (
         <div className="space-y-4">
           <p className="text-gray-600">
@@ -1162,7 +884,7 @@ function App() {
       )
     },
     {
-      title: "Ready to Get Started! 🚀",
+      title: "Ready to Get Started! ðŸš€",
       content: (
         <div className="space-y-4">
           <p className="text-gray-600">
@@ -1192,7 +914,7 @@ function App() {
           </div>
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4 mt-6">
             <p className="text-indigo-800 text-center font-medium">
-              💡 Pro Tip: Start with the default 3x multiplier and adjust based on your business needs!
+              ðŸ’¡ Pro Tip: Start with the default 3x multiplier and adjust based on your business needs!
             </p>
           </div>
         </div>
@@ -1344,6 +1066,9 @@ function App() {
                         Track all uploaded Excel files and data changes
                       </DialogDescription>
                     </DialogHeader>
+                    
+                    
+      
                     
                     <div className="mt-6">
                       {uploadHistory.length > 0 ? (
@@ -1693,6 +1418,8 @@ function App() {
                   <CheckCircle className="w-4 h-4" />
                   <span>Verify</span>
                 </TabsTrigger>
+                
+      
                 <TabsTrigger 
                   value="database-view" 
                   data-testid="database-view-tab"
@@ -2050,6 +1777,8 @@ function App() {
                         </CardContent>
                       </Card>
                       
+                      
+                            
                       <Card className="border-yellow-200 bg-yellow-50">
                         <CardContent className="p-4">
                           <div className="flex items-center space-x-2">
@@ -2218,7 +1947,7 @@ function App() {
                       <CardTitle>Detailed Calculations for All Brands</CardTitle>
                       <CardDescription>
                         Verify these calculations against your manual Excel calculations. 
-                        Multiplier Value = Current Stock Value ÷ Monthly Sales Value
+                        Multiplier Value = Current Stock Value Ã· Monthly Sales Value
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -2277,16 +2006,16 @@ function App() {
                             <h5 className="font-semibold text-blue-900 mb-2">Monthly Sales Calculation</h5>
                             <ol className="text-blue-800 space-y-1">
                               <li>1. Total Sales = D1 Stock - DL Stock</li>
-                              <li>2. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
-                              <li>3. Monthly Sales Qty = Average Daily Sales × 24</li>
-                              <li>4. Monthly Sales Value = Monthly Sales Qty × Selling Rate</li>
+                              <li>2. Average Daily Sales = Total Sales Ã· Days Between D1 & DL</li>
+                              <li>3. Monthly Sales Qty = Average Daily Sales Ã— 24</li>
+                              <li>4. Monthly Sales Value = Monthly Sales Qty Ã— Selling Rate</li>
                             </ol>
                           </div>
                           <div className="p-4 bg-purple-50 rounded-lg">
                             <h5 className="font-semibold text-purple-900 mb-2">Overstocking Analysis</h5>
                             <ol className="text-purple-800 space-y-1">
-                              <li>1. Current Stock Value = DL Stock × Selling Rate</li>
-                              <li>2. Multiplier Value = Stock Value ÷ Monthly Sales Value</li>
+                              <li>1. Current Stock Value = DL Stock Ã— Selling Rate</li>
+                              <li>2. Multiplier Value = Stock Value Ã· Monthly Sales Value</li>
                               <li>3. Overstocked if Multiplier > {overstockMultiplier}x</li>
                               <li>4. Warning if Multiplier > {(overstockMultiplier * 0.7).toFixed(1)}x</li>
                             </ol>
@@ -2306,20 +2035,20 @@ function App() {
                               <h5 className="font-semibold text-gray-900 mb-2">
                                 Example Calculation ({blackDogExample.brand_name})
                                 {blackDogExample !== calculationData[0] && (
-                                  <span className="ml-2 text-sm text-green-600 font-normal">✓ Found Black Dog Centenary</span>
+                                  <span className="ml-2 text-sm text-green-600 font-normal">âœ“ Found Black Dog Centenary</span>
                                 )}:
                               </h5>
                               <div className="text-sm text-gray-700 space-y-1">
                                 <p><strong>Index:</strong> {blackDogExample.index}</p>
-                                <p>• <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
-                                <p>• <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
-                                <p>• <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
-                                <p>• <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
-                                <p>• <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} ÷ {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
-                                <p>• <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
-                                <p>• <strong>Current Stock Value:</strong> {blackDogExample.DL_stock} × ₹{blackDogExample.selling_rate} = <span className="text-green-600 font-medium">{formatCurrency(blackDogExample.calculated_current_stock_value)}</span></p>
-                                <p>• <strong>Multiplier:</strong> {formatCurrency(blackDogExample.calculated_current_stock_value)} ÷ {formatCurrency(blackDogExample.calculated_avg_monthly_sale)} = <strong className="text-purple-600 text-lg">{blackDogExample.calculated_multiplier_value}</strong></p>
-                                <p>• <strong>Stock Status:</strong> 
+                                <p>â€¢ <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
+                                <p>â€¢ <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
+                                <p>â€¢ <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
+                                <p>â€¢ <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
+                                <p>â€¢ <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} Ã· {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
+                                <p>â€¢ <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} Ã— 24 Ã— â‚¹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
+                                <p>â€¢ <strong>Current Stock Value:</strong> {blackDogExample.DL_stock} Ã— â‚¹{blackDogExample.selling_rate} = <span className="text-green-600 font-medium">{formatCurrency(blackDogExample.calculated_current_stock_value)}</span></p>
+                                <p>â€¢ <strong>Multiplier:</strong> {formatCurrency(blackDogExample.calculated_current_stock_value)} Ã· {formatCurrency(blackDogExample.calculated_avg_monthly_sale)} = <strong className="text-purple-600 text-lg">{blackDogExample.calculated_multiplier_value}</strong></p>
+                                <p>â€¢ <strong>Stock Status:</strong> 
                                   {blackDogExample.calculated_multiplier_value > 3 ? (
                                     <span className="text-red-600 font-medium"> Overstocked (>{overstockMultiplier}x)</span>
                                   ) : blackDogExample.calculated_multiplier_value > 2.1 ? (
@@ -2357,7 +2086,8 @@ function App() {
                         // Export database view as JSON
                         const dataStr = JSON.stringify(databaseView.data, null, 2);
                         const dataBlob = new Blob([dataStr], { type: 'application/json' });
-                        const url = URL.createObjectURL(dataBlob);
+                        
+                                                    const url = URL.createObjectURL(dataBlob);
                         const link = document.createElement('a');
                         link.href = url;
                         link.download = `database_export_${new Date().toISOString().split('T')[0]}.json`;
@@ -2719,19 +2449,19 @@ function App() {
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h4 className="font-semibold text-blue-900 mb-2">What happens during reset:</h4>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>✅ Automatic backup is created</li>
-                <li>✅ All stock records are deleted</li>
-                <li>✅ Next upload becomes the new D1 (first date)</li>
-                <li>✅ Fresh start for new cycle</li>
+                <li>âœ… Automatic backup is created</li>
+                <li>âœ… All stock records are deleted</li>
+                <li>âœ… Next upload becomes the new D1 (first date)</li>
+                <li>âœ… Fresh start for new cycle</li>
               </ul>
             </div>
 
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
               <h4 className="font-semibold text-green-900 mb-2">Safety measures:</h4>
               <ul className="text-sm text-green-800 space-y-1">
-                <li>🛡️ Backup created before deletion</li>
-                <li>🛡️ Download backup anytime from "Backups" button</li>
-                <li>🛡️ Backup includes all data for recovery</li>
+                <li>ðŸ›¡ï¸ Backup created before deletion</li>
+                <li>ðŸ›¡ï¸ Download backup anytime from "Backups" button</li>
+                <li>ðŸ›¡ï¸ Backup includes all data for recovery</li>
               </ul>
             </div>
 
@@ -2741,7 +2471,8 @@ function App() {
                 variant="outline"
                 onClick={() => setShowResetDialog(false)}
                 disabled={resetting}
-              >
+              
+                                                                  >
                 Cancel
               </Button>
               <Button
@@ -2796,7 +2527,7 @@ function App() {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <h4 className="font-semibold text-gray-900">
-                          {backup.backup_reason === 'pre_reset_backup' ? '🔄 Pre-Reset Backup' : '💾 Manual Backup'}
+                          {backup.backup_reason === 'pre_reset_backup' ? 'ðŸ”„ Pre-Reset Backup' : 'ðŸ’¾ Manual Backup'}
                         </h4>
                         <p className="text-sm text-gray-600">
                           {formatDate(backup.backup_timestamp)}
@@ -2888,7 +2619,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="executive_summary" className="text-sm font-medium">
-                    📊 Executive Summary
+                    ðŸ“Š Executive Summary
                   </label>
                 </div>
 
@@ -2901,7 +2632,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="top_sellers" className="text-sm font-medium">
-                    🏆 Top Sellers
+                    ðŸ† Top Sellers
                   </label>
                 </div>
 
@@ -2914,7 +2645,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="slow_sellers" className="text-sm font-medium">
-                    🐌 Slow Sellers
+                    ðŸŒ Slow Sellers
                   </label>
                 </div>
 
@@ -2927,7 +2658,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="capital_blockers" className="text-sm font-medium">
-                    💰 Capital Blockers
+                    ðŸ’° Capital Blockers
                   </label>
                 </div>
 
@@ -2940,7 +2671,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="revenue_analysis" className="text-sm font-medium">
-                    📈 Revenue Analysis
+                    ðŸ“ˆ Revenue Analysis
                   </label>
                 </div>
 
@@ -2953,7 +2684,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="demand_forecast" className="text-sm font-medium">
-                    🎯 Demand Forecast
+                    ðŸŽ¯ Demand Forecast
                   </label>
                 </div>
 
@@ -2966,7 +2697,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="profit_analysis" className="text-sm font-medium">
-                    💹 Profit Analysis
+                    ðŸ’¹ Profit Analysis
                   </label>
                 </div>
 
@@ -2979,7 +2710,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="recommendations" className="text-sm font-medium">
-                    💡 Recommendations
+                    ðŸ’¡ Recommendations
                   </label>
                 </div>
 
@@ -2992,7 +2723,7 @@ function App() {
                     className="rounded border-gray-300"
                   />
                   <label htmlFor="datewise_analysis" className="text-sm font-medium">
-                    📊 Brand-Wise Sale Analysis
+                    ðŸ“Š Brand-Wise Sale Analysis
                   </label>
                 </div>
               </div>
@@ -3045,7 +2776,7 @@ function App() {
           {duplicateError && (
             <div className="mt-4 space-y-4">
               <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                <h4 className="font-semibold text-orange-900 mb-2">📅 Duplicate Dates Found:</h4>
+                <h4 className="font-semibold text-orange-900 mb-2">ðŸ“… Duplicate Dates Found:</h4>
                 <div className="text-sm text-orange-800">
                   <div className="font-medium">File: {duplicateError.filename}</div>
                   <div className="mt-1">Dates: <span className="font-mono bg-white px-1 rounded">{duplicateError.duplicateDates.join(', ')}</span></div>
@@ -3054,7 +2785,7 @@ function App() {
                       <div className="font-medium">Found in database:</div>
                       <ul className="mt-1 ml-4 text-xs">
                         {duplicateError.existing_dates_found.map((date, idx) => (
-                          <li key={idx} className="font-mono">• {date}</li>
+                          <li key={idx} className="font-mono">â€¢ {date}</li>
                         ))}
                       </ul>
                     </div>
@@ -3063,11 +2794,11 @@ function App() {
               </div>
               
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="font-semibold text-blue-900 mb-2">💡 Solutions:</h4>
+                <h4 className="font-semibold text-blue-900 mb-2">ðŸ’¡ Solutions:</h4>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Upload data for a <strong>new date</strong> instead</li>
-                  <li>• Use <strong>"Full Monthly Data"</strong> to replace all existing data</li>
-                  <li>• Check your Excel file has the correct date columns</li>
+                  <li>â€¢ Upload data for a <strong>new date</strong> instead</li>
+                  <li>â€¢ Use <strong>"Full Monthly Data"</strong> to replace all existing data</li>
+                  <li>â€¢ Check your Excel file has the correct date columns</li>
                 </ul>
               </div>
               
@@ -3092,3 +2823,7 @@ function App() {
 }
 
 export default App;
+
+
+       
+                
