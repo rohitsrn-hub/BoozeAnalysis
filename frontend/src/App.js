@@ -534,52 +534,6 @@ function App() {
       setResetting(false);
     }
   };
-
-  const handleDownloadBackup = async (backupId, timestamp) => {
-    try {
-      const response = await axios.get(`${API}/stock/backup/${backupId}/download`, {
-        responseType: 'blob',
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      const filename = `stock_backup_${new Date(timestamp).toISOString().split('T')[0]}.xlsx`;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("Backup downloaded successfully!");
-    } catch (error) {
-      console.error("Error downloading backup:", error);
-      toast.error("Failed to download backup");
-    }
-  };
-
-  const handleCreateBackup = async () => {
-    try {
-      setLoading(true);
-      
-      const response = await axios.post(`${API}/stock/backup?reason=manual_backup`);
-      
-      toast.success(`Backup created! ${response.data.total_records} records backed up.`);
-      
-      await fetchBackups();
-      
-    
-      
-    } catch (error) {
-      console.error("Error resetting stock:", error);
-      const errorMessage = error.response?.data?.detail || "Failed to reset stock";
-      toast.error(errorMessage);
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const handleDownloadBackup = async (backupId, timestamp) => {
     try {
       const response = await axios.get(`${API}/stock/backup/${backupId}/download`, {
