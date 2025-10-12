@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && yarn build",
   "outputDirectory": "frontend/build",
-  "devCommand": "cd frontend && npm start",
-  "installCommand": "cd frontend && npm install",
+  "devCommand": "cd frontend && yarn start",
+  "installCommand": "cd frontend && yarn install",
   "framework": "create-react-app",
   "routes": [
     {
@@ -16,5 +16,5 @@
   ],
   "git": {
     "deploymentEnabled": false
-  }
+}
 }
