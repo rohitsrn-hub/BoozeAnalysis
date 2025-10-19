@@ -1415,7 +1415,7 @@ function App() {
 
             {/* Main Dashboard Tabs */}
             <Tabs defaultValue="performance-charts" className="w-full">
-              <TabsList className="grid w-full grid-cols-7 gap-2 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-100 rounded-xl shadow-lg">
+              <TabsList className="grid w-full grid-cols-8 gap-2 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-100 rounded-xl shadow-lg">
                 <TabsTrigger 
                   value="performance-charts" 
                   data-testid="performance-charts-tab"
