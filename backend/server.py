@@ -1220,7 +1220,14 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 }
             )
         
-        # Append today's data to existing monthly data
+        # Check if database is empty (after stock reset scenario)
+        db_record_count = await db.liquor_data.count_documents({})
+        is_fresh_start = (db_record_count == 0)
+        
+        if is_fresh_start:
+            print(f"🆕 Database is empty - treating Today's Data as initial D1 upload")
+        
+        # Append today's data to existing monthly data OR create fresh D1 data
         updated_count = 0
         new_brands_count = 0
         
