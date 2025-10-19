@@ -1003,6 +1003,30 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
         if new_dates:
             print(f"📅 Full monthly upload processing dates: {sorted(list(new_dates))}")
         
+        # Before clearing, get existing brands to preserve their rates if not in new file
+        existing_brands_dict = {}
+        existing_brands = await db.liquor_data.find({}, {"brand_name": 1, "wholesale_rate": 1, "selling_rate": 1}).to_list(1000)
+        for brand in existing_brands:
+            existing_brands_dict[brand['brand_name']] = {
+                'wholesale_rate': brand.get('wholesale_rate', 0.0),
+                'selling_rate': brand.get('selling_rate', brand.get('rate', 0.0))
+            }
+        
+        # Fill in missing rates from existing database records
+        for item_data in parsed_data:
+            brand_name = item_data['brand_name']
+            if brand_name in existing_brands_dict:
+                # If wholesale_rate is 0 in new data, use existing
+                if item_data.get('wholesale_rate', 0) == 0:
+                    item_data['wholesale_rate'] = existing_brands_dict[brand_name]['wholesale_rate']
+                # If selling_rate is 0 in new data, use existing
+                if item_data.get('selling_rate', 0) == 0:
+                    item_data['selling_rate'] = existing_brands_dict[brand_name]['selling_rate']
+                    item_data['rate'] = existing_brands_dict[brand_name]['selling_rate']
+                # Recalculate stock value with correct rates
+                item_data['stock_value_today'] = item_data['current_stock_qty'] * item_data['selling_rate']
+                item_data['monthly_sale_value'] = item_data.get('total_sales_qty', 0) * item_data['selling_rate']
+        
         # Clear existing data and insert new data (full replacement)
         await db.liquor_data.delete_many({})
         
