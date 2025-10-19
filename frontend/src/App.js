@@ -71,6 +71,11 @@ function App() {
   });
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  // Module 5: Historical Sales Averages state
+  const [analyticsSource, setAnalyticsSource] = useState(null);
+  const [showHistoricalTab, setShowHistoricalTab] = useState(false);
+  const [historicalAverages, setHistoricalAverages] = useState([]);
+
   // Fetch all data
   const fetchAnalytics = async (multiplier = 3.0) => {
     try {
