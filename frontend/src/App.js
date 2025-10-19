@@ -1100,11 +1100,52 @@ function App() {
             </div>
           </div>
           
-          <div className="flex justify-end mt-4">
-            {/* Upload Buttons and Controls */}
-            <div className="flex flex-col space-y-3">
+          <div className="flex justify-between items-start mt-4 gap-4">
+            {/* LEFT SIDE: HERO - Today's Data Upload Button with D1/DL Dates */}
+            <div className="flex-shrink-0">
+              <Button 
+                variant="outline" 
+                onClick={() => document.getElementById('todays-data-upload').click()}
+                disabled={loading}
+                data-testid="todays-data-btn"
+                className="border-2 border-blue-600 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-6 h-auto group"
+              >
+                <div className="flex flex-col items-start space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
+                    <span className="text-base font-bold">Upload Today's Data</span>
+                  </div>
+                  {currentDateRange && (
+                    <div className="flex flex-col text-xs text-left space-y-1">
+                      <div className="flex items-center space-x-2 bg-white/60 px-3 py-1 rounded-md">
+                        <span className="font-semibold text-blue-800">D1:</span>
+                        <span className="font-mono text-blue-600">{currentDateRange.d1_date}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 bg-white/60 px-3 py-1 rounded-md">
+                        <span className="font-semibold text-blue-800">DL:</span>
+                        <span className="font-mono text-blue-600">{currentDateRange.dl_date}</span>
+                      </div>
+                    </div>
+                  )}
+                  {!currentDateRange && (
+                    <span className="text-xs text-blue-600">Most frequently used action</span>
+                  )}
+                </div>
+              </Button>
+              <Input
+                id="todays-data-upload"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleTodaysDataUpload}
+                className="hidden"
+                data-testid="todays-data-file-input"
+              />
+            </div>
+
+            {/* RIGHT SIDE: Other Action Buttons */}
+            <div className="flex flex-col space-y-3 flex-grow">
               {/* Row 1: Upload & Brand Management */}
-              <div className="flex items-center justify-center space-x-3">
+              <div className="flex items-center justify-end space-x-3">
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -1123,25 +1164,6 @@ function App() {
                       onChange={handleFullMonthlyUpload}
                       className="hidden"
                       data-testid="full-monthly-file-input"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => document.getElementById('todays-data-upload').click()}
-                      disabled={loading}
-                      data-testid="todays-data-btn"
-                      className="border-blue-600 text-blue-600 hover:bg-blue-50 text-xs font-medium"
-                    >
-                      <Calendar className="w-3 h-3 mr-1" />
-                      Today's Data
-                    </Button>
-                    <Input
-                      id="todays-data-upload"
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleTodaysDataUpload}
-                      className="hidden"
-                      data-testid="todays-data-file-input"
                     />
                     <Button 
                       variant="outline" 
