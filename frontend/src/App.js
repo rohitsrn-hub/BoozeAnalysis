@@ -929,18 +929,8 @@ function App() {
               <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
             </div>
             
-            {/* Right side - Control buttons and D1/DL current values */}
+            {/* Right side - Control buttons */}
             <div className="flex items-center space-x-4">
-              {/* D1/DL Current Values - moved to right and made compact */}
-              {currentDateRange && (
-                <div className="flex items-center space-x-2 px-4 py-1 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-800 whitespace-nowrap">
-                    Current: D1={currentDateRange.d1_date} | DL={currentDateRange.dl_date}
-                  </span>
-                </div>
-              )}
-              
               {/* Control Buttons - moved to far right */}
               <div className="flex items-center space-x-2">
                 {/* Refresh Button */}
