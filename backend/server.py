@@ -703,7 +703,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 except:
                     index_num = idx + 1
             
-            # Get rates
+            # Get rates from Excel file
             wholesale_rate = 0.0
             selling_rate = 0.0
             
@@ -719,11 +719,14 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 except:
                     pass
             
-            # If wholesale rate not provided, calculate as 90% of selling rate
-            if wholesale_rate == 0 and selling_rate > 0:
-                wholesale_rate = selling_rate * 0.9
-            elif selling_rate == 0 and wholesale_rate > 0:
-                selling_rate = wholesale_rate / 0.9
+            # If rates not in Excel, check if brand exists in DB and use stored rates
+            if (wholesale_rate == 0 or selling_rate == 0):
+                existing_brand = await db.liquor_data.find_one({"brand_name": brand_name})
+                if existing_brand:
+                    if wholesale_rate == 0:
+                        wholesale_rate = existing_brand.get('wholesale_rate', 0.0)
+                    if selling_rate == 0:
+                        selling_rate = existing_brand.get('selling_rate', existing_brand.get('rate', 0.0))
             
             # Get daily stock data
             daily_stock_data = {}
