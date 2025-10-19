@@ -161,6 +161,31 @@ class ReportParameters(BaseModel):
     report_title: str = "Monthly Sales Analytics Report"
     report_period: str = ""
 
+# Module 5: Historical Sales Averages Models
+class HistoricalSalesAverage(BaseModel):
+    """Model for storing historical sales averages before reset"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    month_year: str  # Format: "Sep-2025"
+    average_daily_sales_qty: float  # Average bottles sold per day
+    average_daily_sales_value: float  # Average revenue per day
+    total_sales_quantity: float  # Total bottles sold in the month
+    total_sales_value: float  # Total revenue in the month
+    total_sales_days: int  # Number of days with sales data
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    calculation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AnalyticsSourceInfo(BaseModel):
+    """Information about data source used for analytics"""
+    data_source: str  # "historical" or "current"
+    days_of_data: int
+    using_month: str
+    transition_threshold: int = 5
+    is_transitioning: bool
+    confidence_level: str  # "low", "medium", "high"
+
 class TopSeller(BaseModel):
     brand_name: str
     revenue: float
