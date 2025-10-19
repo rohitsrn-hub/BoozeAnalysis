@@ -1472,6 +1472,15 @@ function App() {
                   <Database className="w-4 h-4" />
                   <span>Database</span>
                 </TabsTrigger>
+                <TabsTrigger 
+                  value="historical-averages" 
+                  data-testid="historical-averages-tab"
+                  className="flex items-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200 data-[state=active]:border-violet-300"
+                  onClick={() => fetchHistoricalAverages()}
+                >
+                  <History className="w-4 h-4" />
+                  <span>History</span>
+                </TabsTrigger>
               </TabsList>
 
               {/* Performance Charts Tab */}
