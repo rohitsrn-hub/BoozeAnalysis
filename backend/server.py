@@ -501,12 +501,12 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         
         if 'brand' in col_lower and 'name' in col_lower:
             brand_col = col
-        elif 'wholesale' in col_lower and 'rate' in col_lower:
+        elif ('wholesale' in col_lower or 'w/' in col_lower or col_lower == 'w/rate') and 'rate' in col_lower:
             wholesale_rate_col = col
-        elif ('selling' in col_lower or 'retail' in col_lower) and 'rate' in col_lower:
+        elif ('selling' in col_lower or 'retail' in col_lower or col_lower == 'rate' or col_lower == 's/rate') and 'rate' in col_lower:
             selling_rate_col = col
-        elif 'rate' in col_lower and not wholesale_rate_col and not selling_rate_col:
-            selling_rate_col = col  # Default to selling rate if only one rate column
+        elif 'rate' in col_lower and '/' not in col_lower and not wholesale_rate_col and not selling_rate_col:
+            selling_rate_col = col  # Default to selling rate if only one rate column (but not W/RATE or S/RATE)
         elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
             index_col = col
         else:
