@@ -2544,6 +2544,115 @@ async def reset_stock_data():
         logging.error(f"Error resetting stock data: {e}")
         raise HTTPException(status_code=500, detail=f"Error resetting stock data: {str(e)}")
 
+# MODULE 5: Historical Sales Averages APIs
+
+@api_router.get("/analytics-source")
+async def get_analytics_source_info():
+    """Get information about which data source is being used for analytics"""
+    try:
+        use_historical, days = await should_use_historical_data()
+        
+        # Get current month
+        current_month = datetime.now().strftime("%b-%Y")
+        
+        # Determine confidence level
+        if days == 0:
+            confidence = "none"
+        elif days < 3:
+            confidence = "low"
+        elif days < 5:
+            confidence = "medium"
+        else:
+            confidence = "high"
+        
+        # Get the month we're using for analytics
+        if use_historical:
+            # Try to get the most recent historical month
+            historical_record = await db.historical_sales_averages.find_one(
+                {},
+                sort=[("calculation_date", -1)]
+            )
+            using_month = historical_record.get('month_year', 'Previous Month') if historical_record else 'Previous Month'
+        else:
+            using_month = current_month
+        
+        return {
+            "data_source": "historical" if use_historical else "current",
+            "days_of_data": days,
+            "using_month": using_month,
+            "transition_threshold": 5,
+            "is_transitioning": days > 0 and days < 5,
+            "confidence_level": confidence
+        }
+        
+    except Exception as e:
+        logging.error(f"Error getting analytics source info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/historical-averages")
+async def get_historical_averages(month: Optional[str] = None):
+    """Get historical sales averages, optionally filtered by month"""
+    try:
+        query = {}
+        if month:
+            query["month_year"] = month
+        
+        historical_records = await db.historical_sales_averages.find(query).sort("brand_name", 1).to_list(1000)
+        
+        # Remove _id for JSON serialization
+        for record in historical_records:
+            if '_id' in record:
+                del record['_id']
+        
+        # Get unique months available
+        all_months = await db.historical_sales_averages.distinct("month_year")
+        
+        return {
+            "historical_averages": historical_records,
+            "count": len(historical_records),
+            "available_months": sorted(all_months, reverse=True),
+            "filtered_by_month": month
+        }
+        
+    except Exception as e:
+        logging.error(f"Error fetching historical averages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/calculate-historical-averages")
+async def calculate_historical_averages_manual():
+    """Manually trigger calculation of historical averages (for testing)"""
+    try:
+        result = await calculate_and_store_historical_averages()
+        return {
+            "success": True,
+            "historical_records_created": result.get('historical_records_created', 0),
+            "month_year": result.get('month_year', 'N/A'),
+            "message": "Historical averages calculated and stored successfully"
+        }
+    except Exception as e:
+        logging.error(f"Error manually calculating historical averages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/historical-averages/cleanup")
+async def cleanup_old_historical_data(months_to_keep: int = 36):
+    """Delete historical data older than specified months (default 36 months)"""
+    try:
+        cutoff_date = datetime.now(timezone.utc) - pd.DateOffset(months=months_to_keep)
+        
+        delete_result = await db.historical_sales_averages.delete_many({
+            "calculation_date": {"$lt": cutoff_date}
+        })
+        
+        return {
+            "deleted_count": delete_result.deleted_count,
+            "months_kept": months_to_keep,
+            "message": f"Deleted historical data older than {months_to_keep} months"
+        }
+        
+    except Exception as e:
+        logging.error(f"Error cleaning up historical data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # MODULE 4: Monthly Report Generation APIs
 
 async def generate_monthly_report_data() -> MonthlyReportData:
