@@ -1587,7 +1587,7 @@ async def get_demand_recommendations():
         for record in liquor_records:
             brand_name = record['brand_name']
             selling_rate = record.get('selling_rate', record['rate'])
-            wholesale_rate = record.get('wholesale_rate', selling_rate * 0.9)
+            wholesale_rate = record.get('wholesale_rate', 0.0)
             current_stock_qty = record.get('current_stock_qty', 0)
             avg_daily_sales_qty = record.get('avg_daily_sales_qty', 0)
             stock_days = record['stock_available_days']
