@@ -719,14 +719,10 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 except:
                     pass
             
-            # If rates not in Excel, check if brand exists in DB and use stored rates
-            if (wholesale_rate == 0 or selling_rate == 0):
-                existing_brand = await db.liquor_data.find_one({"brand_name": brand_name})
-                if existing_brand:
-                    if wholesale_rate == 0:
-                        wholesale_rate = existing_brand.get('wholesale_rate', 0.0)
-                    if selling_rate == 0:
-                        selling_rate = existing_brand.get('selling_rate', existing_brand.get('rate', 0.0))
+            # Note: If rates not in Excel, they will be filled from database in the upload endpoint
+            # Store flags to indicate if rates need to be fetched from DB
+            needs_wholesale_from_db = (wholesale_rate == 0)
+            needs_selling_from_db = (selling_rate == 0)
             
             # Get daily stock data
             daily_stock_data = {}
