@@ -1340,10 +1340,22 @@ async def upload_liquor_data(file: UploadFile = File(...)):
 
 @api_router.get("/analytics", response_model=AnalyticsResponse)
 async def get_analytics(overstock_multiplier: float = 3.0):
-    """Get comprehensive analytics including overstocking analysis"""
+    """Get comprehensive analytics including overstocking analysis with smart data source selection"""
     try:
-        # Fetch all liquor data
-        liquor_records = await db.liquor_data.find().to_list(1000)
+        # STEP 1: Determine if we should use historical data
+        use_historical, current_days = await should_use_historical_data()
+        
+        # STEP 2: Fetch appropriate data source
+        if use_historical:
+            # Use historical averages for projection
+            liquor_records = await get_projected_data_from_historical()
+            if not liquor_records:
+                # Fallback to current data if no historical data available
+                liquor_records = await db.liquor_data.find().to_list(1000)
+                use_historical = False
+        else:
+            # Use current month's actual data
+            liquor_records = await db.liquor_data.find().to_list(1000)
         
         if not liquor_records:
             raise HTTPException(status_code=404, detail="No data found. Please upload liquor data first.")
