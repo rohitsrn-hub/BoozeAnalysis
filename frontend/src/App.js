@@ -1389,9 +1389,16 @@ function App() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-gray-900">{analyticsData.overstocked_brands}</div>
-                  <Badge variant="secondary" className="mt-1 text-xs">
-                    {overstockMultiplier}x rule
-                  </Badge>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Badge variant="secondary" className="text-xs">
+                      {overstockMultiplier}x rule
+                    </Badge>
+                    {analyticsSource && analyticsSource.data_source === 'historical' && (
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                        📊 Projected
+                      </Badge>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
