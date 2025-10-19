@@ -168,6 +168,30 @@ function App() {
     }
   };
 
+  // Module 5: Fetch analytics source information
+  const fetchAnalyticsSource = async () => {
+    try {
+      const response = await axios.get(`${API}/analytics-source`);
+      setAnalyticsSource(response.data);
+    } catch (error) {
+      console.error("Error fetching analytics source:", error);
+    }
+  };
+
+  // Module 5: Fetch historical averages
+  const fetchHistoricalAverages = async (month = null) => {
+    try {
+      const url = month ? `${API}/historical-averages?month=${month}` : `${API}/historical-averages`;
+      const response = await axios.get(url);
+      setHistoricalAverages(response.data.historical_averages || []);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching historical averages:", error);
+      toast.error("Failed to fetch historical averages");
+      return null;
+    }
+  };
+
   // Handle full monthly data upload
   const handleFullMonthlyUpload = async (event) => {
     const file = event.target.files[0];
