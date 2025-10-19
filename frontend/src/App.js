@@ -101,6 +101,9 @@ function App() {
       const databaseResponse = await axios.get(`${API}/database-view`);
       setDatabaseView(databaseResponse.data);
       
+      // Module 5: Fetch analytics source info
+      await fetchAnalyticsSource();
+      
       // Extract current D1/DL dates for header display from calculation data
       try {
         if (calculationResponse.data && calculationResponse.data.length > 0) {
