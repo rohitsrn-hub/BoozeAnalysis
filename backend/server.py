@@ -1315,8 +1315,45 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 print(f"✅ Updated {brand_name}: {old_DL_date}({existing_brand.get('DL_stock', 0)}) -> {new_date_column}({new_stock_qty})")
                 
             else:
-                print(f"⚠️ Brand '{brand_name}' (Index: {index_number}) not found in existing data - skipping")
-                # Note: We don't add new brands for today's data uploads
+                # If database is empty (fresh start after reset), create brand as D1
+                if is_fresh_start:
+                    print(f"🆕 Creating fresh D1 record for brand '{brand_name}'")
+                    
+                    # Create fresh brand record with this date as D1 and DL
+                    new_brand_data = {
+                        'id': str(uuid.uuid4()),
+                        'brand_name': brand_name,
+                        'index_number': index_number,
+                        'product_id': f"ID_{index_number}",
+                        'wholesale_rate': 0.0,  # Will be filled when rates are updated
+                        'selling_rate': 0.0,    # Will be filled when rates are updated
+                        'rate': 0.0,
+                        'D1_date': new_date_column,
+                        'D1_stock': new_stock_qty,
+                        'DL_date': new_date_column,
+                        'DL_stock': new_stock_qty,
+                        'current_stock_qty': int(new_stock_qty),
+                        'total_sales_qty': 0.0,  # No sales yet (only one day)
+                        'avg_daily_sales_qty': 0.0,
+                        'monthly_sales_qty': 0.0,
+                        'monthly_sale_value': 0.0,
+                        'monthly_sale_qty': 0,
+                        'stock_value_today': 0.0,  # Will be calculated when rates are set
+                        'stock_ratio': 0.0,
+                        'stock_available_days': 999,
+                        'avg_daily_sale': 0.0,
+                        'stock_value_before': 0.0,
+                        'daily_sales': {new_date_column: new_stock_qty},
+                        'days_analyzed': 1,
+                        'upload_timestamp': datetime.now(timezone.utc)
+                    }
+                    
+                    await db.liquor_data.insert_one(new_brand_data)
+                    new_brands_count += 1
+                    print(f"✅ Created fresh brand '{brand_name}' with D1={new_date_column}, stock={new_stock_qty}")
+                else:
+                    print(f"⚠️ Brand '{brand_name}' (Index: {index_number}) not found in existing data - skipping")
+                    # Note: We don't add new brands for today's data uploads when data exists
         
         # Save upload history
         upload_history = UploadHistory(
