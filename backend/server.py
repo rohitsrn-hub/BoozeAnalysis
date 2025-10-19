@@ -2401,11 +2401,106 @@ async def delete_backup(backup_id: str):
         logging.error(f"Error deleting backup: {e}")
         raise HTTPException(status_code=500, detail=f"Error deleting backup: {str(e)}")
 
+# MODULE 5: Historical Sales Averages - Helper Functions
+
+async def calculate_and_store_historical_averages():
+    """Calculate historical sales averages from current data before reset"""
+    try:
+        liquor_records = await db.liquor_data.find().to_list(10000)
+        
+        if not liquor_records:
+            return {"historical_records_created": 0}
+        
+        # Get month_year from first record's date fields
+        sample_record = liquor_records[0]
+        d1_date = sample_record.get('D1_date', '')
+        
+        # Parse month_year from date string (format: "20-Sep-25")
+        try:
+            if d1_date and d1_date != 'N/A':
+                parts = d1_date.split('-')
+                if len(parts) >= 2:
+                    month = parts[1]  # Sep
+                    year = f"20{parts[2]}" if len(parts) > 2 else "2025"  # 2025
+                    month_year = f"{month}-{year}"
+                else:
+                    month_year = datetime.now().strftime("%b-%Y")
+            else:
+                month_year = datetime.now().strftime("%b-%Y")
+        except:
+            month_year = datetime.now().strftime("%b-%Y")
+        
+        historical_records = []
+        
+        for record in liquor_records:
+            avg_daily_sales_qty = record.get('avg_daily_sales_qty', 0.0)
+            total_sales_qty = record.get('total_sales_qty', 0.0)
+            days_analyzed = record.get('days_analyzed', 0)
+            selling_rate = record.get('selling_rate', record.get('rate', 0))
+            wholesale_rate = record.get('wholesale_rate', 0.0)
+            
+            # Calculate average daily sales value
+            avg_daily_sales_value = avg_daily_sales_qty * selling_rate
+            total_sales_value = total_sales_qty * selling_rate
+            
+            # Only store if there's actual sales data
+            if days_analyzed > 0 and total_sales_qty > 0:
+                historical_avg = HistoricalSalesAverage(
+                    brand_name=record['brand_name'],
+                    month_year=month_year,
+                    average_daily_sales_qty=avg_daily_sales_qty,
+                    average_daily_sales_value=avg_daily_sales_value,
+                    total_sales_quantity=total_sales_qty,
+                    total_sales_value=total_sales_value,
+                    total_sales_days=days_analyzed,
+                    wholesale_rate=wholesale_rate,
+                    selling_rate=selling_rate
+                )
+                historical_records.append(historical_avg.dict())
+        
+        # Store in database
+        if historical_records:
+            await db.historical_sales_averages.insert_many(historical_records)
+            logging.info(f"Stored {len(historical_records)} historical sales averages for {month_year}")
+        
+        return {
+            "historical_records_created": len(historical_records),
+            "month_year": month_year
+        }
+        
+    except Exception as e:
+        logging.error(f"Error calculating historical averages: {e}")
+        return {"historical_records_created": 0, "error": str(e)}
+
+async def get_days_of_current_data() -> int:
+    """Count how many days of sales data we have in current month"""
+    try:
+        liquor_records = await db.liquor_data.find().to_list(1)
+        
+        if not liquor_records:
+            return 0
+        
+        # Get days_analyzed from first record
+        days_analyzed = liquor_records[0].get('days_analyzed', 0)
+        return days_analyzed
+        
+    except Exception as e:
+        logging.error(f"Error getting days of current data: {e}")
+        return 0
+
+async def should_use_historical_data() -> tuple[bool, int]:
+    """Determine if we should use historical data based on current data days"""
+    days = await get_days_of_current_data()
+    return (days < 5, days)
+
 @api_router.post("/stock/reset")
 async def reset_stock_data():
-    """Reset all date-wise stock data after creating backup"""
+    """Reset all date-wise stock data after calculating historical averages and creating backup"""
     try:
-        # First, create automatic backup
+        # STEP 1: Calculate and store historical sales averages
+        historical_result = await calculate_and_store_historical_averages()
+        
+        # STEP 2: Create automatic backup
         liquor_records = await db.liquor_data.find().to_list(10000)
         
         if not liquor_records:
@@ -2428,16 +2523,18 @@ async def reset_stock_data():
         
         await db.stock_backups.insert_one(backup.dict())
         
-        # Now delete all liquor data
+        # STEP 3: Delete all liquor data
         delete_result = await db.liquor_data.delete_many({})
         
-        logging.info(f"Reset completed: Backed up and deleted {delete_result.deleted_count} records")
+        logging.info(f"Reset completed: Stored {historical_result['historical_records_created']} historical averages, backed up and deleted {delete_result.deleted_count} records")
         
         return {
             "backup_id": backup.id,
             "records_backed_up": len(backup_data),
             "records_deleted": delete_result.deleted_count,
-            "message": "Stock data reset successfully. Backup created.",
+            "historical_records_created": historical_result.get('historical_records_created', 0),
+            "historical_month": historical_result.get('month_year', 'N/A'),
+            "message": "Stock data reset successfully. Historical averages stored and backup created.",
             "next_upload_becomes_d1": True
         }
         
