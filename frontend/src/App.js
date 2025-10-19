@@ -1276,6 +1276,61 @@ function App() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Module 5: Data Source Indicator Banner */}
+        {analyticsSource && hasData && (
+          <Alert className={`mb-6 ${
+            analyticsSource.data_source === 'historical' 
+              ? 'bg-gradient-to-r from-purple-50 to-blue-50 border-purple-300' 
+              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
+          }`}>
+            <AlertDescription className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {analyticsSource.data_source === 'historical' ? (
+                  <>
+                    <Database className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <p className="font-semibold text-purple-900">
+                        🔮 Using {analyticsSource.using_month} Historical Averages (Day {analyticsSource.days_of_data}/30)
+                      </p>
+                      <p className="text-sm text-purple-700">
+                        {analyticsSource.is_transitioning 
+                          ? `Switching to live data in ${5 - analyticsSource.days_of_data} day(s)`
+                          : 'Projecting monthly sales based on historical patterns'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-900">
+                        📊 Using {analyticsSource.using_month} Live Data (Day {analyticsSource.days_of_data}/30)
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Analysis based on actual current month sales data
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <Badge 
+                variant="outline" 
+                className={
+                  analyticsSource.confidence_level === 'high' ? 'bg-green-100 text-green-800 border-green-300' :
+                  analyticsSource.confidence_level === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                  analyticsSource.confidence_level === 'low' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                  'bg-gray-100 text-gray-800 border-gray-300'
+                }
+              >
+                {analyticsSource.confidence_level === 'high' ? '✓ High Confidence' :
+                 analyticsSource.confidence_level === 'medium' ? '⚡ Medium Confidence' :
+                 analyticsSource.confidence_level === 'low' ? '⚠ Low Confidence' :
+                 '○ No Data'}
+              </Badge>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {!hasData && !loading ? (
           <div className="text-center py-12">
             <div className="p-6 bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300">
