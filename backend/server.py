@@ -2505,6 +2505,90 @@ async def should_use_historical_data() -> tuple[bool, int]:
     days = await get_days_of_current_data()
     return (days < 5, days)
 
+async def get_projected_data_from_historical():
+    """Get projected liquor data based on historical sales averages"""
+    try:
+        # Get the most recent historical data
+        historical_records = await db.historical_sales_averages.find().to_list(1000)
+        
+        if not historical_records:
+            return []
+        
+        # Get current stock data (if any exists from new month uploads)
+        current_stock_dict = {}
+        current_records = await db.liquor_data.find().to_list(1000)
+        for record in current_records:
+            current_stock_dict[record['brand_name']] = {
+                'current_stock_qty': record.get('current_stock_qty', 0),
+                'stock_value_today': record.get('stock_value_today', 0),
+                'D1_stock': record.get('D1_stock', 0),
+                'DL_stock': record.get('DL_stock', 0),
+                'D1_date': record.get('D1_date', 'N/A'),
+                'DL_date': record.get('DL_date', 'N/A'),
+            }
+        
+        # Create projected records based on historical averages
+        projected_records = []
+        for hist_record in historical_records:
+            brand_name = hist_record['brand_name']
+            avg_daily_qty = hist_record['average_daily_sales_qty']
+            selling_rate = hist_record['selling_rate']
+            wholesale_rate = hist_record['wholesale_rate']
+            
+            # Project for 30 days (full month)
+            projected_monthly_qty = avg_daily_qty * 30
+            projected_monthly_value = projected_monthly_qty * selling_rate
+            
+            # Get current stock if available, otherwise default to 0
+            current_stock_info = current_stock_dict.get(brand_name, {})
+            current_stock_qty = current_stock_info.get('current_stock_qty', 0)
+            stock_value_today = current_stock_info.get('stock_value_today', 0)
+            
+            # Calculate stock ratios
+            if avg_daily_qty > 0:
+                stock_available_days = current_stock_qty / avg_daily_qty
+                stock_ratio = stock_available_days / 30  # Days of stock / Days in month
+            else:
+                stock_available_days = 0
+                stock_ratio = 0
+            
+            # Create projected record in same format as liquor_data
+            projected_record = {
+                'id': str(uuid.uuid4()),
+                'brand_name': brand_name,
+                'rate': selling_rate,
+                'daily_sales': {},  # Empty for historical projection
+                'monthly_sale_qty': int(projected_monthly_qty),
+                'monthly_sale_value': projected_monthly_value,
+                'avg_daily_sale': projected_monthly_value / 30,
+                'stock_available_days': stock_available_days,
+                'stock_value_before': stock_value_today,
+                'stock_value_today': stock_value_today,
+                'stock_ratio': stock_ratio,
+                'index_number': 0,
+                'wholesale_rate': wholesale_rate,
+                'selling_rate': selling_rate,
+                'D1_date': current_stock_info.get('D1_date', 'N/A'),
+                'D1_stock': current_stock_info.get('D1_stock', 0),
+                'DL_date': current_stock_info.get('DL_date', 'N/A'),
+                'DL_stock': current_stock_info.get('DL_stock', 0),
+                'total_sales_qty': projected_monthly_qty,
+                'avg_daily_sales_qty': avg_daily_qty,
+                'days_analyzed': 30,  # Projected for full month
+                'current_stock_qty': current_stock_qty,
+                'upload_timestamp': datetime.now(timezone.utc),
+                '_data_source': 'historical'  # Mark as historical data
+            }
+            
+            projected_records.append(projected_record)
+        
+        logging.info(f"Generated {len(projected_records)} projected records from historical data")
+        return projected_records
+        
+    except Exception as e:
+        logging.error(f"Error getting projected data from historical: {e}")
+        return []
+
 @api_router.post("/stock/reset")
 async def reset_stock_data():
     """Reset all date-wise stock data after calculating historical averages and creating backup"""
