@@ -2315,6 +2315,184 @@ function App() {
                 )}
               </TabsContent>
 
+              {/* Module 5: Historical Averages Tab */}
+              <TabsContent value="historical-averages" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Historical Sales Averages</h2>
+                    <p className="text-gray-600">View past month's sales patterns for predictive analysis (36 months retention)</p>
+                  </div>
+                  <Button
+                    onClick={() => fetchHistoricalAverages()}
+                    variant="outline"
+                    size="sm"
+                    data-testid="refresh-historical-btn"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+
+                {historicalAverages && historicalAverages.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-purple-600">{historicalAverages.length}</div>
+                            <div className="text-sm text-gray-600 mt-1">Brands Tracked</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-blue-600">
+                              {historicalAverages[0]?.month_year || 'N/A'}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">Latest Month</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-green-600">
+                              {Math.round(historicalAverages.reduce((sum, item) => sum + item.average_daily_sales_qty, 0) / historicalAverages.length)}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">Avg Daily Sales</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-orange-600">
+                              {formatCurrency(historicalAverages.reduce((sum, item) => sum + item.total_sales_value, 0))}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">Total Revenue</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Historical Data Table */}
+                    <Card data-testid="historical-averages-table">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <History className="w-5 h-5 text-violet-600" />
+                          <span>Brand-Wise Historical Averages</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Average daily sales from previous months used for projection when current data is insufficient
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-purple-50">
+                                <th className="text-left p-3 font-semibold text-purple-900">Brand Name</th>
+                                <th className="text-left p-3 font-semibold text-purple-900">Month</th>
+                                <th className="text-right p-3 font-semibold text-purple-900">Avg Daily Qty</th>
+                                <th className="text-right p-3 font-semibold text-purple-900">Avg Daily Value</th>
+                                <th className="text-right p-3 font-semibold text-purple-900">Total Sales Qty</th>
+                                <th className="text-right p-3 font-semibold text-purple-900">Total Revenue</th>
+                                <th className="text-center p-3 font-semibold text-purple-900">Days Analyzed</th>
+                                <th className="text-right p-3 font-semibold text-purple-900">Projected Monthly</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historicalAverages.map((item, index) => (
+                                <tr key={index} className="border-b hover:bg-purple-25 transition-colors">
+                                  <td className="p-3 font-medium text-gray-900">{item.brand_name}</td>
+                                  <td className="p-3 text-gray-700">
+                                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">
+                                      {item.month_year}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-3 text-right text-gray-900 font-mono">
+                                    {item.average_daily_sales_qty.toFixed(1)}
+                                  </td>
+                                  <td className="p-3 text-right text-gray-900 font-mono">
+                                    {formatCurrency(item.average_daily_sales_value)}
+                                  </td>
+                                  <td className="p-3 text-right text-gray-900 font-mono">
+                                    {Math.round(item.total_sales_quantity)}
+                                  </td>
+                                  <td className="p-3 text-right text-green-600 font-semibold">
+                                    {formatCurrency(item.total_sales_value)}
+                                  </td>
+                                  <td className="p-3 text-center">
+                                    <Badge variant="secondary">{item.total_sales_days} days</Badge>
+                                  </td>
+                                  <td className="p-3 text-right text-blue-600 font-semibold">
+                                    {Math.round(item.average_daily_sales_qty * 30)} units
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-purple-50 font-bold">
+                                <td className="p-3 text-gray-900" colSpan="2">TOTALS</td>
+                                <td className="p-3 text-right text-gray-900">
+                                  {historicalAverages.reduce((sum, item) => sum + item.average_daily_sales_qty, 0).toFixed(1)}
+                                </td>
+                                <td className="p-3 text-right text-gray-900">
+                                  {formatCurrency(historicalAverages.reduce((sum, item) => sum + item.average_daily_sales_value, 0))}
+                                </td>
+                                <td className="p-3 text-right text-gray-900">
+                                  {Math.round(historicalAverages.reduce((sum, item) => sum + item.total_sales_quantity, 0))}
+                                </td>
+                                <td className="p-3 text-right text-green-600">
+                                  {formatCurrency(historicalAverages.reduce((sum, item) => sum + item.total_sales_value, 0))}
+                                </td>
+                                <td className="p-3"></td>
+                                <td className="p-3 text-right text-blue-600">
+                                  {Math.round(historicalAverages.reduce((sum, item) => sum + item.average_daily_sales_qty, 0) * 30)}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Info Card */}
+                    <Alert className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300">
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-semibold text-blue-900">💡 How Historical Averages Work:</p>
+                          <ul className="text-sm text-blue-800 space-y-1 ml-4">
+                            <li>• <strong>Automatic Storage:</strong> When you reset stock data, historical averages are automatically calculated and stored</li>
+                            <li>• <strong>Smart Analytics:</strong> For the first 5 days of a new month, analytics use historical data for projections</li>
+                            <li>• <strong>Seamless Transition:</strong> After day 5, system automatically switches to current month's actual data</li>
+                            <li>• <strong>36-Month Retention:</strong> System keeps 3 years of historical data for seasonal pattern analysis</li>
+                            <li>• <strong>Projected Monthly:</strong> Shows expected sales for full month based on daily average (avg × 30 days)</li>
+                          </ul>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                ) : (
+                  <Card>
+                    <CardContent className="py-12">
+                      <div className="text-center">
+                        <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Historical Data Available</h3>
+                        <p className="text-gray-600 mb-4">
+                          Historical averages will be automatically created when you reset stock data at month end
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          After your first stock reset, this tab will show brand-wise sales patterns from previous months
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
             </Tabs>
           </div>
         ) : null}
