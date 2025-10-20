@@ -1098,6 +1098,7 @@ function App() {
                 </Dialog>
               </div>
             </div>
+          </div>
           
           {/* NEW LAYOUT: Three sections - Left (Overstock), Center (Buttons), Right (Today's Data) */}
           <div className="flex justify-between items-start mt-4 gap-6">
