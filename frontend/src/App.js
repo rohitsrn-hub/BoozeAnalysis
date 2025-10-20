@@ -1100,8 +1100,138 @@ function App() {
             </div>
           </div>
           
-          <div className="flex justify-between items-start mt-4 gap-4">
-            {/* LEFT SIDE: HERO - Today's Data Upload Button with D1/DL Dates */}
+          {/* NEW LAYOUT: Three sections - Left (Overstock), Center (Buttons), Right (Today's Data) */}
+          <div className="flex justify-between items-start mt-4 gap-6">
+            
+            {/* LEFT SECTION: Overstock Multiplier */}
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <Label htmlFor="multiplier" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Overstock Multiplier:
+              </Label>
+              <Input
+                id="multiplier"
+                type="number"
+                step="0.1"
+                min="1"
+                max="10"
+                value={overstockMultiplier}
+                onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                className="w-16 text-sm"
+                data-testid="overstock-multiplier-input"
+              />
+              <Button
+                onClick={handleMultiplierChange}
+                size="sm"
+                variant="outline"
+                disabled={!hasData || loading}
+                data-testid="update-multiplier-btn"
+                className="text-sm"
+              >
+                Update
+              </Button>
+            </div>
+
+            {/* CENTER SECTION: Action Buttons in Two Rows */}
+            <div className="flex flex-col space-y-2 flex-grow">
+              {/* Row 1: Refresh, Help, History */}
+              <div className="flex items-center justify-center space-x-3">
+                <Button
+                  onClick={handleManualRefresh}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-medium"
+                  disabled={loading}
+                  data-testid="refresh-btn"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={() => setShowOnboarding(true)}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-medium"
+                  data-testid="help-btn"
+                >
+                  <HelpCircle className="w-3 h-3 mr-1" />
+                  Help
+                </Button>
+                <Button
+                  onClick={() => {
+                    fetchUploadHistory();
+                    setShowUploadHistory(true);
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-medium"
+                  data-testid="history-btn"
+                >
+                  <History className="w-3 h-3 mr-1" />
+                  History
+                </Button>
+              </div>
+
+              {/* Row 2: Full Monthly, Add Brand, Update Rates, Backups */}
+              <div className="flex items-center justify-center space-x-3">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => document.getElementById('full-monthly-upload').click()}
+                  disabled={loading}
+                  data-testid="full-monthly-btn"
+                  className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs font-medium"
+                >
+                  <Upload className="w-3 h-3 mr-1" />
+                  Full Monthly
+                </Button>
+                <Input
+                  id="full-monthly-upload"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFullMonthlyUpload}
+                  className="hidden"
+                  data-testid="full-monthly-file-input"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowBrandModal(true)}
+                  disabled={loading}
+                  data-testid="add-brand-btn"
+                  className="border-teal-600 text-teal-600 hover:bg-teal-50 text-xs font-medium"
+                >
+                  <Package className="w-3 h-3 mr-1" />
+                  Add Brand
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowRatesModal(true)}
+                  disabled={loading}
+                  data-testid="update-rates-btn"
+                  className="border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-xs font-medium"
+                >
+                  <DollarSign className="w-3 h-3 mr-1" />
+                  Update Rates
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    fetchBackups();
+                    setShowBackupsDialog(true);
+                  }}
+                  disabled={loading}
+                  data-testid="backups-btn"
+                  className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs font-medium"
+                >
+                  <Database className="w-3 h-3 mr-1" />
+                  Backups
+                </Button>
+              </div>
+            </div>
+
+            {/* RIGHT SECTION: Today's Data Upload Button with D1/DL Dates */}
             <div className="flex-shrink-0">
               <Button 
                 variant="outline" 
@@ -1141,103 +1271,13 @@ function App() {
                 data-testid="todays-data-file-input"
               />
             </div>
+          </div>
 
-            {/* RIGHT SIDE: Other Action Buttons */}
-            <div className="flex flex-col space-y-3 flex-grow">
-              {/* Row 1: Upload & Brand Management */}
-              <div className="flex items-center justify-end space-x-3">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => document.getElementById('full-monthly-upload').click()}
-                      disabled={loading}
-                      data-testid="full-monthly-btn"
-                      className="border-emerald-600 text-emerald-600 hover:bg-emerald-50 text-xs font-medium"
-                    >
-                      <Upload className="w-3 h-3 mr-1" />
-                      Full Monthly
-                    </Button>
-                    <Input
-                      id="full-monthly-upload"
-                      type="file"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={handleFullMonthlyUpload}
-                      className="hidden"
-                      data-testid="full-monthly-file-input"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowBrandModal(true)}
-                      disabled={loading}
-                      data-testid="add-brand-btn"
-                      className="border-teal-600 text-teal-600 hover:bg-teal-50 text-xs font-medium"
-                    >
-                      <Package className="w-3 h-3 mr-1" />
-                      Add Brand
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => setShowRatesModal(true)}
-                      disabled={loading}
-                      data-testid="update-rates-btn"
-                      className="border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-xs font-medium"
-                    >
-                      <DollarSign className="w-3 h-3 mr-1" />
-                      Update Rates
-                    </Button>
-                  </div>
-
-                  {/* Row 2: Operations & Report Management + Overstock Multiplier */}
-                  <div className="flex items-center justify-between">
-                    {/* Overstock Multiplier - aligned with second row buttons (blue arrow position) */}
-                    <div className="flex items-center space-x-2">
-                      <Label htmlFor="multiplier" className="text-xs font-medium text-gray-700">
-                        Overstock Multiplier:
-                      </Label>
-                      <Input
-                        id="multiplier"
-                        type="number"
-                        step="0.1"
-                        min="1"
-                        max="10"
-                        value={overstockMultiplier}
-                        onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
-                        className="w-16 text-xs"
-                        data-testid="overstock-multiplier-input"
-                      />
-                      <Button
-                        onClick={handleMultiplierChange}
-                        size="sm"
-                        variant="outline"
-                        disabled={!hasData || loading}
-                        data-testid="update-multiplier-btn"
-                        className="text-xs"
-                      >
-                        Update
-                      </Button>
-                    </div>
-                    
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-3">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          fetchBackups();
-                          setShowBackupsDialog(true);
-                        }}
-                        disabled={loading}
-                        data-testid="backups-btn"
-                        className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs font-medium"
-                      >
-                        <Database className="w-3 h-3 mr-1" />
-                        Backups
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
+          {/* Additional Row: Reset Stock, Export Excel, Generate PDF (below main layout) */}
+          <div className="flex items-center justify-center space-x-3 mt-3">
+            <Button 
+              variant="outline" 
+              size="sm"
                         onClick={() => setShowResetDialog(true)}
                         disabled={loading || !hasData}
                         data-testid="reset-stock-btn"
