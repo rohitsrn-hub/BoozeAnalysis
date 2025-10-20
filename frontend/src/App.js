@@ -1278,39 +1278,37 @@ function App() {
             <Button 
               variant="outline" 
               size="sm"
-                        onClick={() => setShowResetDialog(true)}
-                        disabled={loading || !hasData}
-                        data-testid="reset-stock-btn"
-                        className="border-red-600 text-red-600 hover:bg-red-50 text-xs font-medium"
-                      >
-                        <RefreshCw className="w-3 h-3 mr-1" />
-                        Reset Stock
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={handleGenerateExcelReport}
-                        disabled={loading || !hasData || generatingReport}
-                        data-testid="excel-report-btn"
-                        className="border-yellow-600 text-yellow-600 hover:bg-yellow-50 text-xs font-medium"
-                      >
-                        <FileSpreadsheet className="w-3 h-3 mr-1" />
-                        {generatingReport ? 'Generating...' : 'Export Excel'}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setShowReportModal(true)}
-                        disabled={loading || !hasData || generatingReport}
-                        data-testid="pdf-report-btn"
-                        className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs font-medium"
-                      >
-                        <FileText className="w-3 h-3 mr-1" />
-                        Generate PDF
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              onClick={() => setShowResetDialog(true)}
+              disabled={loading || !hasData}
+              data-testid="reset-stock-btn"
+              className="border-red-600 text-red-600 hover:bg-red-50 text-xs font-medium"
+            >
+              <RefreshCw className="w-3 h-3 mr-1" />
+              Reset Stock
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleGenerateExcelReport}
+              disabled={loading || !hasData || generatingReport}
+              data-testid="excel-report-btn"
+              className="border-yellow-600 text-yellow-600 hover:bg-yellow-50 text-xs font-medium"
+            >
+              <FileSpreadsheet className="w-3 h-3 mr-1" />
+              {generatingReport ? 'Generating...' : 'Export Excel'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowReportModal(true)}
+              disabled={loading || !hasData || generatingReport}
+              data-testid="pdf-report-btn"
+              className="border-pink-600 text-pink-600 hover:bg-pink-50 text-xs font-medium"
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              Generate PDF
+            </Button>
+          </div>
           </div>
           
           {/* Upload Progress */}
