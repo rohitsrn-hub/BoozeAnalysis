@@ -1308,7 +1308,6 @@ function App() {
               Generate PDF
             </Button>
           </div>
-          </div>
           
           {/* Upload Progress */}
           {uploadProgress > 0 && (
