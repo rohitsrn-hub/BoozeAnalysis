@@ -1319,6 +1319,9 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 if is_fresh_start:
                     print(f"🆕 Creating fresh D1 record for brand '{brand_name}'")
                     
+                    # Import datetime for timestamp (using global import from line 13)
+                    from datetime import datetime, timezone
+                    
                     # Create fresh brand record with this date as D1 and DL
                     new_brand_data = {
                         'id': str(uuid.uuid4()),
