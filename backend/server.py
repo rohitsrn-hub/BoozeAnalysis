@@ -2824,6 +2824,31 @@ async def cleanup_old_historical_data(months_to_keep: int = 36):
         logging.error(f"Error cleaning up historical data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/clear-all-data")
+async def clear_all_data():
+    """Clear all data from the database (liquor_data, backups, historical_averages, upload_history)"""
+    try:
+        # Delete all collections
+        liquor_deleted = await db.liquor_data.delete_many({})
+        backups_deleted = await db.stock_backups.delete_many({})
+        historical_deleted = await db.historical_sales_averages.delete_many({})
+        history_deleted = await db.upload_history.delete_many({})
+        
+        logging.info(f"Cleared all data - Liquor: {liquor_deleted.deleted_count}, Backups: {backups_deleted.deleted_count}, Historical: {historical_deleted.deleted_count}, Upload History: {history_deleted.deleted_count}")
+        
+        return {
+            "success": True,
+            "liquor_records_deleted": liquor_deleted.deleted_count,
+            "backups_deleted": backups_deleted.deleted_count,
+            "historical_records_deleted": historical_deleted.deleted_count,
+            "upload_history_deleted": history_deleted.deleted_count,
+            "message": "All data cleared successfully. You can now upload fresh data."
+        }
+        
+    except Exception as e:
+        logging.error(f"Error clearing all data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # MODULE 4: Monthly Report Generation APIs
 
 async def generate_monthly_report_data() -> MonthlyReportData:
