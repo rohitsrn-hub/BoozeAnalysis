@@ -633,6 +633,47 @@ function App() {
     }
   };
 
+  // Module 5: Restore from backup
+  const handleRestoreFromBackup = async (backupId, backupReason, totalRecords) => {
+    const confirmed = window.confirm(
+      `⚠️ RESTORE FROM BACKUP\n\n` +
+      `This will:\n` +
+      `• DELETE all current data (if any)\n` +
+      `• RESTORE ${totalRecords} records from this backup\n` +
+      `• RECALCULATE historical averages\n\n` +
+      `Backup: ${backupReason}\n\n` +
+      `Are you sure you want to proceed?`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      toast.info("Restoring data from backup...");
+      
+      const response = await axios.post(`${API}/stock/backup/${backupId}/restore`);
+      
+      toast.success(
+        `Successfully restored ${response.data.records_restored} records!\n` +
+        `Historical averages: ${response.data.historical_records_created} created`
+      );
+      
+      // Refresh all data
+      await fetchAnalytics(overstockMultiplier);
+      await fetchBackups();
+      setShowBackupsDialog(false);
+      
+    } catch (error) {
+      console.error("Error restoring from backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to restore from backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Module 4: Report Generation Handlers
   const handleGenerateExcelReport = async () => {
     try {
