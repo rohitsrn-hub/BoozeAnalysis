@@ -255,6 +255,18 @@ backend:
         agent: "testing"
         comment: "COMPREHENSIVE DATE-WISE ANALYSIS TESTING COMPLETED: ✅ Excel Date-wise Sales sheet structure verified: 62 brand records with 11 date columns (D1, D2, D3, D4, D5...) ✅ Required columns present: Index, Brand Name, Wholesale Rate (₹), Retail Rate (₹) ✅ Date-wise sales data properly extracted from daily_sales database field ✅ PDF Date-wise Analysis functionality verified: include_datewise_analysis=true parameter working ✅ PDF with date-wise analysis (3,875 bytes) significantly larger than without (2,271 bytes) ✅ Date-wise table in PDF includes proper structure with chronologically sorted date columns ✅ Both Excel and PDF reports include complete date-wise sales structure as requested ✅ Fixed critical bug in Excel generation (liquor_records variable not defined) ✅ All date columns properly formatted and accessible in both report formats. The date-wise analysis feature is fully functional and meets all specified requirements for both Excel and PDF report generation."
 
+  - task: "Smart Two-Pass Date Parsing for Excel Uploads"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "User reported incorrect DL date detection from Trial 5 Excel file due to mixed/ambiguous date formats (DD-Mon-YY, DD/MM/YY, MM/DD/YYYY). Implemented smart two-pass parsing system: detect_date_format() analyzes ALL date columns to determine if numeric dates are DD/MM or MM/DD format. Logic: if any first number > 12, must be DD/MM (day can be 13-31); if second number > 12, confirms DD/MM; if all values ≤ 12, defaults to DD/MM (Indian standard). Updated parse_date_column() to use detected format. Backend restarted successfully. Needs testing with actual Excel file containing mixed date formats to verify D1/DL detection is now accurate."
+
 frontend:
   - task: "Fix tab styling to show initial colors"
     implemented: true
