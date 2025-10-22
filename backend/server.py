@@ -597,13 +597,14 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     print(f"Skipping unparseable date: '{col_name}' (error: {e})")
                     return None
             
-            # Pattern 2: Numeric date formats (DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, etc.)
-            # Try multiple numeric patterns
+            # Pattern 2: Numeric date formats
+            # IMPORTANT: Try DD/MM format FIRST (European/Indian standard) before MM/DD (US format)
+            # This assumes dates like 10/9/25 = 10th September (not Sept 10th)
             numeric_patterns = [
-                # DD/MM/YYYY or DD/MM/YY (European/Indian format)
-                (r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', '%d/%m/%Y', '%d/%m/%y'),
-                # YYYY-MM-DD or YYYY/MM/DD (ISO format)
-                (r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', '%Y/%m/%d', None),
+                # YYYY-MM-DD or YYYY/MM/DD (ISO format - unambiguous, check first)
+                (r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', '%Y/%m/%d', None, 'YYYY/MM/DD'),
+                # DD/MM/YYYY or DD/MM/YY (European/Indian format - most common for your region)
+                (r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', '%d/%m/%Y', '%d/%m/%y', 'DD/MM/YY'),
             ]
             
             for pattern_regex, format_4digit, format_2digit in numeric_patterns:
