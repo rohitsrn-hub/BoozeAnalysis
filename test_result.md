@@ -269,6 +269,39 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE SMART DATE PARSING TESTING COMPLETED: ✅ ALL 7 DATE PARSING TESTS PASSED (100% success rate) ✅ DD/MM Unambiguous Detection: Successfully uploaded and parsed DD/MM format with day > 12 (dates like 13/09/25, 15/09/25) ✅ MM/DD Unambiguous Detection: Successfully detected DD/MM format when second position > 12 (dates like 09/13/25 correctly parsed as DD/MM) ✅ Ambiguous Default Detection: Successfully defaulted to DD/MM format for ambiguous dates (all values ≤ 12) ✅ Mixed Date Format Support: Successfully parsed and sorted mixed date formats (20-Sep-25, 21/09/25, 22-Sep, 23/09/2025, 24-Oct-25) ✅ D1/DL Identification Accuracy: D1 and DL dates correctly identified with proper stock logic (D1: 15/09/25(100.0), DL: 28/09/25(60.0), Stock decline: 40.0) ✅ Analytics Integration: Analytics endpoint returns proper date progression (15/09/25 to 28/09/25, 5 dates total) ✅ Regression Testing: All existing functionality continues working (analytics, database-view, calculation-details endpoints) ✅ CRITICAL SUCCESS: Smart two-pass date format detection working perfectly - correctly identifies DD/MM vs MM/DD based on numeric analysis ✅ Date parsing handles all formats: numeric dates (DD/MM, MM/DD), month-name dates (20-Sep-25), mixed formats, and chronological sorting ✅ D1/DL detection accurate with proper stock value logic verification. The Smart Two-Pass Date Parsing system is fully functional and resolves the user's reported issue with incorrect D1/DL date detection from mixed date formats."
+      - working: true
+        agent: "main"
+        comment: "Tested successfully. User deployed to production via Vercel. Smart date parsing working as expected."
+
+  - task: "Historical Data Capture During Stock Reset & Restore"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported: After stock reset in production, no historical data is captured. Restore backup works but doesn't create historical averages. Scenario: User uploaded Full Monthly data (Oct Day 1-22) then immediately reset."
+      - working: "NA"
+        agent: "main"
+        comment: "FIXED: Enhanced calculate_and_store_historical_averages() function: (1) Relaxed condition from 'days_analyzed > 0 AND total_sales_qty > 0' to 'days_analyzed >= 1 OR total_sales_qty > 0' to capture more data, (2) Added parameter to accept source_records for restore scenarios, (3) Added detailed logging showing brands_with_data vs brands_skipped, (4) Deletes existing historical records for same month to avoid duplicates, (5) Returns detailed result including month_year and message. Updated restore endpoint to calculate historical FROM BACKUP DATA before clearing current data, ensuring backup data's historical averages are preserved. Enhanced logging throughout with emoji indicators for better debugging. Stock reset now returns detailed historical_message indicating success/failure reasons."
+
+  - task: "Improve Today's Data Upload Functionality"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported: After stock reset, Today's Data upload fails with 500 error. Full Monthly upload works fine. Database is empty after reset."
+      - working: "NA"
+        agent: "main"
+        comment: "IMPROVED: Enhanced Today's Data upload success messages to distinguish between fresh start (empty DB) vs daily update scenarios. Returns is_fresh_start flag and new_date in response. Message now clearly indicates when brands are created fresh (D1 scenario) vs updated. Upload type changed to 'fresh_start' when database is empty. Better user guidance: 'Fresh start: Created X brands with D1 date. Upload more daily data or update rates next.' Existing empty DB handling logic (lines 1410-1447) verified to be working correctly."
 
 frontend:
   - task: "Fix tab styling to show initial colors"
