@@ -618,7 +618,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     # Try parsing with 4-digit year format first
                     try:
                         parsed_date = datetime.strptime(date_str, format_4digit)
-                        print(f"✓ Parsed date (numeric 4-digit year): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                        print(f"✓ Parsed date ({format_name} 4-digit): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
                         return parsed_date
                     except ValueError:
                         pass
@@ -630,7 +630,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                             # Adjust year to 20xx if it's 2-digit
                             if parsed_date.year < 100:
                                 parsed_date = parsed_date.replace(year=2000 + parsed_date.year)
-                            print(f"✓ Parsed date (numeric 2-digit year): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                            print(f"✓ Parsed date ({format_name} 2-digit): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
                             return parsed_date
                         except ValueError:
                             pass
