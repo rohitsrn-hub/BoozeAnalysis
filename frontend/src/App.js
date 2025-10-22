@@ -2805,6 +2805,17 @@ function App() {
                       </div>
                       <div className="flex gap-2">
                         <Button
+                          onClick={() => handleRestoreFromBackup(backup.id, backup.backup_reason, backup.total_records)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`restore-backup-${index}`}
+                          className="border-green-600 text-green-600 hover:bg-green-50"
+                          disabled={loading}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-1" />
+                          Restore
+                        </Button>
+                        <Button
                           onClick={() => handleDownloadBackup(backup.id, backup.backup_timestamp)}
                           size="sm"
                           variant="outline"
