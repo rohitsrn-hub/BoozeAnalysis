@@ -573,7 +573,8 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             col_clean = str(col_name).strip()
             
             # Pattern 1: day-month-year with month name (20-Sep-25, 01-Oct-25, etc.)
-            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', col_clean, re.IGNORECASE)
+            # Use [A-Za-z] instead of \w to ensure we match letters only (not digits)
+            match = re.search(r'(\d{1,2})[-/]([A-Za-z]{3})[-/]?(\d{0,4})', col_clean, re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
                 
