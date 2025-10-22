@@ -1,0 +1,73 @@
+{
+  "summary": {
+    "passed": 7,
+    "total": 7,
+    "success_rate": 100.0,
+    "timestamp": "2025-10-22T12:56:19.949314"
+  },
+  "detailed_results": [
+    {
+      "test_name": "DD/MM Unambiguous Detection",
+      "status": "PASS",
+      "message": "Successfully uploaded and parsed DD/MM format with day > 12",
+      "timestamp": "2025-10-22T12:56:12.740695",
+      "details": "Uploaded 3 records, detected dates: ['13/09/25', '15/09/25', '17/09/25']"
+    },
+    {
+      "test_name": "MM/DD Unambiguous Detection",
+      "status": "PASS",
+      "message": "Successfully detected DD/MM format when second position > 12",
+      "timestamp": "2025-10-22T12:56:13.812092",
+      "details": "Uploaded 3 records, detected dates: ['09/13/25', '09/15/25', '09/17/25']"
+    },
+    {
+      "test_name": "Ambiguous Default Detection",
+      "status": "PASS",
+      "message": "Successfully defaulted to DD/MM format for ambiguous dates",
+      "timestamp": "2025-10-22T12:56:14.857216",
+      "details": "Uploaded 3 records, detected dates: ['12/07/25', '11/08/25', '10/09/25']"
+    },
+    {
+      "test_name": "Mixed Date Formats",
+      "status": "PASS",
+      "message": "Successfully parsed and sorted mixed date formats",
+      "timestamp": "2025-10-22T12:56:15.887090",
+      "details": "Uploaded 3 records, chronological dates: ['20-Sep-25', '21/09/25', '22-Sep', '23/09/2025', '24-Oct-25']"
+    },
+    {
+      "test_name": "D1/DL Identification",
+      "status": "PASS",
+      "message": "D1 and DL dates correctly identified with proper stock logic",
+      "timestamp": "2025-10-22T12:56:16.915812",
+      "details": "D1: 15/09/25(100.0), DL: 28/09/25(60.0), Stock decline: 40.0"
+    },
+    {
+      "test_name": "Analytics Integration",
+      "status": "PASS",
+      "message": "Analytics endpoint returns proper date progression",
+      "timestamp": "2025-10-22T12:56:17.924322",
+      "details": "Date range: 15/09/25 to 28/09/25 (5 dates total)"
+    },
+    {
+      "test_name": "Regression - Analytics endpoint",
+      "status": "PASS",
+      "message": "Endpoint functioning normally",
+      "timestamp": "2025-10-22T12:56:18.933166",
+      "details": "Status: 200"
+    },
+    {
+      "test_name": "Regression - Database view endpoint",
+      "status": "PASS",
+      "message": "Endpoint functioning normally",
+      "timestamp": "2025-10-22T12:56:18.941017",
+      "details": "Status: 200"
+    },
+    {
+      "test_name": "Regression - Calculation details endpoint",
+      "status": "PASS",
+      "message": "Endpoint functioning normally",
+      "timestamp": "2025-10-22T12:56:18.949041",
+      "details": "Status: 200"
+    }
+  ]
+}
