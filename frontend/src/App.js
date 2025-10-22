@@ -922,17 +922,15 @@ function App() {
       {/* Header */}
       <div className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-start justify-between">
-            {/* Left side - Title and D1/DL info */}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
-              <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
-            </div>
-            
-            {/* Right side - Control buttons */}
-            <div className="flex items-center space-x-4">
-              {/* Control Buttons - moved to far right */}
-              <div className="flex items-center space-x-2">
+          {/* Header Title Section */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
+            <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
+          </div>
+
+          {/* Hidden Dialog Components for Help and History (triggered from center buttons) */}
+          <div className="hidden">
+            <div className="flex items-center space-x-2">
                 {/* Refresh Button */}
                 <Button
                   onClick={handleManualRefresh}
