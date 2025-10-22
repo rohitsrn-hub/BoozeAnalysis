@@ -698,7 +698,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     # Filter out invalid date columns and sort the valid ones
     valid_date_columns = []
     for col in date_columns:
-        parsed_date = parse_date_column(col)
+        parsed_date = parse_date_column(col, date_format=detected_format)
         if parsed_date is not None:
             valid_date_columns.append((col, parsed_date))
     
