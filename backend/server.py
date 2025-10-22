@@ -2922,15 +2922,25 @@ async def reset_stock_data():
         # STEP 3: Delete all liquor data
         delete_result = await db.liquor_data.delete_many({})
         
-        logging.info(f"Reset completed: Stored {historical_result['historical_records_created']} historical averages, backed up and deleted {delete_result.deleted_count} records")
+        historical_count = historical_result.get('historical_records_created', 0)
+        historical_month = historical_result.get('month_year', 'N/A')
+        
+        logging.info(f"Reset completed: Stored {historical_count} historical averages for {historical_month}, backed up and deleted {delete_result.deleted_count} records")
+        
+        # Create detailed message based on historical data creation
+        if historical_count > 0:
+            hist_message = f"✅ Saved {historical_count} brands' sales history for {historical_month}"
+        else:
+            hist_message = f"⚠️ No historical data saved - brands need at least 1 day of sales data"
         
         return {
             "backup_id": backup.id,
             "records_backed_up": len(backup_data),
             "records_deleted": delete_result.deleted_count,
-            "historical_records_created": historical_result.get('historical_records_created', 0),
-            "historical_month": historical_result.get('month_year', 'N/A'),
-            "message": "Stock data reset successfully. Historical averages stored and backup created.",
+            "historical_records_created": historical_count,
+            "historical_month": historical_month,
+            "historical_message": hist_message,
+            "message": f"Stock data reset successfully. {hist_message}. Backup created.",
             "next_upload_becomes_d1": True
         }
         
