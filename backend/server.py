@@ -2582,11 +2582,20 @@ async def delete_backup(backup_id: str):
 async def restore_from_backup(backup_id: str, recalculate_historical: bool = True):
     """Restore data from a specific backup and optionally recalculate historical averages"""
     try:
+        logging.info(f"🔄 Starting restore from backup: {backup_id}")
+        
         # Find the backup
         backup = await db.stock_backups.find_one({"id": backup_id})
         
         if not backup:
-            raise HTTPException(status_code=404, detail="Backup not found")
+            # Log available backups for debugging
+            all_backups = await db.stock_backups.find({}, {"id": 1, "backup_timestamp": 1}).to_list(10)
+            available_ids = [b.get('id') for b in all_backups]
+            logging.error(f"Backup {backup_id} not found. Available backup IDs: {available_ids}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Backup not found. Requested ID: {backup_id}. Available backups: {len(all_backups)}"
+            )
         
         # Get the backup data
         backup_data = backup.get('data_snapshot', [])
@@ -2594,12 +2603,27 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
         if not backup_data:
             raise HTTPException(status_code=400, detail="Backup contains no data")
         
-        # STEP 1: Clear current data
+        logging.info(f"📦 Found backup with {len(backup_data)} records from {backup.get('backup_timestamp')}")
+        
+        # STEP 1: Calculate historical averages FROM BACKUP DATA (before clearing current data)
+        historical_records_created = 0
+        historical_month = "N/A"
+        if recalculate_historical:
+            logging.info("📊 Calculating historical averages from backup data...")
+            historical_result = await calculate_and_store_historical_averages(source_records=backup_data)
+            historical_records_created = historical_result.get('historical_records_created', 0)
+            historical_month = historical_result.get('month_year', 'N/A')
+            if historical_records_created > 0:
+                logging.info(f"✅ Created {historical_records_created} historical records for {historical_month}")
+            else:
+                logging.warning(f"⚠️ No historical records created: {historical_result.get('message', 'Unknown reason')}")
+        
+        # STEP 2: Clear current data
         current_count = await db.liquor_data.count_documents({})
         await db.liquor_data.delete_many({})
-        logging.info(f"Cleared {current_count} existing records before restore")
+        logging.info(f"🗑️ Cleared {current_count} existing records before restore")
         
-        # STEP 2: Restore data from backup
+        # STEP 3: Restore data from backup
         # Convert backup data to proper format
         restored_records = []
         for record in backup_data:
@@ -2614,15 +2638,7 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
         # Insert restored data
         if restored_records:
             await db.liquor_data.insert_many(restored_records)
-        
-        logging.info(f"Restored {len(restored_records)} records from backup {backup_id}")
-        
-        # STEP 3: Recalculate historical averages if requested
-        historical_records_created = 0
-        if recalculate_historical:
-            historical_result = await calculate_and_store_historical_averages()
-            historical_records_created = historical_result.get('historical_records_created', 0)
-            logging.info(f"Recalculated {historical_records_created} historical average records")
+            logging.info(f"✅ Restored {len(restored_records)} records from backup")
         
         return {
             "success": True,
@@ -2632,13 +2648,14 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
             "records_restored": len(restored_records),
             "current_records_cleared": current_count,
             "historical_records_created": historical_records_created,
-            "message": f"Successfully restored {len(restored_records)} records from backup"
+            "historical_month": historical_month,
+            "message": f"Successfully restored {len(restored_records)} records and created {historical_records_created} historical averages"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error restoring from backup: {e}")
+        logging.error(f"❌ Error restoring from backup: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error restoring backup: {str(e)}")
 
 # MODULE 5: Historical Sales Averages - Helper Functions
