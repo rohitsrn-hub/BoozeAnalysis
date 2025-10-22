@@ -1080,8 +1080,6 @@ function App() {
                     </div>
                   </DialogContent>
                 </Dialog>
-              </div>
-            </div>
           </div>
           
           {/* NEW LAYOUT: Three sections - Left (Overstock), Center (Buttons), Right (Today's Data) */}
