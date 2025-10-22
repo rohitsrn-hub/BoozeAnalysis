@@ -1214,6 +1214,230 @@ class BackendTester:
             self.log_test("Backup Download", "FAIL", f"Download error: {str(e)}", "Unexpected error during download")
             return False
 
+    def test_analytics_source_endpoint(self):
+        """PRIORITY TEST: Test analytics-source endpoint for data source indicator banner"""
+        print("\n📊 Testing Analytics-Source Endpoint (PRIORITY)")
+        
+        success, data, error = self.test_endpoint("GET", "/analytics-source", 200)
+        
+        if not success:
+            self.log_test("Analytics-Source Endpoint", "FAIL", "Analytics-source endpoint failed", error)
+            return False
+        
+        if not isinstance(data, dict):
+            self.log_test("Analytics-Source Endpoint", "FAIL", "Invalid response format", f"Expected dict, got {type(data)}")
+            return False
+        
+        # Verify required fields in the response
+        required_fields = [
+            'data_source', 'days_of_data', 'using_month', 
+            'transition_threshold', 'is_transitioning', 'confidence_level'
+        ]
+        
+        missing_fields = []
+        for field in required_fields:
+            if field not in data:
+                missing_fields.append(field)
+        
+        if missing_fields:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Missing required fields: {missing_fields}", f"Available fields: {list(data.keys())}")
+            return False
+        
+        # Verify data_source is either "historical" or "current"
+        data_source = data.get('data_source')
+        if data_source not in ['historical', 'current']:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Invalid data_source value: {data_source}", "Expected 'historical' or 'current'")
+            return False
+        
+        # Verify days_of_data is a non-negative integer
+        days_of_data = data.get('days_of_data')
+        if not isinstance(days_of_data, int) or days_of_data < 0:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Invalid days_of_data: {days_of_data}", "Expected non-negative integer")
+            return False
+        
+        # Verify using_month format (should contain month and year)
+        using_month = data.get('using_month')
+        if not isinstance(using_month, str) or len(using_month) < 3:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Invalid using_month format: {using_month}", "Expected month-year format like 'Oct-2025'")
+            return False
+        
+        # Verify transition_threshold is 5
+        transition_threshold = data.get('transition_threshold')
+        if transition_threshold != 5:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Incorrect transition_threshold: {transition_threshold}", "Expected 5")
+            return False
+        
+        # Verify is_transitioning logic (should be True when 0 < days < 5)
+        is_transitioning = data.get('is_transitioning')
+        expected_transitioning = days_of_data > 0 and days_of_data < 5
+        if is_transitioning != expected_transitioning:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Incorrect is_transitioning logic", f"Days: {days_of_data}, Expected: {expected_transitioning}, Got: {is_transitioning}")
+            return False
+        
+        # Verify confidence_level is valid
+        confidence_level = data.get('confidence_level')
+        valid_confidence_levels = ['none', 'low', 'medium', 'high']
+        if confidence_level not in valid_confidence_levels:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Invalid confidence_level: {confidence_level}", f"Expected one of: {valid_confidence_levels}")
+            return False
+        
+        # Verify data_source logic based on days_of_data
+        expected_data_source = "historical" if days_of_data < 5 else "current"
+        if data_source != expected_data_source:
+            self.log_test("Analytics-Source Endpoint", "FAIL", f"Data source logic incorrect", f"Days: {days_of_data}, Expected: {expected_data_source}, Got: {data_source}")
+            return False
+        
+        # Test the banner display logic
+        if data_source == "current" and days_of_data >= 5:
+            expected_banner = f"Using {using_month} Live Data (Day {days_of_data}/30)"
+            banner_type = "Live Data"
+        elif data_source == "historical":
+            expected_banner = "Using Historical Averages..."
+            banner_type = "Historical Averages"
+        else:
+            expected_banner = "Data source unclear"
+            banner_type = "Unknown"
+        
+        self.log_test(
+            "Analytics-Source Endpoint", 
+            "PASS", 
+            f"Analytics-source endpoint working correctly",
+            f"Data source: {data_source}, Days: {days_of_data}, Month: {using_month}, Confidence: {confidence_level}, Banner: {banner_type}, Transitioning: {is_transitioning}"
+        )
+        
+        # Additional test: Verify the response structure matches expected format
+        expected_response_structure = {
+            "data_source": "current",
+            "days_of_data": 22,
+            "using_month": "Oct-2025",
+            "transition_threshold": 5,
+            "is_transitioning": False,
+            "confidence_level": "high"
+        }
+        
+        # Check if all expected keys are present with correct types
+        structure_valid = True
+        for key, expected_value in expected_response_structure.items():
+            if key in data:
+                actual_value = data[key]
+                expected_type = type(expected_value)
+                actual_type = type(actual_value)
+                
+                if actual_type != expected_type:
+                    self.log_test("Analytics-Source Response Structure", "FAIL", f"Type mismatch for {key}", f"Expected {expected_type.__name__}, got {actual_type.__name__}")
+                    structure_valid = False
+        
+        if structure_valid:
+            self.log_test("Analytics-Source Response Structure", "PASS", "Response structure matches expected format", "All field types are correct")
+        
+        return True
+    
+    def test_analytics_source_scenarios(self):
+        """Test analytics-source endpoint with different data scenarios"""
+        print("\n🔄 Testing Analytics-Source Different Data Scenarios")
+        
+        # First, get current database state
+        success, db_data, error = self.test_endpoint("GET", "/database-view", 200)
+        
+        if not success:
+            self.log_test("Analytics-Source Scenarios", "FAIL", "Could not get database state", error)
+            return False
+        
+        data_list = db_data.get('data', [])
+        total_records = len(data_list)
+        
+        if total_records == 0:
+            self.log_test("Analytics-Source Database Empty", "PASS", "Database is empty - should use historical data", "Expected data_source: historical")
+            
+            # Test analytics-source with empty database
+            success, source_data, error = self.test_endpoint("GET", "/analytics-source", 200)
+            
+            if success and isinstance(source_data, dict):
+                data_source = source_data.get('data_source')
+                days_of_data = source_data.get('days_of_data')
+                
+                if data_source == "historical" and days_of_data == 0:
+                    self.log_test("Analytics-Source Empty DB", "PASS", "Correctly uses historical data for empty database", f"Data source: {data_source}, Days: {days_of_data}")
+                else:
+                    self.log_test("Analytics-Source Empty DB", "FAIL", "Incorrect response for empty database", f"Expected: historical/0, Got: {data_source}/{days_of_data}")
+                    return False
+            else:
+                self.log_test("Analytics-Source Empty DB", "FAIL", "Could not test empty database scenario", error)
+                return False
+        
+        else:
+            # Database has data - check days_analyzed from first record
+            sample_record = data_list[0]
+            days_analyzed = sample_record.get('days_analyzed', 0)
+            
+            self.log_test("Analytics-Source Database State", "PASS", f"Database has {total_records} records", f"Sample days_analyzed: {days_analyzed}")
+            
+            # Test analytics-source with current data
+            success, source_data, error = self.test_endpoint("GET", "/analytics-source", 200)
+            
+            if success and isinstance(source_data, dict):
+                data_source = source_data.get('data_source')
+                days_of_data = source_data.get('days_of_data')
+                using_month = source_data.get('using_month')
+                confidence_level = source_data.get('confidence_level')
+                is_transitioning = source_data.get('is_transitioning')
+                
+                # Verify logic based on days
+                if days_of_data < 5:
+                    expected_source = "historical"
+                    expected_transitioning = days_of_data > 0
+                    expected_confidence = "none" if days_of_data == 0 else ("low" if days_of_data < 3 else "medium")
+                else:
+                    expected_source = "current"
+                    expected_transitioning = False
+                    expected_confidence = "high"
+                
+                logic_correct = (
+                    data_source == expected_source and
+                    is_transitioning == expected_transitioning and
+                    confidence_level == expected_confidence
+                )
+                
+                if logic_correct:
+                    self.log_test(
+                        "Analytics-Source Logic Verification", 
+                        "PASS", 
+                        f"should_use_historical_data() logic working correctly",
+                        f"Days: {days_of_data}, Source: {data_source}, Confidence: {confidence_level}, Transitioning: {is_transitioning}"
+                    )
+                else:
+                    self.log_test(
+                        "Analytics-Source Logic Verification", 
+                        "FAIL", 
+                        f"Logic verification failed",
+                        f"Days: {days_of_data}, Expected: {expected_source}/{expected_confidence}/{expected_transitioning}, Got: {data_source}/{confidence_level}/{is_transitioning}"
+                    )
+                    return False
+                
+                # Test banner display scenarios
+                if data_source == "current" and days_of_data >= 5:
+                    banner_message = f"Using {using_month} Live Data (Day {days_of_data}/30)"
+                    banner_scenario = "Live Data Banner"
+                elif data_source == "historical":
+                    banner_message = "Using Historical Averages..."
+                    banner_scenario = "Historical Averages Banner"
+                else:
+                    banner_message = "Transitioning or insufficient data"
+                    banner_scenario = "Transitioning State"
+                
+                self.log_test(
+                    f"Analytics-Source {banner_scenario}", 
+                    "PASS", 
+                    f"Banner scenario verified",
+                    f"Message: '{banner_message}'"
+                )
+                
+            else:
+                self.log_test("Analytics-Source Scenarios", "FAIL", "Could not test current data scenario", error)
+                return False
+        
+        return True
+
     def test_file_upload_endpoints(self):
         """Test file upload endpoints (without actually uploading files)"""
         print("\n📁 Testing File Upload Endpoints")
