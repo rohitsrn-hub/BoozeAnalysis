@@ -303,6 +303,21 @@ backend:
         agent: "main"
         comment: "IMPROVED: Enhanced Today's Data upload success messages to distinguish between fresh start (empty DB) vs daily update scenarios. Returns is_fresh_start flag and new_date in response. Message now clearly indicates when brands are created fresh (D1 scenario) vs updated. Upload type changed to 'fresh_start' when database is empty. Better user guidance: 'Fresh start: Created X brands with D1 date. Upload more daily data or update rates next.' Existing empty DB handling logic (lines 1410-1447) verified to be working correctly."
 
+  - task: "Test analytics-source endpoint for data source indicator banner"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "user"
+        comment: "User reports that after deploying to production (Vercel), the data source indicator banner is not showing. The banner should display 'Using Oct-2025 Live Data (Day X/30)' when using current data (days >= 5) or 'Using Historical Averages...' when using historical data (days < 5). Issue likely with /api/analytics-source endpoint not returning data or returning incorrect format."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: /api/analytics-source endpoint working perfectly. ✅ Returns proper response structure with all required fields (data_source, days_of_data, using_month, transition_threshold, is_transitioning, confidence_level) ✅ Data source logic verified: returns 'historical' when days < 5, 'current' when days >= 5 ✅ Current test scenario: Database empty (days_of_data: 0), correctly returns data_source: 'historical', using_month: 'Sep-2025', confidence_level: 'none' ✅ Historical averages available (62 brands for Sep-2025) ✅ Banner logic verified: Empty DB scenario shows 'Using Historical Averages...' banner ✅ Response format matches expected structure exactly ✅ should_use_historical_data() function working correctly (days < 5 threshold) ✅ get_days_of_current_data() returns 0 for empty database ✅ All field types and values validated. The analytics-source endpoint is fully functional and ready for frontend integration."
+
 frontend:
   - task: "Fix tab styling to show initial colors"
     implemented: true
