@@ -1,205 +1,198 @@
 {
   "summary": {
-    "passed": 12,
-    "total": 14,
-    "success_rate": 85.71428571428571,
-    "timestamp": "2025-10-22T12:56:26.702727"
+    "passed": 5,
+    "total": 16,
+    "success_rate": 31.25,
+    "timestamp": "2025-10-22T19:34:01.694167"
   },
   "detailed_results": [
     {
       "test_name": "Root Endpoint",
       "status": "PASS",
       "message": "API root accessible",
-      "timestamp": "2025-10-22T12:56:25.545806",
+      "timestamp": "2025-10-22T19:34:00.972556",
       "details": "{'message': 'Liquor Sales Analysis Dashboard API'}"
+    },
+    {
+      "test_name": "Analytics-Source Endpoint",
+      "status": "PASS",
+      "message": "Analytics-source endpoint working correctly",
+      "timestamp": "2025-10-22T19:34:00.983803",
+      "details": "Data source: historical, Days: 0, Month: Sep-2025, Confidence: none, Banner: Historical Averages, Transitioning: False"
+    },
+    {
+      "test_name": "Analytics-Source Response Structure",
+      "status": "PASS",
+      "message": "Response structure matches expected format",
+      "timestamp": "2025-10-22T19:34:00.983830",
+      "details": "All field types are correct"
+    },
+    {
+      "test_name": "Analytics-Source Database Empty",
+      "status": "PASS",
+      "message": "Database is empty - should use historical data",
+      "timestamp": "2025-10-22T19:34:01.031452",
+      "details": "Expected data_source: historical"
+    },
+    {
+      "test_name": "Analytics-Source Empty DB",
+      "status": "PASS",
+      "message": "Correctly uses historical data for empty database",
+      "timestamp": "2025-10-22T19:34:01.043031",
+      "details": "Data source: historical, Days: 0"
     },
     {
       "test_name": "Date-wise Analysis Excel",
       "status": "FAIL",
-      "message": "No date columns found",
-      "timestamp": "2025-10-22T12:56:25.923482",
-      "details": "Columns: ['Index', 'Brand Name', 'Wholesale Rate (\u20b9)', 'Retail Rate (\u20b9)', '15/09/25', '18/09/25', '22/09/25', '25/09/25', '28/09/25']"
+      "message": "Excel generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.050004",
+      "details": "{\"detail\":\"Error generating Excel report: 500: Error generating report data: 404: No data found\"}"
     },
     {
       "test_name": "Date-wise Analysis PDF",
-      "status": "PASS",
-      "message": "PDF with Date-wise Analysis generated successfully",
-      "timestamp": "2025-10-22T12:56:25.951854",
-      "details": "Size: 3859 bytes, Content-Type: application/pdf"
-    },
-    {
-      "test_name": "Date-wise Analysis PDF Comparison",
-      "status": "PASS",
-      "message": "PDF with date-wise analysis is larger than without",
-      "timestamp": "2025-10-22T12:56:25.966613",
-      "details": "With: 3859 bytes, Without: 2261 bytes"
+      "status": "FAIL",
+      "message": "PDF generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.099309",
+      "details": "{\"detail\":\"Error generating PDF report: 500: Error generating report data: 404: No data found\"}"
     },
     {
       "test_name": "Module 4 Reports Data",
-      "status": "PASS",
-      "message": "Report data structure validated successfully",
-      "timestamp": "2025-10-22T12:56:25.974660",
-      "details": "Revenue: \u20b946,080, Profit: \u20b939,680, Margin: 86.1%, Top sellers: 2, Slow: 0, Blockers: 0, Demand: 0"
+      "status": "FAIL",
+      "message": "Reports data endpoint failed",
+      "timestamp": "2025-10-22T19:34:01.156106",
+      "details": "Status 500: {'detail': 'Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Module 4 Excel Generation",
       "status": "FAIL",
-      "message": "Missing Excel sheets: ['Slow Sellers', 'Capital Blockers', 'Demand Forecast']",
-      "timestamp": "2025-10-22T12:56:26.013958",
-      "details": "Available sheets: ['Executive Summary', 'Top Revenue Generators', 'Top Volume Movers', 'Profit Analysis', 'Date-wise Sales']"
+      "message": "Excel generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.225298",
+      "details": "{'detail': 'Error generating Excel report: 500: Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Module 4 PDF Generation - Full Report with Date-wise Analysis",
-      "status": "PASS",
-      "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-22T12:56:26.076229",
-      "details": "Filename: monthly_report_20251022_182626.pdf, Size: 5815 bytes, IST time diff: 0.0s"
+      "status": "FAIL",
+      "message": "PDF generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.233055",
+      "details": "{'detail': 'Error generating PDF report: 500: Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Module 4 PDF Generation - Executive Summary Only",
-      "status": "PASS",
-      "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-22T12:56:26.092614",
-      "details": "Filename: monthly_report_20251022_182626.pdf, Size: 2255 bytes, IST time diff: 0.1s"
+      "status": "FAIL",
+      "message": "PDF generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.281140",
+      "details": "{'detail': 'Error generating PDF report: 500: Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Module 4 PDF Generation - Date-wise Analysis Only",
-      "status": "PASS",
-      "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-22T12:56:26.149734",
-      "details": "Filename: monthly_report_20251022_182626.pdf, Size: 3856 bytes, IST time diff: 0.1s"
+      "status": "FAIL",
+      "message": "PDF generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.329786",
+      "details": "{'detail': 'Error generating PDF report: 500: Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Module 4 PDF Generation - Sales Focus Report",
-      "status": "PASS",
-      "message": "PDF report generated successfully with IST timestamp",
-      "timestamp": "2025-10-22T12:56:26.167094",
-      "details": "Filename: monthly_report_20251022_182626.pdf, Size: 3460 bytes, IST time diff: 0.1s"
+      "status": "FAIL",
+      "message": "PDF generation failed with status 500",
+      "timestamp": "2025-10-22T19:34:01.336985",
+      "details": "{'detail': 'Error generating PDF report: 500: Error generating report data: 404: No data found'}"
     },
     {
       "test_name": "Backup Creation",
-      "status": "PASS",
-      "message": "Backup created successfully with ID: acafa1ce-5c5e-4f68-9e67-39c10e5c7c98",
-      "timestamp": "2025-10-22T12:56:26.223043",
-      "details": "Records: 2, Timestamp: 2025-10-22T12:56:26.171130+00:00"
-    },
-    {
-      "test_name": "Backup Listing",
-      "status": "PASS",
-      "message": "Backup found in list (1 total backups)",
-      "timestamp": "2025-10-22T12:56:26.275318",
-      "details": "Backup timestamp: 2025-10-22T12:56:26.171000+00:00"
-    },
-    {
-      "test_name": "Backup IST Timestamp",
-      "status": "PASS",
-      "message": "IST timestamp conversion working correctly",
-      "timestamp": "2025-10-22T12:56:26.301964",
-      "details": "Filename: stock_backup_20251022_182626.xlsx, IST time: 2025-10-22 18:26:26 IST, Diff: 0.2s"
-    },
-    {
-      "test_name": "Backup Download",
-      "status": "PASS",
-      "message": "Excel file downloaded successfully",
-      "timestamp": "2025-10-22T12:56:26.301988",
-      "details": "Size: 5563 bytes, Format: Valid Excel"
+      "status": "FAIL",
+      "message": "Failed to create backup",
+      "timestamp": "2025-10-22T19:34:01.385316",
+      "details": "Status 404: {'detail': 'No data to backup'}"
     },
     {
       "test_name": "Trends Chronological Ordering",
-      "status": "PASS",
-      "message": "Sales trends dates are in chronological order (5 dates)",
-      "timestamp": "2025-10-22T12:56:26.352793",
-      "details": "Sample order: 15/09/25 (2025-09-15) \u2192 18/09/25 (2025-09-18) \u2192 22/09/25 (2025-09-22) \u2192 25/09/25 (2025-09-25) \u2192 28/09/25 (2025-09-28)"
+      "status": "FAIL",
+      "message": "No sales_trends data found",
+      "timestamp": "2025-10-22T19:34:01.393463",
+      "details": "sales_trends is empty or missing"
     },
     {
       "test_name": "Date Parsing Function",
-      "status": "PASS",
-      "message": "All 5 date formats recognized and parseable",
-      "timestamp": "2025-10-22T12:56:26.360163",
-      "details": "Format breakdown: other_formats: 5"
+      "status": "FAIL",
+      "message": "No sales_trends data to test date parsing",
+      "timestamp": "2025-10-22T19:34:01.404489",
+      "details": "Empty sales_trends"
     },
     {
       "test_name": "Data Completeness",
       "status": "PASS",
-      "message": "All 5 dates from database included in sales_trends",
-      "timestamp": "2025-10-22T12:56:26.375974",
+      "message": "All 0 dates from database included in sales_trends",
+      "timestamp": "2025-10-22T19:34:01.460593",
       "details": "Perfect match between database dates and trends data"
     },
     {
       "test_name": "Refresh Analytics",
-      "status": "PASS",
-      "message": "Successfully refreshed 2 records",
-      "timestamp": "2025-10-22T12:56:26.423024",
-      "details": "D1 dates: ['15/09/25'], DL dates: ['28/09/25']"
+      "status": "FAIL",
+      "message": "Refresh endpoint failed",
+      "timestamp": "2025-10-22T19:34:01.467201",
+      "details": "Status 404: {'detail': 'No data found to refresh'}"
     },
     {
       "test_name": "Demand Recommendations",
-      "status": "PASS",
-      "message": "Found 2 recommendations with proper float values",
-      "timestamp": "2025-10-22T12:56:26.430346",
-      "details": "Sample recommended_qty: 132.0 (type: float)"
+      "status": "FAIL",
+      "message": "Endpoint failed",
+      "timestamp": "2025-10-22T19:34:01.514453",
+      "details": "Status 500: {'detail': 'Error generating recommendations: 404: No data found'}"
     },
     {
       "test_name": "DL Date Verification",
-      "status": "PASS",
-      "message": "DL dates are present in analytics",
-      "timestamp": "2025-10-22T12:56:26.436637",
-      "details": "Sample DL_date: 28/09/25"
-    },
-    {
-      "test_name": "DL Date Consistency",
-      "status": "PASS",
-      "message": "DL dates consistent across endpoints",
-      "timestamp": "2025-10-22T12:56:26.483250",
-      "details": "Both show: 28/09/25"
+      "status": "FAIL",
+      "message": "No data records found",
+      "timestamp": "2025-10-22T19:34:01.521454",
+      "details": "Database may be empty"
     },
     {
       "test_name": "Analytics - Analytics with overstock multiplier",
       "status": "PASS",
-      "message": "Returned valid data (485 items/chars)",
-      "timestamp": "2025-10-22T12:56:26.533635",
+      "message": "Returned valid data (1364 items/chars)",
+      "timestamp": "2025-10-22T19:34:01.570026",
       "details": null
     },
     {
       "test_name": "Analytics - Charts data",
-      "status": "PASS",
-      "message": "Returned valid data (735 items/chars)",
-      "timestamp": "2025-10-22T12:56:26.540326",
-      "details": null
+      "status": "FAIL",
+      "message": "Endpoint failed",
+      "timestamp": "2025-10-22T19:34:01.578108",
+      "details": "Status 500: {'detail': 'Error getting charts data: 404: No data found'}"
     },
     {
       "test_name": "Analytics - Calculation details",
-      "status": "PASS",
-      "message": "Returned valid data (2 items/chars)",
-      "timestamp": "2025-10-22T12:56:26.588183",
-      "details": null
+      "status": "FAIL",
+      "message": "Endpoint failed",
+      "timestamp": "2025-10-22T19:34:01.585117",
+      "details": "Status 500: {'detail': 'Error getting calculation details: 404: No data found'}"
     },
     {
       "test_name": "Analytics - Database view",
       "status": "PASS",
-      "message": "Returned valid data (2104 items/chars)",
-      "timestamp": "2025-10-22T12:56:26.596524",
+      "message": "Returned valid data (117 items/chars)",
+      "timestamp": "2025-10-22T19:34:01.632169",
       "details": null
     },
     {
       "test_name": "Analytics - Upload history",
       "status": "PASS",
-      "message": "Returned valid data (6 items/chars)",
-      "timestamp": "2025-10-22T12:56:26.603207",
+      "message": "Returned valid data (12 items/chars)",
+      "timestamp": "2025-10-22T19:34:01.639406",
       "details": null
     },
     {
       "test_name": "Upload - Full Monthly Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-22T12:56:26.655234",
+      "timestamp": "2025-10-22T19:34:01.646682",
       "details": "Returns proper validation error when no file provided"
     },
     {
       "test_name": "Upload - Today's Data Upload",
       "status": "PASS",
       "message": "Endpoint exists and validates file requirement",
-      "timestamp": "2025-10-22T12:56:26.702556",
+      "timestamp": "2025-10-22T19:34:01.694026",
       "details": "Returns proper validation error when no file provided"
     }
   ]
