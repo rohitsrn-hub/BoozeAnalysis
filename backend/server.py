@@ -1458,14 +1458,24 @@ async def upload_todays_data(file: UploadFile = File(...)):
         )
         await db.upload_history.insert_one(upload_history.dict())
         
+        # Determine appropriate success message
+        if is_fresh_start:
+            message = f"✅ Fresh start: Created {new_brands_count} brands with D1 date '{new_date_column}'. Upload more daily data or update rates next."
+        elif new_brands_count > 0:
+            message = f"✅ Successfully updated {updated_count} brands and added {new_brands_count} new brands for date '{new_date_column}'"
+        else:
+            message = f"✅ Successfully updated {updated_count} brands for date '{new_date_column}'"
+        
         return JSONResponse(
             status_code=200,
             content={
-                "message": f"Successfully updated today's data: {updated_count} brands updated, {new_brands_count} new brands added",
+                "message": message,
                 "updated_brands": updated_count,
                 "new_brands": new_brands_count,
                 "total_records": len(brands_data),
-                "upload_type": "daily_update"
+                "upload_type": "fresh_start" if is_fresh_start else "daily_update",
+                "new_date": new_date_column,
+                "is_fresh_start": is_fresh_start
             }
         )
         
