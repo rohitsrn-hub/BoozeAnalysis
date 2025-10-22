@@ -1123,7 +1123,7 @@ function App() {
           </div>
           
           {/* Compact Layout: Two columns - Left (Overstock + Buttons), Right (Today's Data) */}
-          <div className="flex justify-between items-start mt-4 gap-6">
+          <div className="flex justify-between items-start mt-4 gap-4">
             
             {/* LEFT SECTION: Overstock Multiplier */}
             <div className="flex items-center space-x-2 flex-shrink-0">
