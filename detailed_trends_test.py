@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 import re
 
-BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
+BACKEND_URL = "https://liquor-dashboard-1.preview.emergentagent.com/api"
 
 def parse_date_for_sorting(date_str):
     """Parse various date formats for chronological sorting - matches backend logic"""

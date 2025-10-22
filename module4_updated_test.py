@@ -18,7 +18,7 @@ import io
 import re
 
 # Get backend URL from environment
-BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
+BACKEND_URL = "https://liquor-dashboard-1.preview.emergentagent.com/api"
 
 class Module4UpdatedTester:
     def __init__(self):

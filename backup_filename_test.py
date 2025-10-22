@@ -11,7 +11,7 @@ from datetime import datetime
 import pytz
 
 # Get backend URL from environment
-BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
+BACKEND_URL = "https://liquor-dashboard-1.preview.emergentagent.com/api"
 
 def test_backup_filename_format():
     """Test the most recent backup download to verify filename format"""

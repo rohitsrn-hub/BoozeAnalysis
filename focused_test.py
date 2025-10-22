@@ -19,7 +19,7 @@ import pandas as pd
 import io
 
 # Get backend URL from environment
-BACKEND_URL = "https://stockflow-214.preview.emergentagent.com/api"
+BACKEND_URL = "https://liquor-dashboard-1.preview.emergentagent.com/api"
 
 class FocusedTester:
     def __init__(self):
