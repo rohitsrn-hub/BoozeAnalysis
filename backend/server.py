@@ -2469,7 +2469,6 @@ async def download_backup(backup_id: str):
 async def delete_backup(backup_id: str):
     """Delete a specific backup"""
     try:
-        # Find and delete backup
         result = await db.stock_backups.delete_one({"id": backup_id})
         
         if result.deleted_count == 0:
@@ -2478,15 +2477,78 @@ async def delete_backup(backup_id: str):
         logging.info(f"Deleted backup: {backup_id}")
         
         return {
-            "message": "Backup deleted successfully",
-            "backup_id": backup_id
+            "success": True,
+            "message": "Backup deleted successfully"
         }
         
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"Error deleting backup: {e}")
-        raise HTTPException(status_code=500, detail=f"Error deleting backup: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/stock/backup/{backup_id}/restore")
+async def restore_from_backup(backup_id: str, recalculate_historical: bool = True):
+    """Restore data from a specific backup and optionally recalculate historical averages"""
+    try:
+        # Find the backup
+        backup = await db.stock_backups.find_one({"id": backup_id})
+        
+        if not backup:
+            raise HTTPException(status_code=404, detail="Backup not found")
+        
+        # Get the backup data
+        backup_data = backup.get('data_snapshot', [])
+        
+        if not backup_data:
+            raise HTTPException(status_code=400, detail="Backup contains no data")
+        
+        # STEP 1: Clear current data
+        current_count = await db.liquor_data.count_documents({})
+        await db.liquor_data.delete_many({})
+        logging.info(f"Cleared {current_count} existing records before restore")
+        
+        # STEP 2: Restore data from backup
+        # Convert backup data to proper format
+        restored_records = []
+        for record in backup_data:
+            # Ensure all required fields exist
+            if 'id' not in record:
+                record['id'] = str(uuid.uuid4())
+            if 'upload_timestamp' not in record:
+                from datetime import datetime, timezone
+                record['upload_timestamp'] = datetime.now(timezone.utc)
+            restored_records.append(record)
+        
+        # Insert restored data
+        if restored_records:
+            await db.liquor_data.insert_many(restored_records)
+        
+        logging.info(f"Restored {len(restored_records)} records from backup {backup_id}")
+        
+        # STEP 3: Recalculate historical averages if requested
+        historical_records_created = 0
+        if recalculate_historical:
+            historical_result = await calculate_and_store_historical_averages()
+            historical_records_created = historical_result.get('historical_records_created', 0)
+            logging.info(f"Recalculated {historical_records_created} historical average records")
+        
+        return {
+            "success": True,
+            "backup_id": backup_id,
+            "backup_reason": backup.get('backup_reason', 'unknown'),
+            "backup_date": backup.get('backup_timestamp'),
+            "records_restored": len(restored_records),
+            "current_records_cleared": current_count,
+            "historical_records_created": historical_records_created,
+            "message": f"Successfully restored {len(restored_records)} records from backup"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error restoring from backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error restoring backup: {str(e)}")
 
 # MODULE 5: Historical Sales Averages - Helper Functions
 
