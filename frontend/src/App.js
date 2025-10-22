@@ -1153,50 +1153,10 @@ function App() {
               >
                 Update
               </Button>
-            </div>
-
-            {/* CENTER SECTION: Action Buttons in Two Rows */}
-            <div className="flex flex-col space-y-2 flex-grow">
-              {/* Row 1: Refresh, Help, History */}
-              <div className="flex items-center justify-center space-x-3">
-                <Button
-                  onClick={handleManualRefresh}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs font-medium"
-                  disabled={loading}
-                  data-testid="refresh-btn"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" />
-                  Refresh
-                </Button>
-                <Button
-                  onClick={() => setShowOnboarding(true)}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs font-medium"
-                  data-testid="help-btn"
-                >
-                  <HelpCircle className="w-3 h-3 mr-1" />
-                  Help
-                </Button>
-                <Button
-                  onClick={() => {
-                    fetchUploadHistory();
-                    setShowUploadHistory(true);
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs font-medium"
-                  data-testid="history-btn"
-                >
-                  <History className="w-3 h-3 mr-1" />
-                  History
-                </Button>
               </div>
 
-              {/* Row 2: Full Monthly, Add Brand, Update Rates, Backups */}
-              <div className="flex items-center justify-center space-x-3">
+              {/* Row 2: Full Monthly, Add Brand, Update Rates */}
+              <div className="flex items-center space-x-2">
                 <Button 
                   variant="outline" 
                   size="sm"
