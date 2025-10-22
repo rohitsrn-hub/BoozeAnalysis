@@ -352,7 +352,7 @@ def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
         if not new_date_col:
             raise HTTPException(status_code=400, detail="Could not find date column in today's data file")
         
-        print(f"📊 Today's Data Column Detection:")
+        print("📊 Today's Data Column Detection:")
         print(f"  - Brand column: {brand_col}")
         print(f"  - Index column: {index_col}")
         print(f"  - New date column: {new_date_col}")
@@ -594,15 +594,15 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         has_second_gt_12 = any(second > 12 for first, second, _ in numeric_dates)
         
         if has_first_gt_12:
-            print(f"📍 Date format detected: DD/MM (found day > 12 in first position)")
+            print("📍 Date format detected: DD/MM (found day > 12 in first position)")
             return 'DD/MM'
         
         if has_second_gt_12:
-            print(f"📍 Date format detected: MM/DD (found value > 12 in second position)")
+            print("📍 Date format detected: MM/DD (found value > 12 in second position)")
             return 'MM/DD'
         
         # All values <= 12 in both positions - ambiguous
-        print(f"📍 Date format ambiguous (all values ≤ 12), defaulting to DD/MM (Indian standard)")
+        print("📍 Date format ambiguous (all values ≤ 12), defaulting to DD/MM (Indian standard)")
         return 'DD/MM'
     
     # Detect the date format before parsing
@@ -710,7 +710,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     
     print(f"Valid date columns AFTER filtering and sorting: {date_columns}")
     
-    print(f"📊 Column Detection Summary:")
+    print("📊 Column Detection Summary:")
     print(f"  - Brand column: {brand_col}")
     print(f"  - Index column: {index_col}")
     print(f"  - Wholesale rate: {wholesale_rate_col}")
@@ -727,7 +727,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         for col in df.columns:
             col_str = str(col)
             if (col != brand_col and col != wholesale_rate_col and col != selling_rate_col and 
-                col != index_col and not col_str.lower().strip() in ['brand name', 'brand_name', 'rate', 'index', 'sl', 'sr']):
+                col != index_col and col_str.lower().strip() not in ['brand name', 'brand_name', 'rate', 'index', 'sl', 'sr']):
                 potential_date_cols.append(col)
         
         if potential_date_cols:
@@ -844,7 +844,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     else:
                         daily_stock_data[date_col] = 0
                         
-                except Exception as e:
+                except Exception:
                     daily_stock_data[date_col] = 0
             
             if not valid_stock_values:
@@ -1316,7 +1316,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
         is_fresh_start = (db_record_count == 0)
         
         if is_fresh_start:
-            print(f"🆕 Database is empty - treating Today's Data as initial D1 upload")
+            print("🆕 Database is empty - treating Today's Data as initial D1 upload")
         
         # Append today's data to existing monthly data OR create fresh D1 data
         updated_count = 0
