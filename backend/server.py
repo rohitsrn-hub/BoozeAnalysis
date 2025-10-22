@@ -564,8 +564,53 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
     # Filter and sort date columns properly 
     print(f"Date columns BEFORE filtering: {date_columns}")
     
-    def parse_date_column(col_name):
-        """Parse date from column name - return None if invalid"""
+    # Smart two-pass parsing system to handle ambiguous DD/MM vs MM/DD formats
+    def detect_date_format(date_columns_list):
+        """
+        Intelligently detect whether numeric dates are DD/MM or MM/DD format.
+        Returns: 'DD/MM' or 'MM/DD' or 'AMBIGUOUS'
+        """
+        import re
+        
+        numeric_dates = []
+        for col in date_columns_list:
+            col_str = str(col).strip()
+            # Only check numeric dates (not month-name dates like "20-Sep-25")
+            match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', col_str)
+            if match:
+                first_num = int(match.group(1))
+                second_num = int(match.group(2))
+                numeric_dates.append((first_num, second_num, col_str))
+        
+        if not numeric_dates:
+            return 'DD/MM'  # Default if no numeric dates found
+        
+        # Smart detection logic:
+        # 1. If any first number > 12, it MUST be DD/MM format (days can be 13-31)
+        # 2. If any second number > 12, it MUST be DD/MM format (month can't be > 12)
+        # 3. If both are always <= 12, it's ambiguous - default to DD/MM (Indian standard)
+        
+        has_first_gt_12 = any(first > 12 for first, second, _ in numeric_dates)
+        has_second_gt_12 = any(second > 12 for first, second, _ in numeric_dates)
+        
+        if has_first_gt_12:
+            print(f"📍 Date format detected: DD/MM (found day > 12 in first position)")
+            return 'DD/MM'
+        
+        if has_second_gt_12:
+            print(f"📍 Date format detected: MM/DD (found value > 12 in second position)")
+            return 'MM/DD'
+        
+        # All values <= 12 in both positions - ambiguous
+        print(f"📍 Date format ambiguous (all values ≤ 12), defaulting to DD/MM (Indian standard)")
+        return 'DD/MM'
+    
+    # Detect the date format before parsing
+    detected_format = detect_date_format(date_columns)
+    print(f"🎯 Using date format: {detected_format}")
+    
+    def parse_date_column(col_name, date_format='DD/MM'):
+        """Parse date from column name using specified format - return None if invalid"""
         try:
             import re
             from datetime import datetime
@@ -598,43 +643,49 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     print(f"Skipping unparseable date: '{col_name}' (error: {e})")
                     return None
             
-            # Pattern 2: Numeric date formats
-            # IMPORTANT: Try DD/MM format FIRST (European/Indian standard) before MM/DD (US format)
-            # This assumes dates like 10/9/25 = 10th September (not Sept 10th)
-            numeric_patterns = [
-                # YYYY-MM-DD or YYYY/MM/DD (ISO format - unambiguous, check first)
-                (r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', '%Y/%m/%d', None, 'YYYY/MM/DD'),
-                # DD/MM/YYYY or DD/MM/YY (European/Indian format - most common for your region)
-                (r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', '%d/%m/%Y', '%d/%m/%y', 'DD/MM/YY'),
-            ]
+            # Pattern 2: Numeric date formats with intelligent format detection
+            # Check YYYY-MM-DD first (unambiguous ISO format)
+            match = re.search(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', col_clean)
+            if match:
+                year, month, day = match.groups()
+                date_str = f"{year}/{month}/{day}"
+                try:
+                    parsed_date = datetime.strptime(date_str, '%Y/%m/%d')
+                    print(f"✓ Parsed date (YYYY/MM/DD): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError:
+                    pass
             
-            for pattern_regex, format_4digit, format_2digit, format_name in numeric_patterns:
-                match = re.search(pattern_regex, col_clean)
-                if match:
-                    parts = match.groups()
-                    
-                    # Reconstruct date string with slashes
-                    date_str = '/'.join(parts)
-                    
-                    # Try parsing with 4-digit year format first
-                    try:
-                        parsed_date = datetime.strptime(date_str, format_4digit)
-                        print(f"✓ Parsed date ({format_name} 4-digit): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
-                        return parsed_date
-                    except ValueError:
-                        pass
-                    
-                    # Try parsing with 2-digit year format if available
-                    if format_2digit:
-                        try:
-                            parsed_date = datetime.strptime(date_str, format_2digit)
-                            # Adjust year to 20xx if it's 2-digit
-                            if parsed_date.year < 100:
-                                parsed_date = parsed_date.replace(year=2000 + parsed_date.year)
-                            print(f"✓ Parsed date ({format_name} 2-digit): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
-                            return parsed_date
-                        except ValueError:
-                            pass
+            # Check numeric dates DD/MM or MM/DD based on detected format
+            match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', col_clean)
+            if match:
+                first_num, second_num, year_part = match.groups()
+                
+                # Apply detected format
+                if date_format == 'DD/MM':
+                    day, month = first_num, second_num
+                    format_name = 'DD/MM'
+                else:  # MM/DD
+                    month, day = first_num, second_num
+                    format_name = 'MM/DD'
+                
+                # Handle year
+                if len(year_part) == 2:
+                    year = f"20{year_part}"
+                    date_str = f"{day}/{month}/{year}"
+                    date_format_str = '%d/%m/%Y'
+                else:
+                    year = year_part
+                    date_str = f"{day}/{month}/{year}"
+                    date_format_str = '%d/%m/%Y'
+                
+                try:
+                    parsed_date = datetime.strptime(date_str, date_format_str)
+                    print(f"✓ Parsed date ({format_name}): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError as e:
+                    print(f"⚠ Failed to parse '{col_name}' as {format_name}: {e}")
+                    return None
             
             # If no pattern matched
             print(f"⚠ Skipping column (no recognizable date format): '{col_name}'")
