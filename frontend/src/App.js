@@ -928,23 +928,9 @@ function App() {
             <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
           </div>
 
-          {/* Hidden Dialog Components for Help and History (triggered from center buttons) */}
-          <div className="hidden">
-            <div className="flex items-center space-x-2">
-                {/* Refresh Button */}
-                <Button
-                  onClick={handleManualRefresh}
-                  variant="outline"
-                  size="sm"
-                  className="bg-white hover:bg-gray-50 text-xs"
-                  disabled={loading}
-                  data-testid="refresh-analytics-btn"
-                >
-                  <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
-                  {loading ? 'Refreshing...' : 'Refresh'}
-                </Button>
-                
-                {/* Help Guide */}
+          {/* Hidden Dialog Wrappers for Help and History (opened by center buttons) */}
+          <div style={{display: 'none'}}>
+            {/* Help Guide Dialog */}
                 <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
                   <DialogTrigger asChild>
                     <Button 
