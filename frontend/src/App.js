@@ -1125,8 +1125,10 @@ function App() {
           {/* Compact Layout: Two columns - Left (Overstock + Buttons), Right (Today's Data) */}
           <div className="flex justify-between items-start mt-4 gap-4">
             
-            {/* LEFT SECTION: Overstock Multiplier */}
-            <div className="flex items-center space-x-2 flex-shrink-0">
+            {/* LEFT SECTION: Overstock Multiplier and Action Buttons */}
+            <div className="flex flex-col space-y-3 flex-grow">
+              {/* Overstock Multiplier Row */}
+              <div className="flex items-center space-x-2">
               <Label htmlFor="multiplier" className="text-sm font-medium text-gray-700 whitespace-nowrap">
                 Overstock Multiplier:
               </Label>
