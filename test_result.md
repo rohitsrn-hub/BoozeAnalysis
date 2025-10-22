@@ -287,6 +287,8 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Starting implementation of fixes for 500 error, DL date updates, and tab styling. Will implement backend fixes first, then frontend styling."
+  - agent: "main"
+    message: "Implemented smarter two-pass date parsing system in backend server.py. Added detect_date_format() function that intelligently determines if numeric dates are DD/MM or MM/DD by analyzing all date columns. Logic: if any first number > 12, must be DD/MM; if second number > 12, must be DD/MM; if all ≤ 12, defaults to DD/MM (Indian standard). Updated parse_date_column() to use detected format. Frontend builds successfully without syntax errors - Vercel issue may have been transient. Ready for testing."
   - agent: "testing"
     message: "BACKEND TESTING COMPLETE: All backend functionality tested and working perfectly. ✅ Refresh analytics endpoint working (62 records refreshed) ✅ Demand recommendations returning proper float values ✅ DL dates updating correctly in analytics ✅ All analytics endpoints functional ✅ File upload endpoints validated. The Pydantic validation fix is successful - no more 500 errors on refresh."
   - agent: "main"
