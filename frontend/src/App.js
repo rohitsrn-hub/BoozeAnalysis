@@ -922,13 +922,53 @@ function App() {
       {/* Header */}
       <div className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Header Title Section */}
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
-            <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
+          <div className="flex items-start justify-between">
+            {/* Left side - Title */}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
+              <p className="text-sm text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
+            </div>
+            
+            {/* Right side - Compact action buttons */}
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs"
+                disabled={loading}
+                data-testid="refresh-btn"
+              >
+                <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button
+                onClick={() => setShowOnboarding(true)}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs"
+                data-testid="help-btn"
+              >
+                <HelpCircle className="w-3 h-3 mr-1" />
+                Help
+              </Button>
+              <Button
+                onClick={() => {
+                  fetchUploadHistory();
+                  setShowUploadHistory(true);
+                }}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs"
+                data-testid="history-btn"
+              >
+                <History className="w-3 h-3 mr-1" />
+                History
+              </Button>
+            </div>
           </div>
 
-          {/* Hidden Dialog Wrappers for Help and History (opened by center buttons) */}
+          {/* Hidden Dialog Wrappers for Help and History */}
           <div style={{display: 'none'}}>
             {/* Help Guide Dialog */}
                 <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
