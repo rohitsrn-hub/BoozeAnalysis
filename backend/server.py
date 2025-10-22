@@ -607,7 +607,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 (r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', '%d/%m/%Y', '%d/%m/%y', 'DD/MM/YY'),
             ]
             
-            for pattern_regex, format_4digit, format_2digit in numeric_patterns:
+            for pattern_regex, format_4digit, format_2digit, format_name in numeric_patterns:
                 match = re.search(pattern_regex, col_clean)
                 if match:
                     parts = match.groups()
