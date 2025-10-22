@@ -572,7 +572,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             
             col_clean = str(col_name).strip()
             
-            # Primary pattern: day-month-year (20-Sep-25, 01-Oct-25, etc.)
+            # Pattern 1: day-month-year with month name (20-Sep-25, 01-Oct-25, etc.)
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', col_clean, re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
@@ -591,17 +591,55 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 
                 try:
                     parsed_date = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
-                    print(f"Parsed valid date: '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    print(f"✓ Parsed date (month-name format): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
                     return parsed_date
                 except ValueError as e:
                     print(f"Skipping unparseable date: '{col_name}' (error: {e})")
                     return None
-            else:
-                print(f"Skipping non-date column: '{col_name}' (no date pattern found)")
-                return None
+            
+            # Pattern 2: Numeric date formats (DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, etc.)
+            # Try multiple numeric patterns
+            numeric_patterns = [
+                # DD/MM/YYYY or DD/MM/YY (European/Indian format)
+                (r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', '%d/%m/%Y', '%d/%m/%y'),
+                # YYYY-MM-DD or YYYY/MM/DD (ISO format)
+                (r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', '%Y/%m/%d', None),
+            ]
+            
+            for pattern_regex, format_4digit, format_2digit in numeric_patterns:
+                match = re.search(pattern_regex, col_clean)
+                if match:
+                    parts = match.groups()
+                    
+                    # Reconstruct date string with slashes
+                    date_str = '/'.join(parts)
+                    
+                    # Try parsing with 4-digit year format first
+                    try:
+                        parsed_date = datetime.strptime(date_str, format_4digit)
+                        print(f"✓ Parsed date (numeric 4-digit year): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                        return parsed_date
+                    except ValueError:
+                        pass
+                    
+                    # Try parsing with 2-digit year format if available
+                    if format_2digit:
+                        try:
+                            parsed_date = datetime.strptime(date_str, format_2digit)
+                            # Adjust year to 20xx if it's 2-digit
+                            if parsed_date.year < 100:
+                                parsed_date = parsed_date.replace(year=2000 + parsed_date.year)
+                            print(f"✓ Parsed date (numeric 2-digit year): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                            return parsed_date
+                        except ValueError:
+                            pass
+            
+            # If no pattern matched
+            print(f"⚠ Skipping column (no recognizable date format): '{col_name}'")
+            return None
                 
         except Exception as e:
-            print(f"Exception parsing '{col_name}': {e}")
+            print(f"❌ Exception parsing '{col_name}': {e}")
             return None
     
     # Filter out invalid date columns and sort the valid ones
