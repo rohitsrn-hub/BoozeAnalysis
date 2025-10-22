@@ -2643,36 +2643,55 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
 
 # MODULE 5: Historical Sales Averages - Helper Functions
 
-async def calculate_and_store_historical_averages():
-    """Calculate historical sales averages from current data before reset"""
+async def calculate_and_store_historical_averages(source_records=None):
+    """
+    Calculate historical sales averages from data before reset
+    
+    Args:
+        source_records: Optional list of records to calculate from (for restore scenarios)
+                       If None, fetches from current liquor_data collection
+    """
     try:
-        liquor_records = await db.liquor_data.find().to_list(10000)
+        # Use provided records or fetch from database
+        if source_records is None:
+            liquor_records = await db.liquor_data.find().to_list(10000)
+        else:
+            liquor_records = source_records
         
         if not liquor_records:
-            return {"historical_records_created": 0}
+            logging.warning("No records available for historical calculation")
+            return {"historical_records_created": 0, "message": "No data available"}
+        
+        logging.info(f"📊 Calculating historical averages from {len(liquor_records)} records")
         
         # Get month_year from first record's date fields
         sample_record = liquor_records[0]
         d1_date = sample_record.get('D1_date', '')
         
-        # Parse month_year from date string (format: "20-Sep-25")
+        # Parse month_year from date string (format: "20-Sep-25" or "20-Oct-25")
         try:
             if d1_date and d1_date != 'N/A':
                 parts = d1_date.split('-')
                 if len(parts) >= 2:
-                    month = parts[1]  # Sep
-                    year = f"20{parts[2]}" if len(parts) > 2 else "2025"  # 2025
+                    month = parts[1]  # Sep, Oct, etc.
+                    year = f"20{parts[2]}" if len(parts) > 2 and len(parts[2]) == 2 else ("2025" if len(parts) == 2 else parts[2])
                     month_year = f"{month}-{year}"
                 else:
                     month_year = datetime.now().strftime("%b-%Y")
             else:
                 month_year = datetime.now().strftime("%b-%Y")
-        except:
+        except Exception as e:
+            logging.warning(f"Error parsing month_year from D1_date '{d1_date}': {e}")
             month_year = datetime.now().strftime("%b-%Y")
         
+        logging.info(f"📅 Historical data will be stored for period: {month_year}")
+        
         historical_records = []
+        brands_with_sales = 0
+        brands_without_sales = 0
         
         for record in liquor_records:
+            brand_name = record.get('brand_name', 'Unknown')
             avg_daily_sales_qty = record.get('avg_daily_sales_qty', 0.0)
             total_sales_qty = record.get('total_sales_qty', 0.0)
             days_analyzed = record.get('days_analyzed', 0)
@@ -2683,34 +2702,60 @@ async def calculate_and_store_historical_averages():
             avg_daily_sales_value = avg_daily_sales_qty * selling_rate
             total_sales_value = total_sales_qty * selling_rate
             
-            # Only store if there's actual sales data
-            if days_analyzed > 0 and total_sales_qty > 0:
+            # RELAXED CONDITION: Store if there's any meaningful data
+            # Changed from strict "days_analyzed > 0 and total_sales_qty > 0"
+            # to allow records with at least 1 day analyzed OR any stock data
+            if days_analyzed >= 1 or total_sales_qty > 0:
                 historical_avg = HistoricalSalesAverage(
-                    brand_name=record['brand_name'],
+                    brand_name=brand_name,
                     month_year=month_year,
-                    average_daily_sales_qty=avg_daily_sales_qty,
-                    average_daily_sales_value=avg_daily_sales_value,
-                    total_sales_quantity=total_sales_qty,
-                    total_sales_value=total_sales_value,
-                    total_sales_days=days_analyzed,
-                    wholesale_rate=wholesale_rate,
-                    selling_rate=selling_rate
+                    average_daily_sales_qty=float(avg_daily_sales_qty),
+                    average_daily_sales_value=float(avg_daily_sales_value),
+                    total_sales_quantity=float(total_sales_qty),
+                    total_sales_value=float(total_sales_value),
+                    total_sales_days=int(days_analyzed),
+                    wholesale_rate=float(wholesale_rate),
+                    selling_rate=float(selling_rate)
                 )
                 historical_records.append(historical_avg.dict())
+                brands_with_sales += 1
+            else:
+                brands_without_sales += 1
+                logging.debug(f"Skipping brand '{brand_name}': days_analyzed={days_analyzed}, total_sales_qty={total_sales_qty}")
         
-        # Store in database
+        logging.info(f"✅ Brands with sales data: {brands_with_sales}, without: {brands_without_sales}")
+        
+        # Store in database (delete existing records for this month first to avoid duplicates)
         if historical_records:
+            # Remove existing historical data for this month to avoid duplicates
+            delete_result = await db.historical_sales_averages.delete_many({"month_year": month_year})
+            if delete_result.deleted_count > 0:
+                logging.info(f"Removed {delete_result.deleted_count} existing historical records for {month_year}")
+            
+            # Insert new historical records
             await db.historical_sales_averages.insert_many(historical_records)
-            logging.info(f"Stored {len(historical_records)} historical sales averages for {month_year}")
-        
-        return {
-            "historical_records_created": len(historical_records),
-            "month_year": month_year
-        }
+            logging.info(f"✅ Successfully stored {len(historical_records)} historical sales averages for {month_year}")
+            
+            return {
+                "historical_records_created": len(historical_records),
+                "month_year": month_year,
+                "brands_with_data": brands_with_sales,
+                "brands_skipped": brands_without_sales,
+                "message": f"Historical data saved for {month_year}"
+            }
+        else:
+            logging.warning(f"⚠️ No historical records created - all brands had insufficient data")
+            return {
+                "historical_records_created": 0,
+                "month_year": month_year,
+                "brands_with_data": 0,
+                "brands_skipped": brands_without_sales,
+                "message": "No brands had sufficient sales data for historical calculation"
+            }
         
     except Exception as e:
-        logging.error(f"Error calculating historical averages: {e}")
-        return {"historical_records_created": 0, "error": str(e)}
+        logging.error(f"❌ Error calculating historical averages: {e}", exc_info=True)
+        return {"historical_records_created": 0, "error": str(e), "message": f"Error: {str(e)}"}
 
 async def get_days_of_current_data() -> int:
     """Count how many days of sales data we have in current month"""
