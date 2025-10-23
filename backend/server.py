@@ -1475,7 +1475,8 @@ async def upload_todays_data(file: UploadFile = File(...)):
             filename=file.filename,
             upload_type="daily_update",
             records_count=len(brands_data),
-            file_size=len(content)
+            file_size=len(content),
+            can_undo=True  # Enable undo for this upload
         )
         await db.upload_history.insert_one(upload_history.dict())
         
