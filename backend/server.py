@@ -1558,13 +1558,37 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         total_stock_value = sum(item['stock_value_today'] for item in data_dicts)
         total_overstocked_value = sum(item['overstock_value'] for item in overstocked_items)
         
-        # Prepare sales trends data
+        # Prepare sales trends data - Calculate actual DAILY SALES (units sold per day)
+        # Instead of showing stock quantities, calculate sales from stock differences
         sales_trends = {}
+        
         for record in data_dicts:
-            for date, sales in record['daily_sales'].items():
+            daily_sales_dict = record['daily_sales']
+            
+            if not daily_sales_dict:
+                continue
+            
+            # Sort dates chronologically for this brand
+            sorted_dates = sorted(daily_sales_dict.keys(), key=lambda d: parse_date_for_sorting(d))
+            
+            for i, date in enumerate(sorted_dates):
+                current_stock = daily_sales_dict[date]
+                
+                if i == 0:
+                    # First date - no previous data, sales = 0 or use D1 stock - DL stock if available
+                    sales_qty = 0
+                else:
+                    # Calculate sales as: previous_stock - current_stock
+                    previous_date = sorted_dates[i-1]
+                    previous_stock = daily_sales_dict[previous_date]
+                    sales_qty = max(0, previous_stock - current_stock)  # Ensure non-negative
+                
+                # Aggregate sales across all brands for this date
                 if date not in sales_trends:
                     sales_trends[date] = 0
-                sales_trends[date] += sales
+                sales_trends[date] += sales_qty
+        
+        logging.info(f"📊 Calculated sales trends for {len(sales_trends)} dates")
         
         # Sort sales trends by date chronologically
         def parse_date_for_sorting(date_str):
