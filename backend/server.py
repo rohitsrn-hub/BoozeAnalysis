@@ -177,6 +177,16 @@ class HistoricalSalesAverage(BaseModel):
     calculation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class BrandMaster(BaseModel):
+    """Master collection for brand rates that persist across stock resets"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    index_number: int = Field(default=0)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 class AnalyticsSourceInfo(BaseModel):
     """Information about data source used for analytics"""
     data_source: str  # "historical" or "current"
