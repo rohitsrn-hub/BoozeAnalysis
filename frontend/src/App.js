@@ -171,6 +171,30 @@ function App() {
     }
   };
 
+  // Undo upload
+  const handleUndoUpload = async (uploadId, filename) => {
+    if (!window.confirm(`Are you sure you want to undo the upload of "${filename}"?\n\nThis will restore data from the most recent backup before this upload.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API}/upload-history/${uploadId}/undo`);
+      toast.success(response.data.message || "Upload undone successfully!");
+      
+      // Refresh data
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || "Failed to undo upload";
+      toast.error(errorMessage);
+      console.error("Undo error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Module 5: Fetch analytics source information
   const fetchAnalyticsSource = async () => {
     try {
