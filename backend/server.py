@@ -1633,62 +1633,6 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         
         logging.info(f"📊 Calculated sales trends for {len(sales_trends)} dates")
         
-        # Sort sales trends by date chronologically
-        def parse_date_for_sorting(date_str):
-            """Parse various date formats for chronological sorting"""
-            try:
-                import re
-                from datetime import datetime
-                
-                if not date_str:
-                    return datetime.min
-                
-                date_str = str(date_str).strip()
-                
-                # Handle full datetime strings
-                if 'T' in date_str or len(date_str) > 15:
-                    try:
-                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
-                        return dt
-                    except:
-                        pass
-                
-                # Parse various date formats - handle dates with and without years
-                
-                # First try: dates with year (21-Sep-25, 01-Oct-25)
-                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-                
-                # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
-                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name = match.groups()
-                    year = "2025"  # Default to 2025 for dates without year
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-                
-                # Third try: ISO format (2025-10-04)
-                match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
-                if match:
-                    return datetime.strptime(match.group(0), "%Y-%m-%d")
-                
-                # Fourth try: numeric dates (04-10-25, 04/10/2025)
-                match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
-                if match:
-                    day, month, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    return datetime(int(year), int(month), int(day))
-                        
-            except Exception as e:
-                print(f"Warning: Could not parse date '{date_str}': {e}")
-                return datetime.min
-            
-            return datetime.min
-        
         # Sort by actual date values, not string comparison
         sorted_trends = dict(sorted(sales_trends.items(), key=lambda item: parse_date_for_sorting(item[0])))
         
