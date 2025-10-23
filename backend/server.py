@@ -1418,15 +1418,27 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 if is_fresh_start:
                     print(f"🆕 Creating fresh D1 record for brand '{brand_name}'")
                     
+                    # Fetch rates from brands_master if available (PERSISTENCE FEATURE)
+                    master_brand = await db.brands_master.find_one({"brand_name": brand_name})
+                    
+                    if master_brand:
+                        wholesale_rate = master_brand.get('wholesale_rate', 0.0)
+                        selling_rate = master_brand.get('selling_rate', 0.0)
+                        print(f"✅ Found persisted rates for '{brand_name}': W={wholesale_rate}, S={selling_rate}")
+                    else:
+                        wholesale_rate = 0.0
+                        selling_rate = 0.0
+                        print(f"⚠️ No persisted rates for '{brand_name}', using 0.0")
+                    
                     # Create fresh brand record with this date as D1 and DL
                     new_brand_data = {
                         'id': str(uuid.uuid4()),
                         'brand_name': brand_name,
                         'index_number': index_number,
                         'product_id': f"ID_{index_number}",
-                        'wholesale_rate': 0.0,  # Will be filled when rates are updated
-                        'selling_rate': 0.0,    # Will be filled when rates are updated
-                        'rate': 0.0,
+                        'wholesale_rate': wholesale_rate,  # Loaded from brands_master
+                        'selling_rate': selling_rate,      # Loaded from brands_master
+                        'rate': selling_rate,
                         'D1_date': new_date_column,
                         'D1_stock': new_stock_qty,
                         'DL_date': new_date_column,
