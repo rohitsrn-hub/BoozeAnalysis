@@ -1519,7 +1519,9 @@ async def get_upload_history():
                 "upload_timestamp": record["upload_timestamp"],
                 "records_count": record["records_count"],
                 "file_size": record["file_size"],
-                "uploaded_by": record.get("uploaded_by", "dashboard_user")
+                "uploaded_by": record.get("uploaded_by", "dashboard_user"),
+                "can_undo": record.get("can_undo", False),
+                "undone_at": record.get("undone_at")
             }
             for record in upload_records
         ]
@@ -1527,6 +1529,85 @@ async def get_upload_history():
     except Exception as e:
         logging.error(f"Error fetching upload history: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching upload history: {str(e)}")
+
+@api_router.post("/upload-history/{upload_id}/undo")
+async def undo_upload(upload_id: str):
+    """
+    Undo a specific upload by restoring from the most recent backup before that upload.
+    Note: This is a simplified implementation that restores from the last backup.
+    For more granular undo, each upload would need to store before/after snapshots.
+    """
+    try:
+        # Find the upload history record
+        upload_record = await db.upload_history.find_one({"id": upload_id})
+        
+        if not upload_record:
+            raise HTTPException(status_code=404, detail="Upload history not found")
+        
+        if upload_record.get("undone_at"):
+            raise HTTPException(status_code=400, detail="This upload has already been undone")
+        
+        if not upload_record.get("can_undo", False):
+            raise HTTPException(status_code=400, detail="This upload cannot be undone")
+        
+        # Find the most recent backup before this upload
+        upload_time = upload_record["upload_timestamp"]
+        backup = await db.stock_backups.find_one(
+            {"backup_timestamp": {"$lt": upload_time}},
+            sort=[("backup_timestamp", -1)]
+        )
+        
+        if not backup:
+            raise HTTPException(
+                status_code=404, 
+                detail="No backup found before this upload. Cannot undo."
+            )
+        
+        # Restore from backup
+        backup_data = backup.get('data_snapshot', [])
+        
+        if not backup_data:
+            raise HTTPException(status_code=400, detail="Backup contains no data")
+        
+        # Clear current data
+        current_count = await db.liquor_data.count_documents({})
+        await db.liquor_data.delete_many({})
+        
+        # Restore backup data
+        restored_records = []
+        for record in backup_data:
+            if 'id' not in record:
+                record['id'] = str(uuid.uuid4())
+            if 'upload_timestamp' not in record:
+                record['upload_timestamp'] = datetime.now(timezone.utc)
+            restored_records.append(record)
+        
+        if restored_records:
+            await db.liquor_data.insert_many(restored_records)
+        
+        # Mark upload as undone
+        await db.upload_history.update_one(
+            {"id": upload_id},
+            {"$set": {"undone_at": datetime.now(timezone.utc)}}
+        )
+        
+        logging.info(f"Undone upload {upload_id}: Restored {len(restored_records)} records from backup")
+        
+        return {
+            "success": True,
+            "upload_id": upload_id,
+            "backup_used": backup.get("id"),
+            "backup_date": backup.get("backup_timestamp"),
+            "records_restored": len(restored_records),
+            "records_cleared": current_count,
+            "message": f"Successfully undone upload. Restored {len(restored_records)} records from backup dated {backup.get('backup_timestamp')}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error undoing upload: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error undoing upload: {str(e)}")
 
 # Keep existing endpoints for backward compatibility
 @api_router.post("/upload-data")
