@@ -2800,10 +2800,32 @@ async def should_use_historical_data() -> tuple[bool, int]:
     return (days < 5, days)
 
 async def get_projected_data_from_historical():
-    """Get projected liquor data based on historical sales averages"""
+    """Get projected liquor data based on historical sales averages (most recent month only)"""
     try:
-        # Get the most recent historical data
-        historical_records = await db.historical_sales_averages.find().to_list(1000)
+        # Get ALL historical data first
+        all_historical_records = await db.historical_sales_averages.find().to_list(1000)
+        
+        if not all_historical_records:
+            return []
+        
+        # Group by brand_name and keep only the most recent month's data per brand
+        # This prevents counting the same brand multiple times from different months
+        brand_latest_data = {}
+        for record in all_historical_records:
+            brand_name = record.get('brand_name')
+            month_year = record.get('month_year', '')
+            
+            if brand_name not in brand_latest_data:
+                brand_latest_data[brand_name] = record
+            else:
+                # Compare months and keep the most recent
+                existing_month = brand_latest_data[brand_name].get('month_year', '')
+                if month_year > existing_month:  # Newer month (string comparison works for "Oct-2025" > "Sep-2025")
+                    brand_latest_data[brand_name] = record
+        
+        # Convert back to list (now with unique brands only)
+        historical_records = list(brand_latest_data.values())
+        logging.info(f"Using {len(historical_records)} unique brands from historical data (filtered from {len(all_historical_records)} total records)")
         
         if not historical_records:
             return []
