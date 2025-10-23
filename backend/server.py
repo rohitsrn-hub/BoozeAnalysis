@@ -1346,8 +1346,6 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 
                 # Calculate new number of days with updated date range
                 try:
-                    from datetime import datetime
-                    
                     def parse_date_string(date_str):
                         import re
                         match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
