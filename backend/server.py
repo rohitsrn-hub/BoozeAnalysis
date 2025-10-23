@@ -2868,6 +2868,7 @@ async def get_projected_data_from_historical():
                 'DL_stock': record.get('DL_stock', 0),
                 'D1_date': record.get('D1_date', 'N/A'),
                 'DL_date': record.get('DL_date', 'N/A'),
+                'daily_sales': record.get('daily_sales', {}),  # Include daily_sales for trends
             }
         
         # Create projected records based on historical averages
