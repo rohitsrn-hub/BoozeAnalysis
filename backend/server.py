@@ -1536,9 +1536,8 @@ async def get_upload_history():
 @api_router.post("/upload-history/{upload_id}/undo")
 async def undo_upload(upload_id: str):
     """
-    Undo a specific upload by restoring from the most recent backup before that upload.
-    Note: This is a simplified implementation that restores from the last backup.
-    For more granular undo, each upload would need to store before/after snapshots.
+    Undo a specific upload by reversing only the changes made by that upload.
+    This provides granular undo - only the data from this specific upload is removed.
     """
     try:
         # Find the upload history record
@@ -1553,40 +1552,68 @@ async def undo_upload(upload_id: str):
         if not upload_record.get("can_undo", False):
             raise HTTPException(status_code=400, detail="This upload cannot be undone")
         
-        # Find the most recent backup before this upload
-        upload_time = upload_record["upload_timestamp"]
-        backup = await db.stock_backups.find_one(
-            {"backup_timestamp": {"$lt": upload_time}},
-            sort=[("backup_timestamp", -1)]
-        )
+        changes_snapshot = upload_record.get("changes_snapshot", {})
+        upload_type = upload_record.get("upload_type")
         
-        if not backup:
+        if not changes_snapshot:
             raise HTTPException(
-                status_code=404, 
-                detail="No backup found before this upload. Cannot undo."
+                status_code=400, 
+                detail="No change information available for this upload. Cannot undo."
             )
         
-        # Restore from backup
-        backup_data = backup.get('data_snapshot', [])
+        brands_reverted = 0
+        brands_deleted = 0
         
-        if not backup_data:
-            raise HTTPException(status_code=400, detail="Backup contains no data")
+        # Process undo based on upload type
+        if upload_type == "daily_update":
+            # For Today's Data updates, reverse the changes
+            brands_updated = changes_snapshot.get("brands_updated", {})
+            brands_added = changes_snapshot.get("brands_added", [])
+            date_added = changes_snapshot.get("date_added")
+            
+            # Revert updated brands
+            for brand_id, previous_state in brands_updated.items():
+                brand_record = await db.liquor_data.find_one({"id": brand_id})
+                
+                if brand_record:
+                    # Remove the date that was added
+                    current_daily_sales = brand_record.get('daily_sales', {})
+                    if date_added and date_added in current_daily_sales:
+                        del current_daily_sales[date_added]
+                    
+                    # Restore previous values
+                    update_data = {
+                        "daily_sales": current_daily_sales,
+                        "DL_date": previous_state.get("DL_date"),
+                        "DL_stock": previous_state.get("DL_stock"),
+                        "current_stock_qty": previous_state.get("current_stock_qty"),
+                        "total_sales_qty": previous_state.get("total_sales_qty"),
+                        "avg_daily_sales_qty": previous_state.get("avg_daily_sales_qty"),
+                        "days_analyzed": previous_state.get("days_analyzed"),
+                        "monthly_sale_value": previous_state.get("monthly_sale_value"),
+                        "avg_daily_sale": previous_state.get("avg_daily_sale"),
+                        "stock_value_today": previous_state.get("stock_value_today"),
+                        "stock_available_days": previous_state.get("stock_available_days"),
+                        "stock_ratio": previous_state.get("stock_ratio")
+                    }
+                    
+                    await db.liquor_data.update_one(
+                        {"id": brand_id},
+                        {"$set": update_data}
+                    )
+                    brands_reverted += 1
+            
+            # Delete brands that were newly added
+            if brands_added:
+                result = await db.liquor_data.delete_many({"id": {"$in": brands_added}})
+                brands_deleted = result.deleted_count
         
-        # Clear current data
-        current_count = await db.liquor_data.count_documents({})
-        await db.liquor_data.delete_many({})
-        
-        # Restore backup data
-        restored_records = []
-        for record in backup_data:
-            if 'id' not in record:
-                record['id'] = str(uuid.uuid4())
-            if 'upload_timestamp' not in record:
-                record['upload_timestamp'] = datetime.now(timezone.utc)
-            restored_records.append(record)
-        
-        if restored_records:
-            await db.liquor_data.insert_many(restored_records)
+        elif upload_type == "full_monthly":
+            # For Full Monthly upload, delete all the brands that were added
+            brands_added = changes_snapshot.get("brands_added", [])
+            if brands_added:
+                result = await db.liquor_data.delete_many({"id": {"$in": brands_added}})
+                brands_deleted = result.deleted_count
         
         # Mark upload as undone
         await db.upload_history.update_one(
@@ -1594,16 +1621,15 @@ async def undo_upload(upload_id: str):
             {"$set": {"undone_at": datetime.now(timezone.utc)}}
         )
         
-        logging.info(f"Undone upload {upload_id}: Restored {len(restored_records)} records from backup")
+        logging.info(f"Undone upload {upload_id}: Reverted {brands_reverted} brands, deleted {brands_deleted} brands")
         
         return {
             "success": True,
             "upload_id": upload_id,
-            "backup_used": backup.get("id"),
-            "backup_date": backup.get("backup_timestamp"),
-            "records_restored": len(restored_records),
-            "records_cleared": current_count,
-            "message": f"Successfully undone upload. Restored {len(restored_records)} records from backup dated {backup.get('backup_timestamp')}"
+            "upload_type": upload_type,
+            "brands_reverted": brands_reverted,
+            "brands_deleted": brands_deleted,
+            "message": f"Successfully undone upload. Reverted changes for {brands_reverted} brands and removed {brands_deleted} newly added brands."
         }
         
     except HTTPException:
