@@ -1733,9 +1733,9 @@ function App() {
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
                       <TrendingUp className="h-5 w-5 text-indigo-600" />
-                      <span>Stock Analysis Overview</span>
+                      <span>Daily Sales Trend</span>
                     </CardTitle>
-                    <CardDescription>Current stock positions and estimated performance</CardDescription>
+                    <CardDescription>Track stock sold day-by-day to understand sales patterns</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -1759,10 +1759,11 @@ function App() {
                                   angle={-45}
                                   textAnchor="end"
                                   height={80}
+                                  label={{ value: 'Date', position: 'insideBottom', offset: -5 }}
                                 />
-                                <YAxis />
+                                <YAxis label={{ value: 'Stock Sold (Units)', angle: -90, position: 'insideLeft' }} />
                                 <Tooltip 
-                                  formatter={(value) => [formatNumber(value || 0), "Daily Stock"]}
+                                  formatter={(value) => [formatNumber(value || 0), "Stock Sold"]}
                                   labelFormatter={(label) => `Date: ${label}`}
                                 />
                                 <Line 
@@ -1771,13 +1772,14 @@ function App() {
                                   stroke="#3B82F6" 
                                   strokeWidth={3}
                                   dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                                  name="Stock Sold"
                                 />
                               </LineChart>
                             </ResponsiveContainer>
                           </div>
                           
                           <div className="grid gap-4">
-                            <h4 className="font-medium text-gray-900">Recent Stock Trends</h4>
+                            <h4 className="font-medium text-gray-900">Daily Sales Summary</h4>
                             {Object.entries(analyticsData.sales_trends)
                               .filter(([date]) => !date.includes('Monthly') && !date.includes('Stock'))
                               .map(([date, sales]) => (
@@ -1788,7 +1790,7 @@ function App() {
                                   </div>
                                   <div className="text-right">
                                     <div className="text-lg font-semibold text-indigo-600">{formatNumber(sales || 0)}</div>
-                                    <div className="text-xs text-gray-500">total stock units</div>
+                                    <div className="text-xs text-gray-500">units sold</div>
                                   </div>
                                 </div>
                               ))}
@@ -1797,8 +1799,8 @@ function App() {
                       ) : (
                         <div className="text-center py-8">
                           <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Stock Analysis Ready</h3>
-                          <p className="text-gray-600">Upload your new liquor data to view detailed stock analysis</p>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">Sales Trend Ready</h3>
+                          <p className="text-gray-600">Upload your daily sales data to view stock sold trends</p>
                         </div>
                       )}
                     </div>
