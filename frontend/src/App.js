@@ -1001,10 +1001,10 @@ function App() {
                 variant="outline"
                 size="sm"
                 className="bg-white hover:bg-gray-50 text-xs"
-                data-testid="history-btn"
+                data-testid="upload-history-btn"
               >
                 <History className="w-3 h-3 mr-1" />
-                History
+                Upload History
               </Button>
             </div>
           </div>
