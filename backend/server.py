@@ -1484,6 +1484,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     }
                     
                     await db.liquor_data.insert_one(new_brand_data)
+                    brands_added.append(new_brand_data['id'])  # Track for undo
                     new_brands_count += 1
                     print(f"✅ Created fresh brand '{brand_name}' with D1={new_date_column}, stock={new_stock_qty}")
                 else:
