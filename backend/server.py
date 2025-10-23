@@ -76,6 +76,7 @@ class UploadHistory(BaseModel):
     uploaded_by: str = Field(default="dashboard_user")
     can_undo: bool = Field(default=True)  # Whether this upload can be undone
     undone_at: Optional[datetime] = None  # When was this upload undone
+    changes_snapshot: Optional[Dict[str, Any]] = None  # Detailed changes for granular undo
 
 class OverstockConfig(BaseModel):
     multiplier: float = 3.0
