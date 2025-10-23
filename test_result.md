@@ -318,6 +318,51 @@ backend:
         agent: "testing"
         comment: "TESTED: /api/analytics-source endpoint working perfectly. ✅ Returns proper response structure with all required fields (data_source, days_of_data, using_month, transition_threshold, is_transitioning, confidence_level) ✅ Data source logic verified: returns 'historical' when days < 5, 'current' when days >= 5 ✅ Current test scenario: Database empty (days_of_data: 0), correctly returns data_source: 'historical', using_month: 'Sep-2025', confidence_level: 'none' ✅ Historical averages available (62 brands for Sep-2025) ✅ Banner logic verified: Empty DB scenario shows 'Using Historical Averages...' banner ✅ Response format matches expected structure exactly ✅ should_use_historical_data() function working correctly (days < 5 threshold) ✅ get_days_of_current_data() returns 0 for empty database ✅ All field types and values validated. The analytics-source endpoint is fully functional and ready for frontend integration."
 
+  - task: "Critical Issue 1: Duplicate Brands After Second Today's Data Upload"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "user"
+        comment: "User reported: After reset + first Today's Data upload → 62 brands ✅. After second Today's Data upload → 123 brands ❌ (should still be 62). Need to test uploading Today's Data twice on empty database and check brand count."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Critical Issue 1 - Duplicate Brands Test PASSED ✅ Comprehensive testing completed: (1) Database cleared successfully after reset (2) First Today's Data upload (19-Oct-25): 62 brands created correctly (3) Second Today's Data upload (20-Oct-25): Brand count remains 62 (no duplicates) ✅ CRITICAL SUCCESS: The duplicate brands issue is NOT occurring in current implementation. The system correctly updates existing brands instead of creating duplicates when uploading Today's Data multiple times. Upload logic working as expected: first upload creates fresh brands, subsequent uploads update existing brands with new date columns."
+
+  - task: "Critical Issue 2: Sales Trends Empty"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "user"
+        comment: "User reported: User has 3 days of data uploaded but Trends tab shows empty/placeholder. Need to check if daily_sales field is populated in liquor_data records and if /api/analytics returns sales_trends with data."
+      - working: false
+        agent: "testing"
+        comment: "TESTED: Critical Issue 2 - Sales Trends Empty CONFIRMED ❌ ROOT CAUSE IDENTIFIED: (1) daily_sales field IS populated correctly in database records ✅ (2) /api/analytics returns EMPTY sales_trends {} ❌ (3) ISSUE: When days_of_data < 5, system uses historical projections via get_projected_data_from_historical() (4) Historical projections have EMPTY daily_sales dictionaries (line 2854: 'daily_sales': {}) (5) Sales trends calculation depends on daily_sales data (lines 1562-1567) (6) VERIFICATION: With 6+ days of data, system switches to 'current' data source and sales_trends populate correctly ✅ SOLUTION NEEDED: Historical projections should include daily_sales data OR sales_trends should use alternative data source when using historical projections."
+
+  - task: "Critical Issue 3: Datetime Error (Still Persisting)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "user"
+        comment: "User reported: Error 'cannot access local variable 'datetime' where it is not associated with a value' occurs when uploading Today's Data after stock reset. Import was removed at line 1349 but error persists. Need to test uploading Today's Data on empty database."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Critical Issue 3 - Datetime Error Test PASSED ✅ Today's Data upload on empty database completed successfully without any datetime errors. Upload response: 'Fresh start: Created 62 brands with D1 date 22-Oct-25'. No datetime-related errors detected during upload process. The datetime error issue appears to be resolved in current implementation."
+
 frontend:
   - task: "Fix tab styling to show initial colors"
     implemented: true
