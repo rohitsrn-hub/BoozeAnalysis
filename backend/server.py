@@ -1491,13 +1491,18 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     print(f"⚠️ Brand '{brand_name}' (Index: {index_number}) not found in existing data - skipping")
                     # Note: We don't add new brands for today's data uploads when data exists
         
-        # Save upload history
+        # Save upload history with changes snapshot for granular undo
         upload_history = UploadHistory(
             filename=file.filename,
             upload_type="daily_update",
             records_count=len(brands_data),
             file_size=len(content),
-            can_undo=True  # Enable undo for this upload
+            can_undo=True,  # Enable undo for this upload
+            changes_snapshot={
+                "brands_updated": brands_updated,
+                "brands_added": brands_added,
+                "date_added": new_date_column
+            }
         )
         await db.upload_history.insert_one(upload_history.dict())
         
