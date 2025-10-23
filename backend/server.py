@@ -1350,6 +1350,21 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 existing_brand = await db.liquor_data.find_one({"index_number": index_number})
             
             if existing_brand:
+                # Store previous state for undo
+                brands_updated[existing_brand['id']] = {
+                    "DL_date": existing_brand.get('DL_date'),
+                    "DL_stock": existing_brand.get('DL_stock'),
+                    "current_stock_qty": existing_brand.get('current_stock_qty'),
+                    "total_sales_qty": existing_brand.get('total_sales_qty'),
+                    "avg_daily_sales_qty": existing_brand.get('avg_daily_sales_qty'),
+                    "days_analyzed": existing_brand.get('days_analyzed'),
+                    "monthly_sale_value": existing_brand.get('monthly_sale_value'),
+                    "avg_daily_sale": existing_brand.get('avg_daily_sale'),
+                    "stock_value_today": existing_brand.get('stock_value_today'),
+                    "stock_available_days": existing_brand.get('stock_available_days'),
+                    "stock_ratio": existing_brand.get('stock_ratio')
+                }
+                
                 # Append new date column to existing daily_sales
                 current_daily_sales = existing_brand.get('daily_sales', {})
                 current_daily_sales[new_date_column] = new_stock_qty
