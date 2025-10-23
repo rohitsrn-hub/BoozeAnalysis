@@ -1604,34 +1604,50 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         # Prepare sales trends data - Calculate actual DAILY SALES (units sold per day)
         # Instead of showing stock quantities, calculate sales from stock differences
         sales_trends = {}
+        brands_processed = 0
         
-        for record in data_dicts:
-            daily_sales_dict = record['daily_sales']
-            
-            if not daily_sales_dict:
-                continue
-            
-            # Sort dates chronologically for this brand
-            sorted_dates = sorted(daily_sales_dict.keys(), key=lambda d: parse_date_for_sorting(d))
-            
-            for i, date in enumerate(sorted_dates):
-                current_stock = daily_sales_dict[date]
+        try:
+            for record in data_dicts:
+                daily_sales_dict = record.get('daily_sales', {})
                 
-                if i == 0:
-                    # First date - no previous data, sales = 0 or use D1 stock - DL stock if available
-                    sales_qty = 0
-                else:
-                    # Calculate sales as: previous_stock - current_stock
-                    previous_date = sorted_dates[i-1]
-                    previous_stock = daily_sales_dict[previous_date]
-                    sales_qty = max(0, previous_stock - current_stock)  # Ensure non-negative
+                if not daily_sales_dict:
+                    continue
                 
-                # Aggregate sales across all brands for this date
-                if date not in sales_trends:
-                    sales_trends[date] = 0
-                sales_trends[date] += sales_qty
-        
-        logging.info(f"📊 Calculated sales trends for {len(sales_trends)} dates")
+                brands_processed += 1
+                
+                # Sort dates chronologically for this brand
+                try:
+                    sorted_dates = sorted(daily_sales_dict.keys(), key=lambda d: parse_date_for_sorting(d))
+                except Exception as e:
+                    logging.error(f"Error sorting dates for brand {record.get('brand_name')}: {e}")
+                    continue
+                
+                for i, date in enumerate(sorted_dates):
+                    try:
+                        current_stock = daily_sales_dict[date]
+                        
+                        if i == 0:
+                            # First date - no previous data, sales = 0
+                            sales_qty = 0
+                        else:
+                            # Calculate sales as: previous_stock - current_stock
+                            previous_date = sorted_dates[i-1]
+                            previous_stock = daily_sales_dict[previous_date]
+                            sales_qty = max(0, previous_stock - current_stock)  # Ensure non-negative
+                        
+                        # Aggregate sales across all brands for this date
+                        if date not in sales_trends:
+                            sales_trends[date] = 0
+                        sales_trends[date] += sales_qty
+                        
+                    except Exception as e:
+                        logging.error(f"Error calculating sales for date {date}: {e}")
+                        continue
+            
+            logging.info(f"📊 Calculated sales trends for {len(sales_trends)} dates from {brands_processed} brands")
+            
+        except Exception as e:
+            logging.error(f"Error in sales trends calculation: {e}", exc_info=True)
         
         # Sort by actual date values, not string comparison
         sorted_trends = dict(sorted(sales_trends.items(), key=lambda item: parse_date_for_sorting(item[0])))
