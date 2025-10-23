@@ -3025,7 +3025,7 @@ async def reset_stock_data():
         
         await db.stock_backups.insert_one(backup.dict())
         
-        # STEP 3: Delete all liquor data
+        # STEP 3: Delete all liquor data (brands_master is preserved for rate persistence)
         delete_result = await db.liquor_data.delete_many({})
         
         historical_count = historical_result.get('historical_records_created', 0)
