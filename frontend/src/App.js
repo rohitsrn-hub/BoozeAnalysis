@@ -1151,12 +1151,25 @@ function App() {
                                     <h4 className="font-semibold text-gray-900">{upload.filename}</h4>
                                     <p className="text-sm text-gray-600">
                                       {upload.upload_type === 'full_monthly' ? 'Full Monthly Data' : "Today's Data Update"}
+                                      {upload.undone_at && <span className="ml-2 text-red-600">(Undone)</span>}
                                     </p>
                                   </div>
                                 </div>
-                                <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
-                                  {upload.records_count} records
-                                </Badge>
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
+                                    {upload.records_count} records
+                                  </Badge>
+                                  {upload.can_undo && !upload.undone_at && (
+                                    <Button
+                                      onClick={() => handleUndoUpload(upload.id, upload.filename)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      Undo
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                               <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
                                 <div>
