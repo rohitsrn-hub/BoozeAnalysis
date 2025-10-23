@@ -1332,6 +1332,10 @@ async def upload_todays_data(file: UploadFile = File(...)):
         if is_fresh_start:
             print("🆕 Database is empty - treating Today's Data as initial D1 upload")
         
+        # Track changes for undo functionality
+        brands_updated = {}  # {brand_id: previous_state}
+        brands_added = []    # [brand_id, brand_id, ...]
+        
         # Append today's data to existing monthly data OR create fresh D1 data
         updated_count = 0
         new_brands_count = 0
