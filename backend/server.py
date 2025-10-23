@@ -2367,8 +2367,32 @@ async def update_rates_from_excel(file: UploadFile = File(...)):
                     # Try finding by name
                     brand_record = await db.liquor_data.find_one({"brand_name": brand_name})
                 
+                # ALWAYS save/update to brands_master for persistence across resets
+                existing_master = await db.brands_master.find_one({"brand_name": brand_name})
+                
+                if existing_master:
+                    # Update existing master record
+                    await db.brands_master.update_one(
+                        {"id": existing_master["id"]},
+                        {"$set": {
+                            "wholesale_rate": wholesale_rate,
+                            "selling_rate": retail_rate,
+                            "index_number": index_num,
+                            "last_updated": datetime.now(timezone.utc)
+                        }}
+                    )
+                else:
+                    # Create new master record
+                    brand_master = BrandMaster(
+                        brand_name=brand_name,
+                        wholesale_rate=wholesale_rate,
+                        selling_rate=retail_rate,
+                        index_number=index_num
+                    )
+                    await db.brands_master.insert_one(brand_master.dict())
+                
                 if brand_record:
-                    # Update rates and recalculate stock values
+                    # Update rates in current liquor_data and recalculate stock values
                     current_stock_qty = brand_record.get('current_stock_qty', 0)
                     
                     update_data = {
@@ -2393,7 +2417,8 @@ async def update_rates_from_excel(file: UploadFile = File(...)):
                     updated_brands.append(brand_name)
                     updated_count += 1
                 else:
-                    not_found_brands.append(f"{brand_name} (Index: {index_num})")
+                    # Brand not in current database, but rates saved to master
+                    not_found_brands.append(f"{brand_name} (Index: {index_num}) - Rates saved for future use")
                     
             except Exception as row_error:
                 logging.warning(f"Error processing row {idx}: {row_error}")
