@@ -69,11 +69,13 @@ class LiquorData(BaseModel):
 class UploadHistory(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     filename: str
-    upload_type: str  # "full_monthly" or "daily_update"
+    upload_type: str  # "full_monthly", "daily_update", or "rate_update"
     upload_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     records_count: int
     file_size: int
     uploaded_by: str = Field(default="dashboard_user")
+    can_undo: bool = Field(default=True)  # Whether this upload can be undone
+    undone_at: Optional[datetime] = None  # When was this upload undone
 
 class OverstockConfig(BaseModel):
     multiplier: float = 3.0
