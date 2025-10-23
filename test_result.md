@@ -356,7 +356,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Critical Issue 1: Duplicate Brands After Second Today's Data Upload"
+    - "Critical Issue 2: Sales Trends Empty"
+    - "Critical Issue 3: Datetime Error (Still Persisting)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
