@@ -1449,11 +1449,12 @@ async def upload_todays_data(file: UploadFile = File(...)):
                         'monthly_sales_qty': 0.0,
                         'monthly_sale_value': 0.0,
                         'monthly_sale_qty': 0,
-                        'stock_value_today': 0.0,  # Will be calculated when rates are set
+                        'stock_value_today': selling_rate * new_stock_qty,  # Calculated with loaded rate
                         'stock_ratio': 0.0,
                         'stock_available_days': 999,
                         'avg_daily_sale': 0.0,
-                        'stock_value_before': 0.0,
+                        'stock_value_before': selling_rate * new_stock_qty,  # Same as today for D1
+
                         'daily_sales': {new_date_column: new_stock_qty},
                         'days_analyzed': 1,
                         'upload_timestamp': datetime.now(timezone.utc)
