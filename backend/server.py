@@ -2638,7 +2638,6 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
             if 'id' not in record:
                 record['id'] = str(uuid.uuid4())
             if 'upload_timestamp' not in record:
-                from datetime import datetime, timezone
                 record['upload_timestamp'] = datetime.now(timezone.utc)
             restored_records.append(record)
         
