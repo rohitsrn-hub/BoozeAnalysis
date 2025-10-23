@@ -2846,12 +2846,26 @@ async def get_projected_data_from_historical():
                 stock_available_days = 0
                 stock_ratio = 0
             
+            # Create daily_sales dict with projected values for visualization
+            # Use current_stock_info to get actual dates if available
+            daily_sales_dict = {}
+            if current_stock_info.get('daily_sales'):
+                # Use actual daily_sales from current stock data
+                daily_sales_dict = current_stock_info.get('daily_sales', {})
+            else:
+                # Generate synthetic daily sales for historical projection visualization
+                # Use D1 and DL dates if available to show trend
+                d1_date = current_stock_info.get('D1_date', 'N/A')
+                if d1_date != 'N/A' and avg_daily_qty > 0:
+                    # Create a simulated daily sales trend based on historical average
+                    daily_sales_dict[d1_date] = int(avg_daily_qty)
+            
             # Create projected record in same format as liquor_data
             projected_record = {
                 'id': str(uuid.uuid4()),
                 'brand_name': brand_name,
                 'rate': selling_rate,
-                'daily_sales': {},  # Empty for historical projection
+                'daily_sales': daily_sales_dict,  # Populated with actual or projected daily data
                 'monthly_sale_qty': int(projected_monthly_qty),
                 'monthly_sale_value': projected_monthly_value,
                 'avg_daily_sale': projected_monthly_value / 30,
