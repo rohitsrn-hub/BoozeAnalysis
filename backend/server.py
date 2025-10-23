@@ -1152,7 +1152,8 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
             filename=file.filename,
             upload_type="full_monthly",
             records_count=len(liquor_objects),
-            file_size=len(content)
+            file_size=len(content),
+            can_undo=True  # Enable undo for this upload
         )
         await db.upload_history.insert_one(upload_history.dict())
         
