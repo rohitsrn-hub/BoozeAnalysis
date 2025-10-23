@@ -1141,20 +1141,27 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
         
         # Convert to LiquorData models and insert
         liquor_objects = []
+        brands_added_ids = []
         for item_data in parsed_data:
             liquor_obj = LiquorData(**item_data)
-            liquor_objects.append(liquor_obj.dict())
+            liquor_obj_dict = liquor_obj.dict()
+            liquor_objects.append(liquor_obj_dict)
+            brands_added_ids.append(liquor_obj_dict['id'])
         
         if liquor_objects:
             await db.liquor_data.insert_many(liquor_objects)
         
-        # Save upload history
+        # Save upload history with changes snapshot
         upload_history = UploadHistory(
             filename=file.filename,
             upload_type="full_monthly",
             records_count=len(liquor_objects),
             file_size=len(content),
-            can_undo=True  # Enable undo for this upload
+            can_undo=True,  # Enable undo for this upload
+            changes_snapshot={
+                "brands_added": brands_added_ids,
+                "replaced_all": True
+            }
         )
         await db.upload_history.insert_one(upload_history.dict())
         
