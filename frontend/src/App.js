@@ -1,52 +1,4566 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useState, useEffect } from "react";
+import "./App.css";
 import axios from "axios";
+import * as XLSX from 'xlsx';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
+import { Button } from "./components/ui/button";
+import { Input } from "./components/ui/input";
+import { Label } from "./components/ui/label";
+import { Alert, AlertDescription } from "./components/ui/alert";
+import { Badge } from "./components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { Progress } from "./components/ui/progress";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
+import { Upload, TrendingUp, AlertTriangle, BarChart3, Package, DollarSign, Calendar, FileSpreadsheet, HelpCircle, Play, CheckCircle, ArrowRight, Download, Zap, Target, Crown, History, Database, RefreshCw, FileText, Users, Key, Eye, EyeOff, PieChart as PieChartIcon, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Toaster } from "./components/ui/sonner";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+// AUTH REMOVED - Backup in /BACKUP_AUTH_CODE/
+// import UserManagement from "./auth/components/UserManagement";
+// import { PERMISSIONS } from "./auth/config";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-const Home = () => {
-  const helloWorldApi = async () => {
+function App() {
+  // Removed user and onLogout props - no authentication needed
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [chartsData, setChartsData] = useState(null);
+  const [demandData, setDemandData] = useState(null);
+  const [calculationData, setCalculationData] = useState(null);
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [overstockMultiplier, setOverstockMultiplier] = useState(3.0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [hasData, setHasData] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showVerifyDialog, setShowVerifyDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateError, setDuplicateError] = useState(null);
+  const [databaseView, setDatabaseView] = useState(null);
+  const [currentDateRange, setCurrentDateRange] = useState(null);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  // Module 1: Brand Management state
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [showRatesModal, setShowRatesModal] = useState(false);
+  const [brandFormData, setBrandFormData] = useState({
+    index_number: '',
+    brand_name: '',
+    wholesale_rate: '',
+    selling_rate: '',
+    initial_stock_qty: 0
+  });
+  const [ratesFile, setRatesFile] = useState(null);
+
+  // Module 3: Stock Reset & Backup state
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [showBackupsDialog, setShowBackupsDialog] = useState(false);
+  const [backupsList, setBackupsList] = useState([]);
+  const [resetting, setResetting] = useState(false);
+
+  // Module 4: Monthly Report Generation state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportParameters, setReportParameters] = useState({
+    include_executive_summary: true,
+    include_top_sellers: true,
+    include_slow_sellers: true,
+    include_capital_blockers: true,
+    include_revenue_analysis: true,
+    include_demand_forecast: true,
+    include_profit_analysis: true,
+    include_recommendations: true,
+    include_datewise_analysis: false,
+    report_title: "Monthly Sales Analytics Report",
+    report_period: ""
+  });
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  // Module 5: Historical Sales Averages state
+  const [analyticsSource, setAnalyticsSource] = useState(null);
+  const [showHistoricalTab, setShowHistoricalTab] = useState(false);
+  const [historicalAverages, setHistoricalAverages] = useState([]);
+  const [selectedHistoricalPeriods, setSelectedHistoricalPeriods] = useState([]);
+  const [historicalPeriodData, setHistoricalPeriodData] = useState(null);
+  const [loadingHistoricalData, setLoadingHistoricalData] = useState(false);
+  const [selectedMonthTab, setSelectedMonthTab] = useState(null);
+
+  // Module 6: Historical Forecast state
+  const [historicalPeriods, setHistoricalPeriods] = useState([]);
+  const [selectedPeriods, setSelectedPeriods] = useState([]);
+  const [historicalAnalysis, setHistoricalAnalysis] = useState(null);
+  const [analyzingHistory, setAnalyzingHistory] = useState(false);
+  const [forecastMode, setForecastMode] = useState('current'); // 'current' or 'historical'
+
+  // Sales Trends state
+  const [trendsPeriod, setTrendsPeriod] = useState("quarterly"); // quarterly, yearly, single
+  const [trendsData, setTrendsData] = useState(null);
+  const [selectedSalesMonth, setSelectedSalesMonth] = useState(null); // "Sep-Oct 2025"
+  const [availableSalesMonths, setAvailableSalesMonths] = useState([]);
+  const [loadingTrends, setLoadingTrends] = useState(false);
+
+  // Change Password state
+  const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
+  // Role-based access control helper functions
+  // AUTH REMOVED - All features available to everyone
+  const hasPermission = (permission) => true;
+  const isAdmin = () => true;
+
+  // Fetch all data
+  const fetchAnalytics = async (multiplier = 3.0) => {
     try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+      setLoading(true);
+      
+      // Fetch analytics data
+      const analyticsResponse = await axios.get(`${API}/analytics?overstock_multiplier=${multiplier}`);
+      setAnalyticsData(analyticsResponse.data);
+      
+      // Fetch charts data
+      const chartsResponse = await axios.get(`${API}/charts`);
+      setChartsData(chartsResponse.data);
+      
+      // Fetch demand recommendations
+      const demandResponse = await axios.get(`${API}/demand-recommendations`);
+      setDemandData(demandResponse.data);
+      
+      // Fetch calculation details
+      const calculationResponse = await axios.get(`${API}/calculation-details`);
+      setCalculationData(calculationResponse.data);
+      
+      // Fetch database view
+      const databaseResponse = await axios.get(`${API}/database-view`);
+      setDatabaseView(databaseResponse.data);
+      
+      // Module 5: Fetch analytics source info
+      await fetchAnalyticsSource();
+      
+      // Extract current D1/DL dates for header display from calculation data
+      try {
+        if (calculationResponse.data && calculationResponse.data.length > 0) {
+          const firstRecord = calculationResponse.data[0];
+          if (firstRecord.D1_date && firstRecord.DL_date) {
+            // Format dates for display
+            const formatDateForDisplay = (dateStr) => {
+              try {
+                if (!dateStr) return 'N/A';
+                
+                // Handle different date formats
+                if (dateStr.includes('T') || dateStr.includes('00:00:00')) {
+                  // It's a full datetime string like "2025-10-04 00:00:00"
+                  const date = new Date(dateStr);
+                  if (isNaN(date.getTime())) return dateStr; // Invalid date
+                  
+                  const day = date.getDate().toString().padStart(2, '0');
+                  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                  const month = months[date.getMonth()];
+                  const year = date.getFullYear().toString().slice(-2);
+                  return `${day}-${month}-${year}`;
+                } else {
+                  // It's already in format like "20-Sep-25"
+                  return dateStr;
+                }
+              } catch (e) {
+                console.warn('Error formatting date:', dateStr, e);
+                return dateStr; // Return as-is if parsing fails
+              }
+            };
+
+            setCurrentDateRange({
+              d1_date: formatDateForDisplay(firstRecord.D1_date),
+              dl_date: formatDateForDisplay(firstRecord.DL_date)
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Error extracting date range:', e);
+      }
+      
+      setHasData(true);
+      toast.success("Analytics updated successfully");
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      if (error.response?.status === 404) {
+        setHasData(false);
+        toast.error("No data found. Please upload liquor data first.");
+      } else {
+        toast.error(`Failed to fetch data: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Fetch upload history
+  const fetchUploadHistory = async () => {
+    try {
+      const response = await axios.get(`${API}/upload-history`);
+      setUploadHistory(response.data);
+    } catch (error) {
+      console.error("Error fetching upload history:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      
+      // More specific error messages
+      if (error.message === 'Network Error') {
+        toast.error("Cannot connect to backend. Check CORS settings.");
+      } else if (error.response?.status === 404) {
+        toast.error("Upload history endpoint not found");
+      } else {
+        toast.error(`Failed to fetch upload history: ${error.response?.data?.detail || error.message}`);
+      }
+    }
+  };
+
+  // Undo upload
+  const handleUndoUpload = async (uploadId, filename) => {
+    if (!window.confirm(`Are you sure you want to undo the upload of "${filename}"?\n\nThis will restore data from the most recent backup before this upload.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API}/upload-history/${uploadId}/undo`);
+      toast.success(response.data.message || "Upload undone successfully!");
+      
+      // Refresh all data including DL date and trends
+      await fetchAnalytics(overstockMultiplier);
+      await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || "Failed to undo upload";
+      toast.error(errorMessage);
+      console.error("Undo error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUpload = async (uploadId, filename) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${filename}" from upload history?\n\nThis will also remove the associated data period from trendlines and History tab.\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.delete(`${API}/upload-history/${uploadId}`);
+      toast.success(response.data.message || "Upload history deleted successfully!");
+      
+      // Refresh all data to reflect the deletion
+      await fetchUploadHistory();
+      await fetchAnalytics(overstockMultiplier);
+      await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+      await fetchHistoricalPeriods();
+      
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || "Failed to delete upload history";
+      toast.error(errorMessage);
+      console.error("Delete error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePeriod = async (periodId, periodName) => {
+    if (!window.confirm(`Are you sure you want to permanently delete the period "${periodName}"?\n\nThis will remove this period from:\n- Historical Analysis\n- Trendlines\n- All historical data views\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.delete(`${API}/stock/backup/${periodId}`);
+      toast.success(response.data.message || "Period deleted successfully!");
+      
+      // Refresh historical periods and trends
+      await fetchHistoricalPeriods();
+      await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+      
+      // Clear selection if deleted period was selected
+      if (selectedPeriods.includes(periodId)) {
+        setSelectedPeriods(selectedPeriods.filter(id => id !== periodId));
+      }
+      
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || "Failed to delete period";
+      toast.error(errorMessage);
+      console.error("Delete period error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Module 5: Fetch analytics source information
+  const fetchAnalyticsSource = async () => {
+    try {
+      const response = await axios.get(`${API}/analytics-source`);
+      setAnalyticsSource(response.data);
+    } catch (error) {
+      console.error("Error fetching analytics source:", error);
+    }
+  };
+
+  // Module 5: Fetch historical averages
+  const fetchHistoricalAverages = async (month = null) => {
+    try {
+      const url = month ? `${API}/historical-averages?month=${month}` : `${API}/historical-averages`;
+      const response = await axios.get(url);
+      setHistoricalAverages(response.data.historical_averages || []);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching historical averages:", error);
+      toast.error("Failed to fetch historical averages");
+      return null;
+    }
+  };
+
+  // Fetch historical periods for calendar
+  const fetchHistoricalPeriods = async () => {
+    try {
+      const response = await axios.get(`${API}/historical-periods`);
+      setHistoricalPeriods(response.data || []);
+    } catch (error) {
+      console.error("Error fetching historical periods:", error);
+      toast.error("Failed to fetch historical periods");
+    }
+  };
+
+  // Toggle historical period selection
+  const toggleHistoricalPeriodSelection = (periodId) => {
+    setSelectedHistoricalPeriods(prev => {
+      if (prev.includes(periodId)) {
+        return prev.filter(id => id !== periodId);
+      } else {
+        return [...prev, periodId];
+      }
+    });
+  };
+
+  // Fetch data for selected historical periods
+  const fetchHistoricalPeriodData = async () => {
+    if (selectedHistoricalPeriods.length === 0) {
+      toast.error("Please select at least one period to view");
+      return;
+    }
+
+    try {
+      setLoadingHistoricalData(true);
+      const response = await axios.post(`${API}/historical-data-view`, selectedHistoricalPeriods);
+      setHistoricalPeriodData(response.data);
+      toast.success(`Loaded data for ${selectedHistoricalPeriods.length} period(s)`);
+    } catch (error) {
+      console.error("Error fetching historical period data:", error);
+      toast.error("Failed to fetch historical period data");
+    } finally {
+      setLoadingHistoricalData(false);
+    }
+  };
+
+  // Analyze selected historical periods
+  const analyzeHistoricalPeriods = async () => {
+    if (selectedPeriods.length === 0) {
+      toast.error("Please select at least one period to analyze");
+      return;
+    }
+
+    try {
+      setAnalyzingHistory(true);
+      const response = await axios.post(`${API}/historical-analysis`, selectedPeriods);
+      setHistoricalAnalysis(response.data);
+      setForecastMode('historical');
+      toast.success(`Analyzed ${selectedPeriods.length} period(s) successfully`);
+    } catch (error) {
+      console.error("Error analyzing historical periods:", error);
+      toast.error("Failed to analyze historical periods");
+    } finally {
+      setAnalyzingHistory(false);
+    }
+  };
+
+  // Toggle period selection
+  const togglePeriodSelection = (periodId) => {
+    setSelectedPeriods(prev => {
+      if (prev.includes(periodId)) {
+        return prev.filter(id => id !== periodId);
+      } else {
+        return [...prev, periodId];
+      }
+    });
+  };
+
+  // Quick select presets
+  const selectLastNPeriods = (n) => {
+    const periodsToSelect = historicalPeriods.filter(p => p.has_data).slice(0, n).map(p => p.id);
+    setSelectedPeriods(periodsToSelect);
+  };
+
+  // Handle full monthly data upload
+  const handleFullMonthlyUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-full-monthly-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Successfully uploaded full monthly data: ${response.data.total_records} records`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading full monthly data:", error);
+      
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle today's data upload
+  const handleTodaysDataUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-todays-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
+      
+      // Fetch analytics, trends, and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading today's data:", error);
+      
+      let errorMessage = "Failed to upload today's data";
+      
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        
+        // Handle duplicate date error specially
+        if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
+          setDuplicateError({
+            duplicateDates: detail.duplicate_dates,
+            filename: detail.filename,
+            suggestion: detail.suggestion,
+            existing_dates_found: detail.existing_dates_found || []
+          });
+          setShowDuplicateDialog(true);
+          return; // Exit early for duplicate date error
+        }
+        
+        // Handle other errors
+        if (typeof detail === 'object') {
+          errorMessage = detail.message || errorMessage;
+          
+          // Show available columns if provided
+          if (detail.available_columns && Array.isArray(detail.available_columns)) {
+            const columns = detail.available_columns.join(', ');
+            errorMessage += `\n\nColumns found in your file: ${columns}`;
+          }
+          
+          // Show additional suggestions if available
+          if (detail.suggestions && Array.isArray(detail.suggestions)) {
+            const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
+            errorMessage += `\n\nSuggestions:\n${suggestions}`;
+          }
+        } else {
+          errorMessage = detail;
+        }
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      event.target.value = "";
+    }
+  };
+
+  // Handle file upload (legacy - keeping for backward compatibility)
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      setLoading(true);
+      setUploadProgress(10);
+      
+      const response = await axios.post(`${API}/upload-data`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+        },
+      });
+
+      setUploadProgress(100);
+      toast.success(`Successfully uploaded ${response.data.total_records} records`);
+      
+      // Fetch analytics and upload history after successful upload
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      
+      // Better error handling for file upload
+      let errorMessage = "Failed to upload file";
+      
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'object') {
+          errorMessage = error.response.data.detail.message || errorMessage;
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
+      // Show helpful error messages
+      if (errorMessage.includes("Invalid file type")) {
+        toast.error("Please upload an Excel file (.xlsx, .xls) or CSV file");
+      } else if (errorMessage.includes("Insufficient numerical data")) {
+        toast.error("File format incorrect. Please check the data structure in your Excel file");
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+      setUploadProgress(0);
+      // Clear file input
+      event.target.value = "";
+    }
+  };
+
+  // Handle multiplier change
+  const handleMultiplierChange = async () => {
+    if (hasData) {
+      await fetchAnalytics(overstockMultiplier);
+    }
+  };
+
+  // Handle manual refresh
+  const handleManualRefresh = async () => {
+    try {
+      setLoading(true);
+      toast.info("Refreshing all data...");
+      
+      // Call backend refresh endpoint first
+      await axios.post(`${API}/refresh-analytics`);
+      
+      // Then fetch ALL updated data sources
+      await fetchAnalytics(overstockMultiplier);
+      await fetchUploadHistory();
+      
+      toast.success("All data refreshed successfully!");
+    } catch (error) {
+      console.error("Error refreshing analytics:", error);
+      toast.error("Failed to refresh data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle demand forecast export
+  const handleExportDemandList = async () => {
+    try {
+      // Check if we have data to export
+      if (forecastMode === 'current' && (!demandData || demandData.length === 0)) {
+        toast.error("No current forecast data available to export");
+        return;
+      }
+      
+      if (forecastMode === 'historical' && !historicalAnalysis) {
+        toast.error("No historical analysis available to export");
+        return;
+      }
+      
+      let response;
+      
+      if (forecastMode === 'historical' && historicalAnalysis) {
+        // Export historical forecast data
+        // Create Excel from historical analysis forecast data
+        // Match the exact format of current export with index and current stock
+        const excelData = historicalAnalysis.forecast.map(item => ({
+          'Index': item.index_number || 'N/A',
+          'Brand Name': item.brand_name,
+          'Wholesale Rate': item.wholesale_rate,
+          'Projected Monthly Sale (Qty)': Math.round(item.forecast_qty),
+          'Quantity held in Stock': item.current_stock_qty || 0,
+          'Quantity to be Demanded': Math.max(0, Math.round(item.forecast_qty - (item.current_stock_qty || 0))),
+          'Number of Cases to be Demanded': Math.ceil(Math.max(0, item.forecast_qty - (item.current_stock_qty || 0)) / 12)
+        }));
+        
+        // Calculate totals for the TOTAL row
+        const totalWholesaleCost = historicalAnalysis.forecast.reduce((sum, item) => {
+          const qtyDemanded = Math.max(0, item.forecast_qty - (item.current_stock_qty || 0));
+          return sum + (item.wholesale_rate * qtyDemanded);
+        }, 0);
+        const totalProjectedSale = historicalAnalysis.forecast.reduce((sum, item) => 
+          sum + item.forecast_qty, 0);
+        const totalCurrentStock = historicalAnalysis.forecast.reduce((sum, item) => 
+          sum + (item.current_stock_qty || 0), 0);
+        const totalQuantityDemanded = historicalAnalysis.forecast.reduce((sum, item) => 
+          sum + Math.max(0, item.forecast_qty - (item.current_stock_qty || 0)), 0);
+        const totalCasesDemanded = historicalAnalysis.forecast.reduce((sum, item) => 
+          sum + Math.ceil(Math.max(0, item.forecast_qty - (item.current_stock_qty || 0)) / 12), 0);
+        
+        // Add TOTAL row
+        excelData.push({
+          'Index': 'TOTAL',
+          'Brand Name': `(${historicalAnalysis.forecast.length} brands)`,
+          'Wholesale Rate': `Cost: ${Math.round(totalWholesaleCost * 100) / 100}`,
+          'Projected Monthly Sale (Qty)': Math.round(totalProjectedSale),
+          'Quantity held in Stock': Math.round(totalCurrentStock),
+          'Quantity to be Demanded': Math.round(totalQuantityDemanded),
+          'Number of Cases to be Demanded': totalCasesDemanded
+        });
+        
+        // Create worksheet with data
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        
+        // Apply formatting to header row (row 1)
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const address = XLSX.utils.encode_col(C) + "1";
+          if (!ws[address]) continue;
+          ws[address].s = {
+            fill: { fgColor: { rgb: "4472C4" } },
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            alignment: { horizontal: "center", vertical: "center" }
+          };
+        }
+        
+        // Apply formatting to TOTAL row (last row)
+        const totalRowNum = range.e.r + 1;
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const address = XLSX.utils.encode_col(C) + totalRowNum;
+          if (!ws[address]) continue;
+          ws[address].s = {
+            fill: { fgColor: { rgb: "FFC000" } },
+            font: { bold: true },
+            alignment: { horizontal: "center", vertical: "center" }
+          };
+        }
+        
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 10 },  // Index
+          { wch: 30 },  // Brand Name
+          { wch: 16 },  // Wholesale Rate
+          { wch: 18 },  // Projected Monthly Sale
+          { wch: 18 },  // Quantity held in Stock
+          { wch: 20 },  // Quantity to be Demanded
+          { wch: 22 }   // Number of Cases to be Demanded
+        ];
+        
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Demand Forecast');
+        
+        // Generate filename with date and time
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+        const filename = `Historical Liquor Forecast ${dateStr} ${timeStr}.xlsx`;
+        
+        XLSX.writeFile(wb, filename);
+        toast.success("Historical forecast exported successfully!");
+        return;
+      } else {
+        // Export current period forecast
+        response = await axios.get(`${API}/export-demand-list`, {
+          responseType: 'blob',
+        });
+        
+        // Create blob link to download
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Get filename from response headers or use default
+        const contentDisposition = response.headers['content-disposition'];
+        const filename = contentDisposition 
+          ? contentDisposition.split('filename=')[1].replace(/"/g, '')
+          : `liquor_demand_forecast_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        
+        toast.success("Demand forecast exported successfully!");
+      }
+    } catch (error) {
+      console.error("Error exporting demand forecast:", error);
+      toast.error("Failed to export demand forecast");
+    }
+  };
+
+  // Module 1: Brand Management handlers
+  const handleAddBrand = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/brands/add`, {
+        index_number: parseInt(brandFormData.index_number),
+        brand_name: brandFormData.brand_name,
+        wholesale_rate: parseFloat(brandFormData.wholesale_rate),
+        selling_rate: parseFloat(brandFormData.selling_rate),
+        initial_stock_qty: parseInt(brandFormData.initial_stock_qty) || 0
+      });
+      
+      toast.success(response.data.message);
+      setShowBrandModal(false);
+      
+      // Reset form
+      setBrandFormData({
+        index_number: '',
+        brand_name: '',
+        wholesale_rate: '',
+        selling_rate: '',
+        initial_stock_qty: 0
+      });
+      
+      // Refresh analytics if data exists
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error adding brand:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to add brand";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateRates = async (e) => {
+    e.preventDefault();
+    
+    if (!ratesFile) {
+      toast.error("Please select an Excel file");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const formData = new FormData();
+      formData.append("file", ratesFile);
+      
+      const response = await axios.post(`${API}/brands/update-rates`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      
+      const result = response.data;
+      
+      if (result.updated_count > 0) {
+        toast.success(`Successfully updated ${result.updated_count} brand(s)`);
+      }
+      
+      if (result.not_found_count > 0) {
+        toast.warning(`${result.not_found_count} brand(s) not found: ${result.not_found_brands.slice(0, 3).join(', ')}${result.not_found_brands.length > 3 ? '...' : ''}`);
+      }
+      
+      setShowRatesModal(false);
+      setRatesFile(null);
+      
+      // Refresh analytics
+      if (hasData) {
+        await fetchAnalytics(overstockMultiplier);
+      }
+      
+    } catch (error) {
+      console.error("Error updating rates:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to update rates";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Module 3: Stock Reset & Backup handlers
+  const fetchBackups = async () => {
+    try {
+      const response = await axios.get(`${API}/stock/backups`);
+      setBackupsList(response.data);
+    } catch (error) {
+      console.error("Error fetching backups:", error);
+      toast.error("Failed to fetch backups");
+    }
+  };
+
+  const handleStockReset = async () => {
+    try {
+      setResetting(true);
+      
+      const response = await axios.post(`${API}/stock/reset`);
+      
+      // Show detailed success message with historical data info
+      const message = response.data.historical_records_created > 0
+        ? `Stock reset successful! ${response.data.records_deleted} records deleted.\n${response.data.historical_message}\nBackup ID: ${response.data.backup_id}`
+        : `Stock reset successful! ${response.data.records_deleted} records deleted. Backup ID: ${response.data.backup_id}`;
+      
+      toast.success(message);
+      
+      setShowResetDialog(false);
+      setHasData(false);
+      
+      // Refresh backups list
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error resetting stock:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to reset stock";
+      toast.error(errorMessage);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleDownloadBackup = async (backupId, timestamp) => {
+    try {
+      const response = await axios.get(`${API}/stock/backup/${backupId}/download`, {
+        responseType: 'blob',
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const filename = `stock_backup_${new Date(timestamp).toISOString().split('T')[0]}.xlsx`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Backup downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading backup:", error);
+      toast.error("Failed to download backup");
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await axios.post(`${API}/stock/backup?reason=manual_backup`);
+      
+      toast.success(`Backup created! ${response.data.total_records} records backed up.`);
+      
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error creating backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to create backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBackup = async (backupId, backupReason) => {
+    if (!window.confirm(`Are you sure you want to delete this backup?\n\nReason: ${backupReason}\n\nThis action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      await axios.delete(`${API}/stock/backup/${backupId}`);
+      
+      toast.success("Backup deleted successfully!");
+      
+      await fetchBackups();
+      
+    } catch (error) {
+      console.error("Error deleting backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to delete backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Module 5: Restore from backup
+  const handleRestoreFromBackup = async (backupId, backupReason, totalRecords) => {
+    const confirmed = window.confirm(
+      `⚠️ RESTORE FROM BACKUP\n\n` +
+      `This will:\n` +
+      `• DELETE all current data (if any)\n` +
+      `• RESTORE ${totalRecords} records from this backup\n` +
+      `• RECALCULATE historical averages\n\n` +
+      `Backup: ${backupReason}\n\n` +
+      `Are you sure you want to proceed?`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      toast.info("Restoring data from backup...");
+      
+      const response = await axios.post(`${API}/stock/backup/${backupId}/restore`);
+      
+      toast.success(
+        `Successfully restored ${response.data.records_restored} records!\n` +
+        `Historical averages: ${response.data.historical_records_created} created`
+      );
+      
+      // Refresh all data
+      await fetchAnalytics(overstockMultiplier);
+      await fetchBackups();
+      setShowBackupsDialog(false);
+      
+    } catch (error) {
+      console.error("Error restoring from backup:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to restore from backup";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Change Password Handler
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      toast.error("New passwords don't match");
+      return;
+    }
+    
+    if (passwordData.new_password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+    
+    try {
+      setChangingPassword(true);
+      
+      const response = await axios.post(`${API}/auth/change-password`, {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password
+      });
+      
+      toast.success("Password changed successfully!");
+      setShowChangePasswordDialog(false);
+      
+      // Reset form
+      setPasswordData({
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      });
+      
+    } catch (error) {
+      console.error("Error changing password:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to change password";
+      toast.error(errorMessage);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // Module 4: Report Generation Handlers
+  const handleGenerateExcelReport = async () => {
+    try {
+      setGeneratingReport(true);
+      
+      const response = await axios.post(`${API}/reports/generate-excel`, {}, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'monthly_report.xlsx';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Excel report generated successfully!");
+      
+    } catch (error) {
+      console.error("Error generating Excel report:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to generate Excel report";
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleGeneratePDFReport = async () => {
+    try {
+      setGeneratingReport(true);
+      
+      const response = await axios.post(`${API}/reports/generate-pdf`, reportParameters, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from response headers
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'monthly_report.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("PDF report generated successfully!");
+      setShowReportModal(false);
+      
+    } catch (error) {
+      console.error("Error generating PDF report:", error);
+      const errorMessage = error.response?.data?.detail || "Failed to generate PDF report";
+      toast.error(errorMessage);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleReportParameterChange = (key, value) => {
+    setReportParameters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  // Format number
+  const formatNumber = (number) => {
+    return new Intl.NumberFormat("en-IN").format(number);
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString("en-IN", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Kolkata"
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Chart colors
+  const CHART_COLORS = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+    '#F97316', '#06B6D4', '#84CC16', '#EC4899', '#6366F1'
+  ];
+
+  // Fetch sales trends based on period
+  const fetchSalesTrends = async (period = "quarterly", salesMonth = null) => {
+    try {
+      setLoadingTrends(true);
+      const params = new URLSearchParams({ period });
+      if (period === "single" && salesMonth) {
+        params.append("sales_month", salesMonth);
+      }
+      
+      const response = await axios.get(`${API}/sales-trends?${params}`);
+      setTrendsData(response.data);
+      setAvailableSalesMonths(response.data.available_months || []);
+    } catch (error) {
+      console.error("Error fetching trends:", error);
+      toast.error("Failed to load sales trends");
+    } finally {
+      setLoadingTrends(false);
+    }
+  };
+
+  // Load trends data when period changes
   useEffect(() => {
-    helloWorldApi();
+    if (hasData) {
+      fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+    }
+  }, [trendsPeriod, selectedSalesMonth, hasData]);
+
+  // Fetch historical periods on mount
+  useEffect(() => {
+    fetchHistoricalPeriods();
+  }, []);
+
+  // Onboarding content
+  const onboardingSteps = [
+    {
+      title: "Welcome to Liquor Sales Analytics! 🎯",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600 leading-relaxed">
+            This dashboard helps you analyze your liquor sales patterns and identify overstocking issues. 
+            Let's take a quick tour to get you started!
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-semibold text-blue-900 mb-2">What you can do:</h4>
+            <ul className="text-blue-800 space-y-1 text-sm">
+              <li>• Upload Excel/CSV files with sales data</li>
+              <li>• Track daily sales trends across all brands</li>
+              <li>• Identify overstocked items automatically</li>
+              <li>• Compare brand performance rankings</li>
+              <li>• Configure overstock thresholds (3x rule by default)</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 1: Upload Your Data 📊",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Start by uploading your liquor sales Excel file. The system supports .xlsx, .xls, and .csv formats.
+          </p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 className="font-semibold text-green-900 mb-2">Required columns in your file:</h4>
+            <ul className="text-green-800 space-y-1 text-sm">
+              <li>• <strong>Brand Name</strong> - Name of the liquor brand</li>
+              <li>• <strong>Rate</strong> - Price per unit</li>
+              <li>• <strong>Date columns</strong> - Daily sales quantities (e.g., 25-Aug-25, 26-Aug-25)</li>
+              <li>• <strong>Monthly Sale value (a)</strong> - Total monthly sales value</li>
+              <li>• <strong>Stock value Today</strong> - Current stock value</li>
+            </ul>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Click the "Upload Data" button in the top-right corner</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 2: Configure Overstock Settings ⚙️",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Set your overstock multiplier to define what constitutes overstocking. The default is 3x monthly average.
+          </p>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <h4 className="font-semibold text-orange-900 mb-2">How it works:</h4>
+            <div className="text-orange-800 space-y-2 text-sm">
+              <p>• <strong>3x multiplier</strong>: Items with stock &gt; 3× monthly sales = overstocked</p>
+              <p>• <strong>2x multiplier</strong>: Items with stock &gt; 2× monthly sales = overstocked</p>
+              <p>• Lower multipliers = more brands flagged as overstocked</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <AlertTriangle className="w-4 h-4" />
+            <span>Adjust the multiplier in the header and click "Update"</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Step 3: Analyze Your Data 📈",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Explore three main sections to analyze your liquor business:
+          </p>
+          <div className="grid gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <TrendingUp className="w-4 h-4 text-blue-600" />
+                <strong className="text-blue-900">Sales Trends</strong>
+              </div>
+              <p className="text-blue-800 text-sm">View daily sales performance across all brands over time</p>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-orange-600" />
+                <strong className="text-orange-900">Overstocking Alerts</strong>
+              </div>
+              <p className="text-orange-800 text-sm">Identify brands with excessive stock and calculate overstock values</p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2 mb-2">
+                <BarChart3 className="w-4 h-4 text-green-600" />
+                <strong className="text-green-900">Brand Performance</strong>
+              </div>
+              <p className="text-green-800 text-sm">Compare top-performing brands by sales value and stock ratios</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "Ready to Get Started! 🚀",
+      content: (
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            You're all set! Here's a quick checklist to get the most out of your dashboard:
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Upload your Excel file with liquor sales data</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Review key metrics in the top dashboard cards</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Check overstocking alerts to optimize inventory</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Analyze brand performance to focus on winners</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-gray-800">Adjust overstock multiplier as needed</span>
+            </div>
+          </div>
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-4 mt-6">
+            <p className="text-indigo-800 text-center font-medium">
+              💡 Pro Tip: Start with the default 3x multiplier and adjust based on your business needs!
+            </p>
+          </div>
+        </div>
+      )
+    }
+  ];
+
+  // Initialize
+  useEffect(() => {
+    fetchAnalytics();
+    fetchUploadHistory();
   }, []);
 
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <Toaster position="top-center" />
+      
+      {/* Header - Simple Single Layout */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            {/* Left side - Title */}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Liquor Sales Analytics</h1>
+              <p className="text-xs text-gray-600 mt-1">D1=First Date Column | DL=Last Date Column</p>
+            </div>
+            
+            {/* Center - User Info */}
+            <div className="flex items-center space-x-2 bg-gradient-to-r from-indigo-50 to-purple-50 px-4 py-2 rounded-lg border border-indigo-200">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-indigo-900">Public Access</span>
+                <span className="text-xs text-indigo-600">No Login Required</span>
+              </div>
+            </div>
+            
+            {/* Right side - Utility buttons */}
+            <div className="flex items-center space-x-2">
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs h-8"
+                disabled={loading}
+                data-testid="refresh-btn"
+              >
+                <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button
+                onClick={() => setShowOnboarding(true)}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs h-8"
+                data-testid="help-btn"
+              >
+                <HelpCircle className="w-3 h-3 mr-1" />
+                Help
+              </Button>
+              <Button
+                onClick={() => setShowVerifyDialog(true)}
+                variant="outline"
+                size="sm"
+                className="bg-white hover:bg-gray-50 text-xs h-8"
+                data-testid="verify-btn"
+                disabled={!hasData || loading}
+              >
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Verify
+              </Button>
+            </div>
+          </div>
 
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+          {/* Hidden Dialog Wrappers for Help and History */}
+          <div style={{display: 'none'}}>
+            {/* Help Guide Dialog */}
+                <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="bg-white hover:bg-gray-50 text-xs"
+                      data-testid="help-guide-btn"
+                    >
+                      <HelpCircle className="w-3 h-3 mr-1" />
+                      Help
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center space-x-2">
+                        <Play className="w-5 h-5 text-indigo-600" />
+                        <span>{onboardingSteps[onboardingStep].title}</span>
+                      </DialogTitle>
+                      <DialogDescription>
+                        Step {onboardingStep + 1} of {onboardingSteps.length}
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="mt-6">
+                      {onboardingSteps[onboardingStep].content}
+                    </div>
+                    
+                    <div className="flex justify-between items-center mt-8 pt-4 border-t">
+                      <Button
+                        onClick={() => setOnboardingStep(Math.max(0, onboardingStep - 1))}
+                        disabled={onboardingStep === 0}
+                        variant="outline"
+                        size="sm"
+                        data-testid="onboarding-prev-btn"
+                      >
+                        Previous
+                      </Button>
+                      
+                      <div className="flex space-x-2">
+                        {onboardingSteps.map((_, index) => (
+                          <div
+                            key={index}
+                            className={`w-2 h-2 rounded-full ${
+                              index === onboardingStep ? 'bg-indigo-600' : 'bg-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      
+                      {onboardingStep < onboardingSteps.length - 1 ? (
+                        <Button
+                          onClick={() => setOnboardingStep(Math.min(onboardingSteps.length - 1, onboardingStep + 1))}
+                          size="sm"
+                          data-testid="onboarding-next-btn"
+                        >
+                          Next
+                          <ArrowRight className="w-3 h-3 ml-1" />
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => setShowOnboarding(false)}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700"
+                          data-testid="onboarding-finish-btn"
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Got it!
+                        </Button>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Verify Calculations Dialog */}
+                <Dialog open={showVerifyDialog} onOpenChange={setShowVerifyDialog}>
+                  <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+                    <DialogHeader className="pb-4 border-b">
+                      <DialogTitle className="flex items-center space-x-2">
+                        <CheckCircle className="w-5 h-5 text-indigo-600" />
+                        <span>Calculation Verification</span>
+                      </DialogTitle>
+                      <DialogDescription>
+                        Compare dashboard calculations with your manual Excel calculations
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    {/* Export Button - placed separately below header */}
+                    {calculationData && calculationData.length > 0 && (
+                      <div className="flex justify-end pt-3 pb-2">
+                        <Button
+                          onClick={() => {
+                            // Export calculation data as CSV for easy comparison
+                            const csvContent = [
+                              // Header row
+                              'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
+                              // Data rows
+                              ...calculationData.map(row => [
+                                row.index,
+                                `"${row.brand_name}"`,
+                                row.D1_stock,
+                                row.DL_stock,
+                                row.D1_date,
+                                row.DL_date,
+                                row.calculated_wholesale_rate,
+                                row.selling_rate,
+                                row.total_sales_qty.toFixed(2),
+                                row.avg_daily_sales_qty.toFixed(3),
+                                row.calculated_avg_monthly_sale.toFixed(2),
+                                row.calculated_current_stock_value.toFixed(2),
+                                row.calculated_multiplier_value,
+                                row.days_analyzed,
+                                row.stock_available_days.toFixed(1)
+                              ].join(','))
+                            ].join('\n');
+                            
+                            const blob = new Blob([csvContent], { type: 'text/csv' });
+                            const url = window.URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = `calculation_verification_${new Date().toISOString().split('T')[0]}.csv`;
+                            link.click();
+                            window.URL.revokeObjectURL(url);
+                            toast.success("Calculation data exported to CSV!");
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="bg-indigo-50 hover:bg-indigo-100 border-indigo-200"
+                          data-testid="export-calculations-btn"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export CSV
+                        </Button>
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 overflow-y-auto">
+                      {calculationData && calculationData.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b bg-gray-50">
+                                <th className="text-left p-3 font-semibold">Index</th>
+                                <th className="text-left p-3 font-semibold">Brand Name</th>
+                                <th className="text-left p-3 font-semibold">D1 Stock</th>
+                                <th className="text-left p-3 font-semibold">DL Stock</th>
+                                <th className="text-left p-3 font-semibold">Wholesale Rate</th>
+                                <th className="text-left p-3 font-semibold">Selling Rate</th>
+                                <th className="text-left p-3 font-semibold">Monthly Sale Value</th>
+                                <th className="text-left p-3 font-semibold">Current Stock Value</th>
+                                <th className="text-left p-3 font-semibold">Multiplier Value</th>
+                                <th className="text-left p-3 font-semibold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {calculationData.map((row, index) => (
+                                <tr key={index} className="border-b hover:bg-gray-50" data-testid={`calc-row-${index}`}>
+                                  <td className="p-3 font-medium">{row.index}</td>
+                                  <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
+                                  <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
+                                  <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
+                                  <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
+                                  <td className="p-3">{formatCurrency(row.selling_rate)}</td>
+                                  <td className="p-3 font-medium text-blue-600">
+                                    {formatCurrency(row.calculated_avg_monthly_sale)}
+                                  </td>
+                                  <td className="p-3 font-medium text-green-600">
+                                    {formatCurrency(row.calculated_current_stock_value)}
+                                  </td>
+                                  <td className="p-3 font-bold text-purple-600">{row.calculated_multiplier_value}</td>
+                                  <td className="p-3">
+                                    {row.calculated_multiplier_value > overstockMultiplier ? (
+                                      <Badge variant="destructive">Overstocked</Badge>
+                                    ) : row.calculated_multiplier_value > overstockMultiplier * 0.7 ? (
+                                      <Badge className="bg-yellow-500 text-white">Warning</Badge>
+                                    ) : (
+                                      <Badge className="bg-green-500 text-white">Healthy</Badge>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12">
+                          <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Calculation Data Available</h3>
+                          <p className="text-gray-600">Upload sales data to view verification details</p>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+          </div>
+          
+          {/* Action Buttons Section - Fixed No-Wrap Layout */}
+          <div className="flex justify-between items-start gap-4 mt-4 px-4">
+            
+            {/* LEFT: Overstock Multiplier + Management Buttons */}
+            <div className="flex flex-col space-y-2">
+              {/* Overstock Multiplier */}
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="multiplier" className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                  Overstock Multiplier:
+                </Label>
+                <Input
+                  id="multiplier"
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="10"
+                  value={overstockMultiplier}
+                  onChange={(e) => setOverstockMultiplier(parseFloat(e.target.value) || 3.0)}
+                  className="w-16 text-xs h-8"
+                />
+                <Button
+                  onClick={handleMultiplierChange}
+                  size="sm"
+                  variant="outline"
+                  disabled={!hasData || loading}
+                  className="text-xs h-8"
+                >
+                  Update
+                </Button>
+              </div>
+
+              {/* Management Buttons */}
+              <div className="flex items-center flex-wrap gap-2">
+                {hasPermission('CAN_EDIT_DATA') && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowBrandModal(true)}
+                      disabled={loading}
+                      className="border-teal-600 text-teal-600 hover:bg-teal-50 text-xs h-8"
+                    >
+                      <Package className="w-3 h-3 mr-1" />
+                      Add Brand
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowRatesModal(true)}
+                      disabled={loading}
+                      className="border-indigo-600 text-indigo-600 hover:bg-indigo-50 text-xs h-8"
+                    >
+                      <DollarSign className="w-3 h-3 mr-1" />
+                      Update Rates
+                    </Button>
+                  </>
+                )}
+                {hasPermission('CAN_BACKUP_DATA') && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      fetchBackups();
+                      setShowBackupsDialog(true);
+                    }}
+                    disabled={loading}
+                    className="border-purple-600 text-purple-600 hover:bg-purple-50 text-xs h-8"
+                  >
+                    <Database className="w-3 h-3 mr-1" />
+                    Backups
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* CENTER: Upload Actions - Fixed width to prevent shift */}
+            {hasPermission('CAN_UPLOAD_DATA') && (
+              <div className="flex items-center gap-3" style={{minWidth: '400px'}}>
+                {/* Primary: Upload Today's Data */}
+                <Button 
+                  variant="outline" 
+                  onClick={() => document.getElementById('todays-data-upload').click()}
+                  disabled={loading}
+                  className="border-2 border-blue-600 bg-blue-50 hover:bg-blue-100 text-blue-700 shadow-md px-4 py-3 h-auto"
+                >
+                  <Calendar className="w-4 h-4 mr-2 text-blue-600" />
+                  <div className="text-left">
+                    <div className="font-bold text-sm">Upload Today's Data</div>
+                    {currentDateRange && (
+                      <div className="text-xs mt-0.5">
+                        D1: {currentDateRange.d1_date} | DL: {currentDateRange.dl_date}
+                      </div>
+                    )}
+                  </div>
+                </Button>
+
+                {/* Secondary Actions */}
+                <div className="flex flex-col gap-2">
+                  <Button 
+                    size="sm"
+                    onClick={() => document.getElementById('full-monthly-upload').click()}
+                    disabled={loading}
+                    className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-8"
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    Full Monthly
+                  </Button>
+                  {hasPermission('CAN_RESET_SYSTEM') && (
+                    <Button 
+                      size="sm"
+                      onClick={() => setShowResetDialog(true)}
+                      disabled={loading || !hasData}
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Reset Stock
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* RIGHT: Report Buttons - Always rendered to prevent layout shift */}
+            <div className="flex flex-col gap-2" style={{minWidth: '140px'}}>
+              {hasPermission('CAN_EXPORT_REPORTS') && (
+                <>
+                  <Button 
+                    size="sm"
+                    onClick={handleGenerateExcelReport}
+                    disabled={loading || !hasData || generatingReport}
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs h-9 whitespace-nowrap disabled:opacity-50"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    {generatingReport ? 'Generating...' : 'Export Excel'}
+                  </Button>
+                  <Button 
+                    size="sm"
+                    onClick={() => setShowReportModal(true)}
+                    disabled={loading || !hasData || generatingReport}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 whitespace-nowrap disabled:opacity-50"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Generate PDF
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {/* Hidden file inputs */}
+            {hasPermission('CAN_UPLOAD_DATA') && (
+              <>
+                <Input
+                  id="todays-data-upload"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleTodaysDataUpload}
+                  className="hidden"
+                />
+                <Input
+                  id="full-monthly-upload"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFullMonthlyUpload}
+                  className="hidden"
+                />
+              </>
+            )}
+          </div>
+          
+
+          {/* Upload Progress */}
+          {uploadProgress > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm text-gray-600">Uploading...</span>
+              </div>
+              <Progress value={uploadProgress} className="mt-2" data-testid="upload-progress" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content - Responsive */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {/* Module 5: Data Source Indicator Banner */}
+        {analyticsSource && hasData && (
+          <Alert className={`mb-6 ${
+            analyticsSource.data_source === 'historical' 
+              ? 'bg-gradient-to-r from-purple-50 to-blue-50 border-purple-300' 
+              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-300'
+          }`}>
+            <AlertDescription className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {analyticsSource.data_source === 'historical' ? (
+                  <>
+                    <Database className="w-5 h-5 text-purple-600" />
+                    <div>
+                      <p className="font-semibold text-purple-900">
+                        🔮 Using {analyticsSource.using_month} Historical Averages (Day {analyticsSource.days_of_data}/30)
+                      </p>
+                      <p className="text-sm text-purple-700">
+                        {analyticsSource.is_transitioning 
+                          ? `Switching to live data in ${5 - analyticsSource.days_of_data} day(s)`
+                          : 'Projecting monthly sales based on historical patterns'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-900">
+                        📊 Using {analyticsSource.using_month} Live Data (Day {analyticsSource.days_of_data}/30)
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Analysis based on actual current month sales data
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <Badge 
+                variant="outline" 
+                className={
+                  analyticsSource.confidence_level === 'high' ? 'bg-green-100 text-green-800 border-green-300' :
+                  analyticsSource.confidence_level === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                  analyticsSource.confidence_level === 'low' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                  'bg-gray-100 text-gray-800 border-gray-300'
+                }
+              >
+                {analyticsSource.confidence_level === 'high' ? '✓ High Confidence' :
+                 analyticsSource.confidence_level === 'medium' ? '⚡ Medium Confidence' :
+                 analyticsSource.confidence_level === 'low' ? '⚠ Low Confidence' :
+                 '○ No Data'}
+              </Badge>
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {!hasData && !loading ? (
+          <div className="text-center py-12">
+            <div className="p-6 bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300">
+              <FileSpreadsheet className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
+              <p className="text-gray-600 mb-4">Upload your liquor sales Excel file to start analyzing data</p>
+              <div className="text-sm text-gray-500 mb-4">
+                <p>Supported formats: .xlsx, .xls, .csv</p>
+              </div>
+              <Button
+                onClick={() => setShowOnboarding(true)}
+                variant="outline"
+                className="mt-2"
+                data-testid="get-started-btn"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Get Started Guide
+              </Button>
+            </div>
+          </div>
+        ) : loading && !analyticsData ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading analytics...</p>
+            </div>
+          </div>
+        ) : analyticsData ? (
+          <div className="space-y-8">
+            {/* Key Metrics Cards - Responsive */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <Card data-testid="total-brands-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total Brands</CardTitle>
+                  <Package className="h-4 w-4 text-indigo-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{analyticsData.total_brands}</div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="total-stock-value-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total Stock Value</CardTitle>
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{formatCurrency(analyticsData.total_stock_value)}</div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="overstocked-brands-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Overstocked Brands</CardTitle>
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{analyticsData.overstocked_brands}</div>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Badge variant="secondary" className="text-xs">
+                      {overstockMultiplier}x rule
+                    </Badge>
+                    {analyticsSource && analyticsSource.data_source === 'historical' && (
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-300">
+                        📊 Projected
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="overstocked-value-card">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Overstocked Value</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-red-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-600">{formatCurrency(analyticsData.total_overstocked_value)}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Main Dashboard Tabs - Responsive */}
+            <Tabs defaultValue="performance-charts" className="w-full">
+              <TabsList className="grid w-full grid-cols-7 gap-2 p-2 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-100 rounded-xl shadow-lg">
+                <TabsTrigger 
+                  value="performance-charts" 
+                  data-testid="performance-charts-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 data-[state=active]:border-blue-300"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Charts</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="overstocking" 
+                  data-testid="overstocking-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200 data-[state=active]:border-orange-300"
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Alerts</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="brand-performance" 
+                  data-testid="brand-performance-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-purple-100 text-purple-700 hover:bg-purple-200 border border-purple-200 data-[state=active]:border-purple-300"
+                >
+                  <Crown className="w-4 h-4" />
+                  <span>Top Brands</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="recommendations" 
+                  data-testid="recommendations-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200 data-[state=active]:border-indigo-300"
+                >
+                  <Target className="w-4 h-4" />
+                  <span>Forecast</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="database-view" 
+                  data-testid="database-view-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300 data-[state=active]:border-gray-400"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>Database</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="historical-averages" 
+                  data-testid="historical-averages-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200 data-[state=active]:border-violet-300"
+                  onClick={() => fetchHistoricalAverages()}
+                >
+                  <History className="w-4 h-4" />
+                  <span>History</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="upload-history" 
+                  data-testid="upload-history-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 data-[state=active]:border-green-300"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Uploads</span>
+                </TabsTrigger>
+                {/* User Management tab removed - Auth disabled */}
+              </TabsList>
+
+              {/* Performance Charts Tab */}
+              <TabsContent value="performance-charts" className="space-y-6">
+                {/* Sales Trends Chart - Moved from Trends tab */}
+                <Card data-testid="sales-trends-card">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center space-x-2">
+                          <TrendingUp className="h-5 w-5 text-indigo-600" />
+                          <span>Daily Sales Trends</span>
+                        </CardTitle>
+                        <CardDescription>Track sales patterns over time across periods</CardDescription>
+                      </div>
+                      
+                      {/* Period Selector */}
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant={trendsPeriod === "quarterly" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTrendsPeriod("quarterly")}
+                          className={trendsPeriod === "quarterly" ? "bg-indigo-600" : ""}
+                        >
+                          Last 3 Periods
+                        </Button>
+                        <Button
+                          variant={trendsPeriod === "yearly" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setTrendsPeriod("yearly")}
+                          className={trendsPeriod === "yearly" ? "bg-indigo-600" : ""}
+                        >
+                          Last 12 Periods
+                        </Button>
+                        <Button
+                          variant={trendsPeriod === "single" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setTrendsPeriod("single");
+                            if (availableSalesMonths.length > 0) {
+                              setSelectedSalesMonth(availableSalesMonths[availableSalesMonths.length - 1]);
+                            }
+                          }}
+                          className={trendsPeriod === "single" ? "bg-indigo-600" : ""}
+                        >
+                          Single Period
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Sales Month Selector for Single Period View */}
+                    {trendsPeriod === "single" && availableSalesMonths.length > 0 && (
+                      <div className="mt-4 flex items-center space-x-2">
+                        <Label htmlFor="sales-month-selector" className="text-sm">Select Sales Period:</Label>
+                        <select
+                          id="sales-month-selector"
+                          value={selectedSalesMonth || ""}
+                          onChange={(e) => setSelectedSalesMonth(e.target.value)}
+                          className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                          {availableSalesMonths.map(month => (
+                            <option key={month} value={month}>{month}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {loadingTrends ? (
+                      <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-600">Loading trends...</p>
+                      </div>
+                    ) : trendsData && trendsData.series && trendsData.series.length > 0 ? (
+                      <div className="space-y-4">
+                        {/* Chart with Multiple Lines */}
+                        <div className="h-96 w-full mb-6">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={(() => {
+                                const maxDay = Math.max(...trendsData.series.map(s => 
+                                  Math.max(...s.data.map(d => d.day))
+                                ));
+                                
+                                const combinedData = [];
+                                for (let day = 1; day <= maxDay; day++) {
+                                  const dayData = { day };
+                                  
+                                  trendsData.series.forEach((series, idx) => {
+                                    const dayPoint = series.data.find(d => d.day === day);
+                                    dayData[`sales_${idx}`] = dayPoint ? dayPoint.sales : null;
+                                    dayData[`date_${idx}`] = dayPoint ? dayPoint.date : null;
+                                    dayData[`month_${idx}`] = series.month;
+                                  });
+                                  
+                                  combinedData.push(dayData);
+                                }
+                                
+                                return combinedData;
+                              })()}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis 
+                                dataKey="day" 
+                                type="number"
+                                domain={['dataMin', 'dataMax']}
+                                label={{ value: 'Day Number (D1 to DL)', position: 'insideBottom', offset: -5 }}
+                              />
+                              <YAxis label={{ value: 'Sales (Units)', angle: -90, position: 'insideLeft' }} />
+                              <Tooltip 
+                                content={({ active, payload, label }) => {
+                                  if (!active || !payload || !payload.length) return null;
+                                  
+                                  return (
+                                    <div className="bg-white p-3 border border-gray-300 rounded-lg shadow-lg">
+                                      <p className="font-semibold mb-2">Day {label}</p>
+                                      {payload.map((entry, index) => {
+                                        if (entry.value === null || entry.value === undefined) return null;
+                                        
+                                        const seriesIdx = entry.dataKey.split('_')[1];
+                                        const date = entry.payload[`date_${seriesIdx}`];
+                                        const month = entry.payload[`month_${seriesIdx}`];
+                                        
+                                        return (
+                                          <div key={index} className="flex items-center space-x-2 mt-1">
+                                            <div 
+                                              className="w-3 h-3 rounded-full" 
+                                              style={{ backgroundColor: entry.color }}
+                                            ></div>
+                                            <span className="text-sm">
+                                              <span className="font-medium">{month}</span>
+                                              <span className="text-gray-600"> ({date}): </span>
+                                              <span className="font-bold">{formatNumber(entry.value)} units</span>
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }}
+                              />
+                              {trendsData.series.map((periodSeries, index) => (
+                                <Line
+                                  key={periodSeries.month}
+                                  dataKey={`sales_${index}`}
+                                  name={periodSeries.month}
+                                  stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                                  strokeWidth={3}
+                                  dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
+                                  connectNulls={false}
+                                  type="monotone"
+                                />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                        
+                        {/* Legend showing sales periods with colors */}
+                        <div className="flex flex-wrap gap-4 justify-center mb-6">
+                          {trendsData.series.map((periodSeries, index) => (
+                            <div key={periodSeries.month} className="flex items-center space-x-2 bg-white px-3 py-2 rounded-lg border">
+                              <div 
+                                className="w-4 h-4 rounded-full" 
+                                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                              ></div>
+                              <div className="text-sm">
+                                <div className="font-semibold text-gray-900">{periodSeries.month}</div>
+                                <div className="text-xs text-gray-600">
+                                  {periodSeries.d1_date} to {periodSeries.dl_date}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <div className="text-3xl font-bold text-indigo-600">
+                                  {formatNumber(trendsData.summary?.total_sales || 0)}
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">Total Sales</div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <div className="text-3xl font-bold text-green-600">
+                                  {trendsData.summary?.periods_count || 0}
+                                </div>
+                                <div className="text-sm text-gray-600 mt-1">Sales Periods Compared</div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                        
+                        {/* Period Sales Summary */}
+                        <div className="grid gap-3">
+                          <h4 className="font-medium text-gray-900">Sales Period Summary</h4>
+                          {trendsData.series.map((periodSeries, index) => {
+                            const periodTotal = periodSeries.data.reduce((sum, day) => sum + day.sales, 0);
+                            const avgDaily = periodTotal / periodSeries.data.length;
+                            
+                            return (
+                              <div key={periodSeries.month} className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4" style={{ borderLeftColor: CHART_COLORS[index % CHART_COLORS.length] }}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center space-x-3">
+                                    <div 
+                                      className="w-3 h-3 rounded-full" 
+                                      style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                                    ></div>
+                                    <div>
+                                      <div className="font-semibold text-gray-900">{periodSeries.month}</div>
+                                      <div className="text-xs text-gray-500">{periodSeries.d1_date} to {periodSeries.dl_date}</div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-lg font-bold text-indigo-600">{formatNumber(periodTotal)}</div>
+                                    <div className="text-xs text-gray-500">total units</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600">Days tracked: {periodSeries.data.length}</span>
+                                  <span className="text-gray-600">Avg/day: {formatNumber(Math.round(avgDaily))}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Trends Data Available</h3>
+                        <p className="text-gray-600">Upload sales data to view trend analysis</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Other Charts - 2x2 Grid Layout */}
+                {chartsData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Volume Leaders Chart */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <BarChart3 className="h-5 w-5 text-blue-600" />
+                          <span>Top 10 Volume Leaders</span>
+                        </CardTitle>
+                        <CardDescription>Brands with highest sales volume</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={300} className="sm:h-96">
+                          <BarChart data={chartsData.volume_leaders}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} fontSize={12} />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="value" fill="#3B82F6" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    {/* Revenue Leaders Chart */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <DollarSign className="h-5 w-5 text-green-600" />
+                          <span>Top 10 Revenue Leaders</span>
+                        </CardTitle>
+                        <CardDescription>Brands generating highest revenue</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={300} className="sm:h-96">
+                          <BarChart data={chartsData.revenue_leaders}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} fontSize={12} />
+                            <YAxis />
+                            <Tooltip formatter={(value) => formatCurrency(value)} />
+                            <Bar dataKey="value" fill="#10B981" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    {/* Revenue Share Distribution (Pie Chart) */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <PieChartIcon className="h-5 w-5 text-purple-600" />
+                          <span>Revenue Share Distribution</span>
+                        </CardTitle>
+                        <CardDescription>Top 10 brands by revenue percentage</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={300} className="sm:h-96">
+                          <PieChart>
+                            <Pie
+                              data={chartsData.revenue_proportion}
+                              dataKey="percentage"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={120}
+                              label={(entry) => `${entry.name.substring(0, 15)}: ${entry.percentage}%`}
+                              labelLine={true}
+                            >
+                              {chartsData.revenue_proportion.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(value, name, props) => [
+                                `${value}% (${formatCurrency(props.payload.value)})`,
+                                props.payload.name
+                              ]}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+
+                    {/* Fastest Moving Brands (Velocity Leaders) */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Zap className="h-5 w-5 text-yellow-600" />
+                          <span>Fastest Moving Brands</span>
+                        </CardTitle>
+                        <CardDescription>Brands with highest turnover rate</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {chartsData.velocity_leaders && chartsData.velocity_leaders.length > 0 ? (
+                            chartsData.velocity_leaders.map((brand, index) => (
+                              <div 
+                                key={index}
+                                className="flex items-center justify-between p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border border-yellow-200 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-gray-900 text-sm">{brand.name}</h4>
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {brand.days_of_stock.toFixed(1)} days stock
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xl font-bold text-yellow-600">
+                                    {brand.velocity.toFixed(2)}x
+                                  </div>
+                                  <div className="text-xs text-gray-500">velocity</div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              No velocity data available
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Overstocking Tab */}
+              <TabsContent value="overstocking" className="space-y-6">
+                <Card data-testid="overstocking-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-600" />
+                      <span>Overstocked Items</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Items with stock value exceeding {overstockMultiplier}x their monthly average sales
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analyticsData.overstocked_items.length > 0 ? (
+                      <div className="space-y-4">
+                        {analyticsData.overstocked_items.map((item, index) => (
+                          <Alert key={index} className="border-orange-200 bg-orange-50" data-testid={`overstock-item-${index}`}>
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <AlertDescription>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-start">
+                                  <h4 className="font-semibold text-gray-900">{item.brand_name}</h4>
+                                  <Badge variant="destructive">
+                                    Overstock: {formatCurrency(item.overstock_value)}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Current Stock:</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.current_stock_value)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Monthly Avg:</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.monthly_avg_sale)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Threshold ({overstockMultiplier}x):</span>
+                                    <span className="ml-2 font-medium">{formatCurrency(item.threshold)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Stock Ratio:</span>
+                                    <span className="ml-2 font-medium">{item.stock_ratio.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Package className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Overstocking Issues</h3>
+                        <p className="text-gray-600">All brands are within optimal stock levels</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Brand Performance Tab */}
+              <TabsContent value="brand-performance" className="space-y-6">
+                <Card data-testid="brand-performance-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+                      <span>Top Performing Brands</span>
+                    </CardTitle>
+                    <CardDescription>Ranked by estimated sales performance</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {analyticsData && analyticsData.top_selling_brands.map((brand, index) => (
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                          data-testid={`top-brand-${index}`}
+                        >
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center justify-center w-8 h-8 bg-indigo-100 text-indigo-600 font-bold text-sm rounded-full">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-gray-900">{brand.brand_name}</h4>
+                              <p className="text-sm text-gray-600">Stock Ratio: {brand.stock_ratio.toFixed(2)}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold text-indigo-600">
+                              {formatCurrency(brand.monthly_sale_value)}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Stock: {formatCurrency(brand.stock_value_today)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Demand Forecast Tab */}
+              <TabsContent value="recommendations" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Smart Demand Forecast</h2>
+                    <p className="text-gray-600">
+                      {forecastMode === 'current' ? 'AI-powered recommendations for current period' : 'Historical analysis and forecast'}
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                      <Button
+                        onClick={() => setForecastMode('current')}
+                        className={`px-6 py-2 font-semibold transition-all ${
+                          forecastMode === 'current' 
+                            ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md' 
+                            : 'bg-transparent text-gray-600 hover:text-gray-900'
+                        }`}
+                        size="default"
+                      >
+                        📍 Current Period
+                      </Button>
+                      <Button
+                        onClick={() => setForecastMode('historical')}
+                        className={`px-6 py-2 font-semibold transition-all ${
+                          forecastMode === 'historical' 
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md' 
+                            : 'bg-transparent text-gray-600 hover:text-gray-900'
+                        }`}
+                        size="default"
+                      >
+                        <Calendar className="w-4 h-4 mr-2" />
+                        Historical Analysis
+                      </Button>
+                    </div>
+                    <Button
+                      onClick={handleExportDemandList}
+                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold px-6 shadow-md"
+                      data-testid="export-demand-btn"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Excel
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Historical Period Selection - shown only in historical mode */}
+                {forecastMode === 'historical' && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Calendar className="h-5 w-5 text-pink-600" />
+                        <span>Select Sales Periods for Analysis</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Choose periods to analyze. Click tiles to select, use quick presets, or customize your selection.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Quick Selection Presets */}
+                      <div className="flex gap-2 flex-wrap">
+                        <Button 
+                          onClick={() => selectLastNPeriods(3)}
+                          variant="outline"
+                          size="sm"
+                          className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        >
+                          Last 3 Periods
+                        </Button>
+                        <Button 
+                          onClick={() => selectLastNPeriods(6)}
+                          variant="outline"
+                          size="sm"
+                          className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        >
+                          Last 6 Periods
+                        </Button>
+                        <Button 
+                          onClick={() => selectLastNPeriods(12)}
+                          variant="outline"
+                          size="sm"
+                          className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                        >
+                          Last 12 Periods
+                        </Button>
+                        <Button 
+                          onClick={() => setSelectedPeriods([])}
+                          variant="outline"
+                          size="sm"
+                          className="bg-gray-50 hover:bg-gray-100"
+                        >
+                          Clear Selection
+                        </Button>
+                        <div className="ml-auto">
+                          <Badge variant="secondary" className="text-sm">
+                            {selectedPeriods.length} period(s) selected
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Calendar Grid */}
+                      <div className="grid grid-cols-3 gap-3">
+                        {historicalPeriods.map((period) => {
+                          const isSelected = selectedPeriods.includes(period.id);
+                          const isCurrent = period.is_current;
+                          
+                          // Format dates
+                          let periodLabel = "";
+                          try {
+                            const d1 = new Date(period.d1_date);
+                            const dl = new Date(period.dl_date);
+                            periodLabel = `Pd: ${d1.getDate()} ${d1.toLocaleDateString('en-US', { month: 'short' })} ${d1.getFullYear()} - ${dl.getDate()} ${dl.toLocaleDateString('en-US', { month: 'short' })} ${dl.getFullYear()}`;
+                          } catch (e) {
+                            periodLabel = `Pd: ${period.d1_date} - ${period.dl_date}`;
+                          }
+
+                          return (
+                            <div
+                              key={period.id}
+                              onClick={() => period.has_data && togglePeriodSelection(period.id)}
+                              className={`
+                                p-4 rounded-lg border-2 cursor-pointer transition-all
+                                ${!period.has_data ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-50' :
+                                  isSelected ? 'bg-indigo-100 border-indigo-500 shadow-md' :
+                                  'bg-white border-gray-200 hover:border-indigo-300 hover:shadow'}
+                              `}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="font-semibold text-gray-900">
+                                  {isCurrent ? '📍 Current Period' : period.period_name}
+                                </div>
+                                {period.has_data && (
+                                  <div className={`
+                                    w-5 h-5 rounded-full border-2 flex items-center justify-center
+                                    ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300'}
+                                  `}>
+                                    {isSelected && <span className="text-white text-xs">✓</span>}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                {periodLabel}
+                              </div>
+                              {period.has_data ? (
+                                <div className="text-xs text-green-600 mt-1">
+                                  ✅ {period.total_records} records
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-400 mt-1">
+                                  ⚪ No data
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex justify-center gap-3 pt-4">
+                        <Button
+                          onClick={analyzeHistoricalPeriods}
+                          disabled={selectedPeriods.length === 0 || analyzingHistory}
+                          className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-8 py-3"
+                        >
+                          {analyzingHistory ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <BarChart3 className="w-4 h-4 mr-2" />
+                              Analyze Selected Periods
+                            </>
+                          )}
+                        </Button>
+                        
+                        <Button
+                          onClick={async () => {
+                            // Get selected period names for confirmation
+                            const selectedPeriodNames = historicalPeriods
+                              .filter(p => selectedPeriods.includes(p.id))
+                              .map(p => p.period_name || p.id)
+                              .join(', ');
+                            
+                            if (!window.confirm(`Are you sure you want to permanently delete the selected period(s)?\n\n${selectedPeriodNames}\n\nThis will remove these periods from:\n- Historical Analysis\n- Trendlines\n- All historical data views\n\nThis action cannot be undone.`)) {
+                              return;
+                            }
+                            
+                            try {
+                              setLoading(true);
+                              
+                              // Delete each selected period (excluding current)
+                              const deletePromises = selectedPeriods
+                                .filter(id => id !== 'current')
+                                .map(id => axios.delete(`${API}/stock/backup/${id}`));
+                              
+                              await Promise.all(deletePromises);
+                              
+                              toast.success(`Successfully deleted ${deletePromises.length} period(s)`);
+                              
+                              // Clear selection and refresh data
+                              setSelectedPeriods([]);
+                              await fetchHistoricalPeriods();
+                              await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+                              
+                            } catch (error) {
+                              const errorMessage = error.response?.data?.detail || "Failed to delete selected periods";
+                              toast.error(errorMessage);
+                              console.error("Delete error:", error);
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          disabled={selectedPeriods.length === 0 || selectedPeriods.includes('current')}
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 px-8 py-3"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Selected
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Current Period Forecast */}
+                {forecastMode === 'current' && (
+                  <div>
+
+                {demandData && demandData.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Priority Legend for Zero-D1-Stock Items */}
+                    <Card className="border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+                      <CardContent className="p-4">
+                        <div className="flex items-start space-x-3">
+                          <div className="mt-1">
+                            <svg className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-indigo-900 mb-1">Priority System for Zero-D1-Stock Items</h4>
+                            <p className="text-xs text-indigo-800 leading-relaxed">
+                              Items <span className="font-semibold">not stocked on Day 1</span> are prioritized using historical sales data: 
+                              <span className="font-semibold text-red-600"> High Priority</span> (≥2 units/day avg), 
+                              <span className="font-semibold text-yellow-600"> Moderate Priority</span> (&lt;2 units/day avg), 
+                              <span className="font-semibold text-gray-600"> Low Priority</span> (no historical data).
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Urgency Level Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="border-red-200 bg-red-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-red-600">
+                                {demandData.filter(item => item.urgency_level === 'HIGH').length}
+                              </div>
+                              <div className="text-sm text-red-800">High Priority</div>
+                              <div className="text-xs text-red-700 mt-1">
+                                {demandData.filter(item => item.urgency_level === 'HIGH' && item.d1_stock === 0).length} zero-D1 items
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="border-yellow-200 bg-yellow-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <Package className="h-5 w-5 text-yellow-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-yellow-600">
+                                {demandData.filter(item => item.urgency_level === 'MEDIUM').length}
+                              </div>
+                              <div className="text-sm text-yellow-800">Medium Priority</div>
+                              <div className="text-xs text-yellow-700 mt-1">
+                                {demandData.filter(item => item.urgency_level === 'MEDIUM' && item.d1_stock === 0).length} zero-D1 items
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center space-x-2">
+                            <Target className="h-5 w-5 text-blue-600" />
+                            <div>
+                              <div className="text-2xl font-bold text-blue-600">
+                                {demandData.filter(item => item.urgency_level === 'LOW').length}
+                              </div>
+                              <div className="text-sm text-blue-800">Low Priority</div>
+                              <div className="text-xs text-blue-700 mt-1">
+                                {demandData.filter(item => item.urgency_level === 'LOW' && item.d1_stock === 0).length} zero-D1 items
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Recommendations List */}
+                    <Card data-testid="recommendations-list">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Target className="h-5 w-5 text-indigo-600" />
+                          <span>Recommended Orders</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Optimized ordering recommendations with wholesale rates (10% lower than selling price)
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {demandData.map((rec, index) => {
+                            const urgencyColors = {
+                              HIGH: 'border-red-200 bg-red-50',
+                              MEDIUM: 'border-yellow-200 bg-yellow-50',
+                              LOW: 'border-blue-200 bg-blue-50'
+                            };
+                            
+                            const urgencyBadgeColors = {
+                              HIGH: 'bg-red-600 text-white',
+                              MEDIUM: 'bg-yellow-600 text-white',
+                              LOW: 'bg-blue-600 text-white'
+                            };
+                            
+                            const urgencyLabels = {
+                              HIGH: 'HIGH PRIORITY',
+                              MEDIUM: 'MODERATE PRIORITY',
+                              LOW: 'LOW PRIORITY',
+                              NONE: 'ADEQUATE STOCK'
+                            };
+                            
+                            const hasRemarks = rec.remarks && rec.remarks.length > 0;
+                            const isHistoricalData = rec.data_source === 'historical';
+                            const isZeroD1 = rec.d1_stock === 0;
+
+                            return (
+                              <div 
+                                key={index} 
+                                className={`p-4 rounded-lg border ${urgencyColors[rec.urgency_level]} ${hasRemarks ? 'ring-2 ring-orange-400' : ''}`}
+                                data-testid={`recommendation-${index}`}
+                              >
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 flex-wrap">
+                                      <h4 className="font-semibold text-gray-900">{rec.brand_name}</h4>
+                                      {isHistoricalData && (
+                                        <Badge className="bg-purple-100 text-purple-800 text-xs">
+                                          📊 Historical
+                                        </Badge>
+                                      )}
+                                      {isZeroD1 && (
+                                        <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold">
+                                          ⚠️ Not Stocked on D1
+                                        </Badge>
+                                      )}
+                                      {/* Priority Badge for Zero-D1-Stock Items */}
+                                      {isZeroD1 && (
+                                        <Badge className={`text-xs font-bold ${
+                                          rec.urgency_level === 'HIGH' ? 'bg-red-600 text-white ring-2 ring-red-300' :
+                                          rec.urgency_level === 'MEDIUM' ? 'bg-yellow-500 text-white ring-2 ring-yellow-300' :
+                                          'bg-gray-500 text-white ring-2 ring-gray-300'
+                                        }`}>
+                                          {rec.urgency_level === 'HIGH' && '🔥 High Demand (Historical)'}
+                                          {rec.urgency_level === 'MEDIUM' && '📊 Moderate Demand (Historical)'}
+                                          {rec.urgency_level === 'LOW' && '📉 Low/No Demand (Historical)'}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      Current Stock: {rec.current_stock_qty} units
+                                      {rec.d1_stock !== undefined && rec.d1_stock === 0 && (
+                                        <span className="ml-2 text-orange-600 font-medium">(D1: 0 ⚠️)</span>
+                                      )}
+                                      {rec.d1_stock !== undefined && rec.d1_stock > 0 && rec.d1_stock < 5 && (
+                                        <span className="ml-2 text-orange-600 font-medium">(D1: {rec.d1_stock})</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                  <Badge className={urgencyBadgeColors[rec.urgency_level]}>
+                                    {urgencyLabels[rec.urgency_level]}
+                                  </Badge>
+                                </div>
+                                
+                                {/* Remarks Section */}
+                                {hasRemarks && (
+                                  <div className={`mb-3 p-3 rounded-md border ${
+                                    isZeroD1 && rec.urgency_level === 'HIGH' ? 'bg-red-50 border-red-300' :
+                                    isZeroD1 && rec.urgency_level === 'MEDIUM' ? 'bg-yellow-50 border-yellow-300' :
+                                    isZeroD1 && rec.urgency_level === 'LOW' ? 'bg-gray-50 border-gray-300' :
+                                    'bg-orange-50 border-orange-200'
+                                  }`}>
+                                    <div className={`text-xs font-semibold mb-2 flex items-center space-x-1 ${
+                                      isZeroD1 && rec.urgency_level === 'HIGH' ? 'text-red-900' :
+                                      isZeroD1 && rec.urgency_level === 'MEDIUM' ? 'text-yellow-900' :
+                                      isZeroD1 && rec.urgency_level === 'LOW' ? 'text-gray-900' :
+                                      'text-orange-900'
+                                    }`}>
+                                      {isZeroD1 && (
+                                        <span className="text-base">
+                                          {rec.urgency_level === 'HIGH' ? '🎯' : 
+                                           rec.urgency_level === 'MEDIUM' ? '📊' : '💡'}
+                                        </span>
+                                      )}
+                                      <span>{isZeroD1 ? 'Priority Analysis:' : 'Special Notes:'}</span>
+                                    </div>
+                                    <ul className={`text-xs space-y-1 ${
+                                      isZeroD1 && rec.urgency_level === 'HIGH' ? 'text-red-800' :
+                                      isZeroD1 && rec.urgency_level === 'MEDIUM' ? 'text-yellow-800' :
+                                      isZeroD1 && rec.urgency_level === 'LOW' ? 'text-gray-800' :
+                                      'text-orange-800'
+                                    }`}>
+                                      {rec.remarks.map((remark, idx) => (
+                                        <li key={idx} className="leading-relaxed">{remark}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Selling Rate:</span>
+                                    <div className="font-medium">{formatCurrency(rec.selling_rate)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Wholesale Rate:</span>
+                                    <div className="font-medium text-green-600">{formatCurrency(rec.wholesale_rate)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Current Stock:</span>
+                                    <div className="font-medium">{rec.current_stock_qty} units</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Recommended Order:</span>
+                                    <div className="font-medium text-indigo-600 text-lg">
+                                      {rec.recommended_qty} units
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recommendations Available</h3>
+                    <p className="text-gray-600">Upload liquor data to generate smart demand forecasts</p>
+                  </div>
+                )}
+                </div>
+                )}
+
+                {/* Historical Period Forecast */}
+                {forecastMode === 'historical' && historicalAnalysis && (
+                  <div className="space-y-6">
+                    {/* Next Month Forecast from Historical Analysis */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Target className="h-5 w-5 text-indigo-600" />
+                          <span>Next Month Demand Forecast</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Based on historical trends from {historicalAnalysis.summary.total_periods} selected period(s)
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {historicalAnalysis.forecast.slice(0, 30).map((item, index) => {
+                            const priorityColors = {
+                              HIGH: 'border-red-200 bg-red-50',
+                              MEDIUM: 'border-yellow-200 bg-yellow-50',
+                              LOW: 'border-blue-200 bg-blue-50'
+                            };
+                            
+                            const priorityBadgeColors = {
+                              HIGH: 'bg-red-600 text-white',
+                              MEDIUM: 'bg-yellow-600 text-white',
+                              LOW: 'bg-blue-600 text-white'
+                            };
+
+                            return (
+                              <div 
+                                key={index} 
+                                className={`p-4 rounded-lg border ${priorityColors[item.priority]}`}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2">
+                                      <h4 className="font-semibold text-gray-900">{item.brand_name}</h4>
+                                      <Badge className={priorityBadgeColors[item.priority]}>
+                                        {item.priority} PRIORITY
+                                      </Badge>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      Historical Avg: {item.historical_avg} units/month
+                                      <span className={`ml-2 ${item.growth_rate > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        ({item.growth_rate > 0 ? '+' : ''}{item.growth_rate}% trend)
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-6 gap-3 mt-3 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Forecast Qty:</span>
+                                    <div className="font-bold text-indigo-600 text-lg">{item.forecast_qty} units</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Current Stock:</span>
+                                    <div className="font-bold text-blue-600 text-lg">{item.current_stock_qty || 0} units</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Qty to Buy:</span>
+                                    <div className="font-bold text-orange-600 text-lg">{Math.max(0, item.forecast_qty - (item.current_stock_qty || 0))} units</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Cases to Buy:</span>
+                                    <div className="font-bold text-purple-600 text-lg">{Math.ceil(Math.max(0, item.forecast_qty - (item.current_stock_qty || 0)) / 12)} cases</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Wholesale Rate:</span>
+                                    <div className="font-medium text-green-600">{formatCurrency(item.wholesale_rate)}</div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Est. Value:</span>
+                                    <div className="font-medium">{formatCurrency(item.wholesale_rate * Math.max(0, item.forecast_qty - (item.current_stock_qty || 0)))}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {forecastMode === 'historical' && !historicalAnalysis && (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Periods to Analyze</h3>
+                      <p className="text-gray-600">
+                        Choose one or more sales periods from the calendar above to generate historical forecast
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Calculation Verification Tab */}
+              <TabsContent value="calculations" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Calculation Verification</h2>
+                    <p className="text-gray-600">Compare dashboard calculations with your manual calculations</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      if (calculationData && calculationData.length > 0) {
+                        // Export calculation data as CSV for easy comparison
+                        const csvContent = [
+                          // Header row
+                          'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
+                          // Data rows
+                          ...calculationData.map(row => [
+                            row.index,
+                            `"${row.brand_name}"`,
+                            row.D1_stock,
+                            row.DL_stock,
+                            row.D1_date,
+                            row.DL_date,
+                            row.calculated_wholesale_rate,
+                            row.selling_rate,
+                            row.total_sales_qty.toFixed(2),
+                            row.avg_daily_sales_qty.toFixed(3),
+                            row.calculated_avg_monthly_sale.toFixed(2),
+                            row.calculated_current_stock_value.toFixed(2),
+                            row.calculated_multiplier_value,
+                            row.days_analyzed,
+                            row.stock_available_days.toFixed(1)
+                          ].join(','))
+                        ].join('\n');
+                        
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `calculation_verification_${new Date().toISOString().split('T')[0]}.csv`;
+                        link.click();
+                        window.URL.revokeObjectURL(url);
+                        toast.success("Calculation data exported to CSV!");
+                      }
+                    }}
+                    variant="outline"
+                    disabled={!calculationData || calculationData.length === 0}
+                    data-testid="export-calculations-btn"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export CSV
+                  </Button>
+                </div>
+
+                {calculationData && calculationData.length > 0 ? (
+                  <Card data-testid="calculation-table">
+                    <CardHeader>
+                      <CardTitle>Detailed Calculations for All Brands</CardTitle>
+                      <CardDescription>
+                        Verify these calculations against your manual Excel calculations. 
+                        Multiplier Value = Current Stock Value ÷ Monthly Sales Value
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-gray-50">
+                              <th className="text-left p-3 font-semibold">Index</th>
+                              <th className="text-left p-3 font-semibold">Brand Name</th>
+                              <th className="text-left p-3 font-semibold">D1 Stock</th>
+                              <th className="text-left p-3 font-semibold">DL Stock</th>
+                              <th className="text-left p-3 font-semibold">Wholesale Rate</th>
+                              <th className="text-left p-3 font-semibold">Selling Rate</th>
+                              <th className="text-left p-3 font-semibold">Monthly Sale Value</th>
+                              <th className="text-left p-3 font-semibold">Current Stock Value</th>
+                              <th className="text-left p-3 font-semibold">Multiplier Value</th>
+                              <th className="text-left p-3 font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {calculationData.map((row, index) => (
+                              <tr key={index} className="border-b hover:bg-gray-50" data-testid={`calc-row-${index}`}>
+                                <td className="p-3 font-medium">{row.index}</td>
+                                <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
+                                <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
+                                <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
+                                <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
+                                <td className="p-3">{formatCurrency(row.selling_rate)}</td>
+                                <td className="p-3 font-medium text-blue-600">
+                                  {formatCurrency(row.calculated_avg_monthly_sale)}
+                                </td>
+                                <td className="p-3 font-medium text-green-600">
+                                  {formatCurrency(row.calculated_current_stock_value)}
+                                </td>
+                                <td className="p-3 font-bold text-purple-600">{row.calculated_multiplier_value}</td>
+                                <td className="p-3">
+                                  {row.calculated_multiplier_value > overstockMultiplier ? (
+                                    <Badge variant="destructive">Overstocked</Badge>
+                                  ) : row.calculated_multiplier_value > overstockMultiplier * 0.7 ? (
+                                    <Badge className="bg-yellow-500 text-white">Warning</Badge>
+                                  ) : (
+                                    <Badge className="bg-green-500 text-white">Healthy</Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Calculation Details Breakdown */}
+                      <div className="mt-8 grid gap-4">
+                        <h4 className="text-lg font-semibold text-gray-900">Calculation Formula Breakdown</h4>
+                        <div className="grid md:grid-cols-2 gap-4 text-sm">
+                          <div className="p-4 bg-blue-50 rounded-lg">
+                            <h5 className="font-semibold text-blue-900 mb-2">Monthly Sales Calculation</h5>
+                            <ol className="text-blue-800 space-y-1">
+                              <li>1. Total Sales = D1 Stock - DL Stock</li>
+                              <li>2. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
+                              <li>3. Monthly Sales Qty = Average Daily Sales × 24</li>
+                              <li>4. Monthly Sales Value = Monthly Sales Qty × Selling Rate</li>
+                            </ol>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg">
+                            <h5 className="font-semibold text-purple-900 mb-2">Overstocking Analysis</h5>
+                            <ol className="text-purple-800 space-y-1">
+                              <li>1. Current Stock Value = DL Stock × Selling Rate</li>
+                              <li>2. Multiplier Value = Stock Value ÷ Monthly Sales Value</li>
+                              <li>3. Overstocked if Multiplier > {overstockMultiplier}x</li>
+                              <li>4. Warning if Multiplier > {(overstockMultiplier * 0.7).toFixed(1)}x</li>
+                            </ol>
+                          </div>
+                        </div>
+
+                        {/* Detailed calculation for Black Dog Centenary as example */}
+                        {calculationData.length > 0 && (() => {
+                          // Find Black Dog Centenary in the data
+                          const blackDogExample = calculationData.find(item => 
+                            item.brand_name.toLowerCase().includes('black dog') && 
+                            item.brand_name.toLowerCase().includes('centenary')
+                          ) || calculationData[0]; // Fallback to first item if Black Dog Centenary not found
+                          
+                          return (
+                            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Example Calculation ({blackDogExample.brand_name})
+                                {blackDogExample !== calculationData[0] && (
+                                  <span className="ml-2 text-sm text-green-600 font-normal">✓ Found Black Dog Centenary</span>
+                                )}:
+                              </h5>
+                              <div className="text-sm text-gray-700 space-y-1">
+                                <p><strong>Index:</strong> {blackDogExample.index}</p>
+                                <p>• <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
+                                <p>• <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
+                                <p>• <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
+                                <p>• <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
+                                <p>• <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} ÷ {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
+                                <p>• <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
+                                <p>• <strong>Current Stock Value:</strong> {blackDogExample.DL_stock} × ₹{blackDogExample.selling_rate} = <span className="text-green-600 font-medium">{formatCurrency(blackDogExample.calculated_current_stock_value)}</span></p>
+                                <p>• <strong>Multiplier:</strong> {formatCurrency(blackDogExample.calculated_current_stock_value)} ÷ {formatCurrency(blackDogExample.calculated_avg_monthly_sale)} = <strong className="text-purple-600 text-lg">{blackDogExample.calculated_multiplier_value}</strong></p>
+                                <p>• <strong>Stock Status:</strong> 
+                                  {blackDogExample.calculated_multiplier_value > 3 ? (
+                                    <span className="text-red-600 font-medium"> Overstocked (>{overstockMultiplier}x)</span>
+                                  ) : blackDogExample.calculated_multiplier_value > 2.1 ? (
+                                    <span className="text-yellow-600 font-medium"> Warning (>2.1x)</span>
+                                  ) : (
+                                    <span className="text-green-600 font-medium"> Healthy Stock Level</span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="text-center py-12">
+                    <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No Calculation Data</h3>
+                    <p className="text-gray-600">Upload liquor data to see detailed calculations</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Database View Tab */}
+              <TabsContent value="database-view" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Database View</h2>
+                    <p className="text-gray-600">Complete view of raw database data for debugging and transparency</p>
+                  </div>
+                  {databaseView && databaseView.data && (
+                    <Button
+                      onClick={() => {
+                        // Export database view as JSON
+                        const dataStr = JSON.stringify(databaseView.data, null, 2);
+                        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(dataBlob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `database_export_${new Date().toISOString().split('T')[0]}.json`;
+                        link.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("Database exported as JSON file!");
+                      }}
+                      variant="outline"
+                      data-testid="export-database-btn"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export JSON
+                    </Button>
+                  )}
+                </div>
+
+                {databaseView ? (
+                  <div className="space-y-6">
+                    {/* Database Summary */}
+                    <Card data-testid="database-summary">
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <Database className="w-5 h-5 text-blue-600" />
+                          <span>Database Summary</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center p-4 bg-blue-50 rounded-lg">
+                            <div className="text-2xl font-bold text-blue-600">{databaseView.total_records}</div>
+                            <div className="text-sm text-blue-800">Total Records</div>
+                          </div>
+                          <div className="text-center p-4 bg-green-50 rounded-lg">
+                            <div className="text-2xl font-bold text-green-600">{databaseView.summary?.unique_d1_dates?.length || 0}</div>
+                            <div className="text-sm text-green-800">D1 Dates</div>
+                          </div>
+                          <div className="text-center p-4 bg-purple-50 rounded-lg">
+                            <div className="text-2xl font-bold text-purple-600">{databaseView.summary?.unique_dl_dates?.length || 0}</div>
+                            <div className="text-sm text-purple-800">DL Dates</div>
+                          </div>
+                          <div className="text-center p-4 bg-orange-50 rounded-lg">
+                            <div className="text-2xl font-bold text-orange-600">{databaseView.summary?.unique_daily_sales_dates?.length || 0}</div>
+                            <div className="text-sm text-orange-800">Daily Sales Dates</div>
+                          </div>
+                        </div>
+
+                        {databaseView.summary && (
+                          <div className="mt-6 grid md:grid-cols-2 gap-6">
+                            <div className="p-4 bg-gray-50 rounded-lg">
+                              <h4 className="font-semibold text-gray-900 mb-2">Date Information</h4>
+                              <div className="text-sm space-y-1">
+                                {databaseView.summary.unique_d1_dates && (
+                                  <div>
+                                    <span className="font-medium text-blue-600">D1 Dates:</span>
+                                    <span className="ml-2">{databaseView.summary.unique_d1_dates.join(', ')}</span>
+                                  </div>
+                                )}
+                                {databaseView.summary.unique_dl_dates && (
+                                  <div>
+                                    <span className="font-medium text-purple-600">DL Dates:</span>
+                                    <span className="ml-2">{databaseView.summary.unique_dl_dates.join(', ')}</span>
+                                  </div>
+                                )}
+                                {databaseView.summary.date_range && (
+                                  <div>
+                                    <span className="font-medium text-gray-600">Date Range:</span>
+                                    <span className="ml-2">{databaseView.summary.date_range}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="p-4 bg-gray-50 rounded-lg">
+                              <h4 className="font-semibold text-gray-900 mb-2">Record Fields</h4>
+                              <div className="text-xs text-gray-600">
+                                {databaseView.summary.sample_record_fields && databaseView.summary.sample_record_fields.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {databaseView.summary.sample_record_fields.map((field, idx) => (
+                                      <span key={idx} className="bg-white px-2 py-1 rounded border text-xs">
+                                        {field}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  "No fields available"
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Raw Data Table */}
+                    {databaseView.data && databaseView.data.length > 0 ? (
+                      <Card data-testid="raw-database-table">
+                        <CardHeader>
+                          <CardTitle>Raw Database Records</CardTitle>
+                          <CardDescription>
+                            Showing all {databaseView.total_records} records from the database
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-gray-50">
+                                  <th className="text-left p-2 font-semibold">Index</th>
+                                  <th className="text-left p-2 font-semibold">Brand Name</th>
+                                  <th className="text-left p-2 font-semibold">D1 Date</th>
+                                  <th className="text-left p-2 font-semibold">D1 Stock</th>
+                                  <th className="text-left p-2 font-semibold">DL Date</th>
+                                  <th className="text-left p-2 font-semibold">DL Stock</th>
+                                  <th className="text-left p-2 font-semibold">Days Analyzed</th>
+                                  <th className="text-left p-2 font-semibold">Selling Rate</th>
+                                  <th className="text-left p-2 font-semibold">Monthly Sale Value</th>
+                                  <th className="text-left p-2 font-semibold">Current Stock Value</th>
+                                  <th className="text-left p-2 font-semibold">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {databaseView.data.map((record, index) => (
+                                  <tr key={index} className="border-b hover:bg-gray-50" data-testid={`db-row-${index}`}>
+                                    <td className="p-2 font-medium">{record.index_number || 'N/A'}</td>
+                                    <td className="p-2 max-w-xs truncate" title={record.brand_name}>{record.brand_name}</td>
+                                    <td className="p-2 text-blue-600 text-xs">{record.D1_date || 'N/A'}</td>
+                                    <td className="p-2 font-medium text-indigo-600">{record.D1_stock || 0}</td>
+                                    <td className="p-2 text-purple-600 text-xs">{record.DL_date || 'N/A'}</td>
+                                    <td className="p-2 font-medium text-orange-600">{record.DL_stock || 0}</td>
+                                    <td className="p-2 font-medium text-green-600">{record.days_analyzed || 'N/A'}</td>
+                                    <td className="p-2">{record.selling_rate ? formatCurrency(record.selling_rate) : 'N/A'}</td>
+                                    <td className="p-2 font-medium text-blue-600">{record.monthly_sale_value ? formatCurrency(record.monthly_sale_value) : 'N/A'}</td>
+                                    <td className="p-2 font-medium text-green-600">{record.stock_value_today ? formatCurrency(record.stock_value_today) : 'N/A'}</td>
+                                    <td className="p-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          // Show detailed record in JSON format
+                                          const detailStr = JSON.stringify(record, null, 2);
+                                          navigator.clipboard.writeText(detailStr);
+                                          toast.success(`${record.brand_name} record copied to clipboard!`);
+                                        }}
+                                        className="text-xs"
+                                      >
+                                        Copy JSON
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {databaseView.data.length > 10 && (
+                            <div className="mt-4 text-center text-sm text-gray-600">
+                              Showing all {databaseView.data.length} records
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Database className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Database Records</h3>
+                        <p className="text-gray-600">Upload liquor data to populate the database</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading database view...</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Module 5: Historical Averages Tab */}
+              <TabsContent value="historical-averages" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {historicalPeriodData && historicalPeriodData.summary 
+                        ? historicalPeriodData.summary.period_labels.join(' + ')
+                        : 'Historical Data Viewer'}
+                    </h2>
+                    <p className="text-gray-600">
+                      {historicalPeriodData && historicalPeriodData.summary
+                        ? `Aggregated data from ${historicalPeriodData.summary.total_periods} period(s)`
+                        : 'Select one or more periods to view aggregated sales data'}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setSelectedHistoricalPeriods([]);
+                      setHistoricalPeriodData(null);
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                </div>
+
+                {/* Period Selection Calendar */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Calendar className="h-5 w-5 text-violet-600" />
+                      <span>Select Periods to View</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Click on one or more periods to view aggregated data. Multiple selections will be combined by brand.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Selection Counter */}
+                    <div className="flex justify-between items-center">
+                      <Badge variant="secondary" className="text-sm">
+                        {selectedHistoricalPeriods.length} period(s) selected
+                      </Badge>
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={fetchHistoricalPeriodData}
+                          disabled={selectedHistoricalPeriods.length === 0 || loadingHistoricalData}
+                          className="bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white"
+                        >
+                          {loadingHistoricalData ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              <Database className="w-4 h-4 mr-2" />
+                              Load Data
+                            </>
+                          )}
+                        </Button>
+                        
+                        <Button
+                          onClick={async () => {
+                            // Check if current period is selected
+                            const hasCurrentPeriod = selectedHistoricalPeriods.includes('current');
+                            
+                            if (hasCurrentPeriod) {
+                              toast.error("Cannot delete current period. Please deselect it first.");
+                              return;
+                            }
+                            
+                            // Get selected period names for confirmation
+                            const selectedPeriodNames = historicalPeriods
+                              .filter(p => selectedHistoricalPeriods.includes(p.id))
+                              .map(p => p.period_name || p.id)
+                              .join(', ');
+                            
+                            if (!window.confirm(`Are you sure you want to permanently delete the selected period(s)?\n\n${selectedPeriodNames}\n\nThis will remove these periods from:\n- Historical Data Viewer\n- Trendlines\n- All historical views\n\nThis action cannot be undone.`)) {
+                              return;
+                            }
+                            
+                            try {
+                              setLoading(true);
+                              
+                              // Delete each selected period (excluding current)
+                              const deletePromises = selectedHistoricalPeriods
+                                .filter(id => id !== 'current')
+                                .map(id => axios.delete(`${API}/stock/backup/${id}`));
+                              
+                              await Promise.all(deletePromises);
+                              
+                              toast.success(`Successfully deleted ${deletePromises.length} period(s)`);
+                              
+                              // Clear selection and refresh data
+                              setSelectedHistoricalPeriods([]);
+                              setHistoricalPeriodData(null);
+                              await fetchHistoricalPeriods();
+                              await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
+                              await fetchHistoricalAverages();
+                              
+                            } catch (error) {
+                              const errorMessage = error.response?.data?.detail || "Failed to delete selected periods";
+                              toast.error(errorMessage);
+                              console.error("Delete error:", error);
+                            } finally {
+                              setLoading(false);
+                            }
+                          }}
+                          disabled={selectedHistoricalPeriods.length === 0 || selectedHistoricalPeriods.includes('current')}
+                          variant="outline"
+                          className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Selected
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Calendar Grid */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {historicalPeriods.map((period) => {
+                        const isSelected = selectedHistoricalPeriods.includes(period.id);
+                        const isCurrent = period.is_current;
+                        
+                        // Format dates
+                        let periodLabel = "";
+                        try {
+                          const d1 = new Date(period.d1_date);
+                          const dl = new Date(period.dl_date);
+                          periodLabel = `Pd: ${d1.getDate()} ${d1.toLocaleDateString('en-US', { month: 'short' })} ${d1.getFullYear()} - ${dl.getDate()} ${dl.toLocaleDateString('en-US', { month: 'short' })} ${dl.getFullYear()}`;
+                        } catch (e) {
+                          periodLabel = `Pd: ${period.d1_date} - ${period.dl_date}`;
+                        }
+
+                        return (
+                          <div
+                            key={period.id}
+                            onClick={() => period.has_data && toggleHistoricalPeriodSelection(period.id)}
+                            className={`
+                              p-4 rounded-lg border-2 cursor-pointer transition-all
+                              ${!period.has_data ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-50' :
+                                isSelected ? 'bg-violet-100 border-violet-500 shadow-md' :
+                                'bg-white border-gray-200 hover:border-violet-300 hover:shadow'}
+                            `}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="font-semibold text-gray-900">
+                                {isCurrent ? '📍 Current Period' : period.period_name}
+                              </div>
+                              {period.has_data && (
+                                <div className={`
+                                  w-5 h-5 rounded-full border-2 flex items-center justify-center
+                                  ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-gray-300'}
+                                `}>
+                                  {isSelected && <span className="text-white text-xs">✓</span>}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              {periodLabel}
+                            </div>
+                            {period.has_data ? (
+                              <div className="text-xs text-green-600 mt-1">
+                                ✅ {period.total_records} records
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 mt-1">
+                                ⚪ No data
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Historical Period Data Display */}
+                {historicalPeriodData && historicalPeriodData.data && historicalPeriodData.data.length > 0 && (
+                  <div className="space-y-6">
+                    {/* Period Info Banner */}
+                    <Card className="bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-violet-900">
+                              Viewing: {historicalPeriodData.summary.period_labels.join(', ')}
+                            </h3>
+                            <p className="text-sm text-violet-700">
+                              {historicalPeriodData.summary.total_periods} period(s) • {historicalPeriodData.summary.total_brands} brands
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-green-600">
+                              Revenue: {formatCurrency(historicalPeriodData.summary.total_revenue)}
+                            </div>
+                            <div className="text-sm font-semibold text-blue-600">
+                              Profit: {formatCurrency(historicalPeriodData.summary.total_profit)}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Historical Data Table */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center space-x-2">
+                          <History className="w-5 w-5 text-violet-600" />
+                          <span>Aggregated Historical Data</span>
+                        </CardTitle>
+                        <CardDescription>
+                          Combined data from selected period(s), aggregated by brand
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-violet-100 border-b-2 border-violet-300">
+                                <th className="p-3 text-left font-semibold">Index</th>
+                                <th className="p-3 text-left font-semibold">Brand Name</th>
+                                <th className="p-3 text-right font-semibold">Total Qty Sold</th>
+                                <th className="p-3 text-right font-semibold">Avg/Day Sale</th>
+                                <th className="p-3 text-right font-semibold">Avg Retail Rate</th>
+                                <th className="p-3 text-right font-semibold">Avg Wholesale Rate</th>
+                                <th className="p-3 text-right font-semibold">Total Revenue</th>
+                                <th className="p-3 text-right font-semibold">Total Profit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historicalPeriodData.data.map((item, index) => (
+                                <tr key={index} className="border-b hover:bg-gray-50">
+                                  <td className="p-3">{item.index_number}</td>
+                                  <td className="p-3 font-medium">{item.brand_name}</td>
+                                  <td className="p-3 text-right">{item.total_qty_sold}</td>
+                                  <td className="p-3 text-right">{item.avg_daily_sales}</td>
+                                  <td className="p-3 text-right">{formatCurrency(item.avg_selling_rate)}</td>
+                                  <td className="p-3 text-right">{formatCurrency(item.avg_wholesale_rate)}</td>
+                                  <td className="p-3 text-right font-semibold text-green-600">{formatCurrency(item.total_revenue)}</td>
+                                  <td className="p-3 text-right font-semibold text-blue-600">{formatCurrency(item.total_profit)}</td>
+                                </tr>
+                              ))}
+                              {/* TOTAL Row */}
+                              <tr className="bg-orange-100 border-t-2 border-orange-300 font-bold">
+                                <td className="p-3" colSpan="6">TOTAL</td>
+                                <td className="p-3 text-right text-green-700">{formatCurrency(historicalPeriodData.summary.total_revenue)}</td>
+                                <td className="p-3 text-right text-blue-700">{formatCurrency(historicalPeriodData.summary.total_profit)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {!historicalPeriodData && (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Select Periods and Load Data</h3>
+                      <p className="text-gray-600">
+                        Click on one or more periods from the calendar above, then click "Load Data" to view aggregated historical data
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {historicalAverages && historicalAverages.length > 0 ? (
+                  <div className="space-y-6">
+                    {(() => {
+                      // Group data by month
+                      const monthGroups = {};
+                      historicalAverages.forEach(item => {
+                        const month = item.month_year;
+                        if (!monthGroups[month]) {
+                          monthGroups[month] = [];
+                        }
+                        monthGroups[month].push(item);
+                      });
+                      
+                      // Get sorted months (most recent first), limit to 13
+                      const months = Object.keys(monthGroups).sort().reverse().slice(0, 13);
+                      
+                      // Set default selected month if not set
+                      if (!selectedMonthTab && months.length > 0) {
+                        setSelectedMonthTab(months[0]);
+                      }
+                      
+                      const currentMonthData = monthGroups[selectedMonthTab] || [];
+                      
+                      return (
+                        <>
+                          {/* Monthly Tabs */}
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center space-x-2">
+                                <History className="w-5 h-5 text-violet-600" />
+                                <span>Brand-Wise Historical Averages</span>
+                              </CardTitle>
+                              <CardDescription>
+                                Select a month to view average daily sales data (max 13 months retained)
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              {/* Horizontal Month Tabs */}
+                              <div className="flex overflow-x-auto gap-2 pb-4 border-b mb-4">
+                                {months.map((month) => {
+                                  // Format month as "Sep-2025"
+                                  let formattedMonth = month;
+                                  try {
+                                    // Parse month_year format (could be "September 2025", "Sep-2025", etc.)
+                                    const parts = month.split(/[\s-]+/);
+                                    if (parts.length >= 2) {
+                                      const monthName = parts[0];
+                                      const year = parts[1];
+                                      // Convert to short month name
+                                      const monthMap = {
+                                        'January': 'Jan', 'February': 'Feb', 'March': 'Mar',
+                                        'April': 'Apr', 'May': 'May', 'June': 'Jun',
+                                        'July': 'Jul', 'August': 'Aug', 'September': 'Sep',
+                                        'October': 'Oct', 'November': 'Nov', 'December': 'Dec'
+                                      };
+                                      const shortMonth = monthMap[monthName] || monthName.substring(0, 3);
+                                      formattedMonth = `${shortMonth}-${year}`;
+                                    }
+                                  } catch (e) {
+                                    // Keep original if parsing fails
+                                  }
+                                  
+                                  return (
+                                    <button
+                                      key={month}
+                                      onClick={() => setSelectedMonthTab(month)}
+                                      className={`
+                                        px-6 py-3 rounded-lg font-semibold whitespace-nowrap transition-all
+                                        ${selectedMonthTab === month 
+                                          ? 'bg-gradient-to-r from-violet-500 to-violet-600 text-white shadow-md' 
+                                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+                                      `}
+                                    >
+                                      {formattedMonth}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Summary Stats for Selected Month */}
+                              <div className="grid grid-cols-4 gap-4 mb-6">
+                                <Card className="bg-purple-50">
+                                  <CardContent className="pt-4 pb-4">
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-purple-600">{currentMonthData.length}</div>
+                                      <div className="text-xs text-gray-600 mt-1">Brands</div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                                <Card className="bg-green-50">
+                                  <CardContent className="pt-4 pb-4">
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-green-600">
+                                        {currentMonthData.length > 0 ? Math.round(currentMonthData.reduce((sum, item) => sum + item.average_daily_sales_qty, 0) / currentMonthData.length) : 0}
+                                      </div>
+                                      <div className="text-xs text-gray-600 mt-1">Avg Daily</div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                                <Card className="bg-orange-50">
+                                  <CardContent className="pt-4 pb-4">
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-orange-600">
+                                        {formatCurrency(currentMonthData.reduce((sum, item) => sum + item.total_sales_value, 0))}
+                                      </div>
+                                      <div className="text-xs text-gray-600 mt-1">Revenue</div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                                <Card className="bg-blue-50">
+                                  <CardContent className="pt-4 pb-4">
+                                    <div className="text-center">
+                                      <div className="text-2xl font-bold text-blue-600">
+                                        {currentMonthData[0]?.total_sales_days || 0}
+                                      </div>
+                                      <div className="text-xs text-gray-600 mt-1">Days</div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </div>
+
+                              {/* Month Data Table */}
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b bg-purple-50">
+                                      <th className="text-left p-3 font-semibold text-purple-900">Brand Name</th>
+                                      <th className="text-left p-3 font-semibold text-purple-900">Month</th>
+                                      <th className="text-right p-3 font-semibold text-purple-900">Avg Daily Qty</th>
+                                      <th className="text-right p-3 font-semibold text-purple-900">Avg Daily Value</th>
+                                      <th className="text-right p-3 font-semibold text-purple-900">Total Sales Qty</th>
+                                      <th className="text-right p-3 font-semibold text-purple-900">Total Revenue</th>
+                                      <th className="text-center p-3 font-semibold text-purple-900">Days Analyzed</th>
+                                      <th className="text-right p-3 font-semibold text-purple-900">Projected Monthly</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {currentMonthData.map((item, index) => (
+                                      <tr key={index} className="border-b hover:bg-purple-25 transition-colors">
+                                        <td className="p-3 font-medium text-gray-900">{item.brand_name}</td>
+                                        <td className="p-3 text-gray-700">
+                                          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-300">
+                                            {item.month_year}
+                                          </Badge>
+                                        </td>
+                                        <td className="p-3 text-right text-gray-900 font-mono">
+                                          {item.average_daily_sales_qty.toFixed(1)}
+                                        </td>
+                                        <td className="p-3 text-right text-gray-900 font-mono">
+                                          {formatCurrency(item.average_daily_sales_value)}
+                                        </td>
+                                        <td className="p-3 text-right text-gray-900 font-mono">
+                                          {Math.round(item.total_sales_quantity)}
+                                        </td>
+                                        <td className="p-3 text-right text-green-600 font-semibold">
+                                          {formatCurrency(item.total_sales_value)}
+                                        </td>
+                                        <td className="p-3 text-center">
+                                          <Badge variant="secondary">{item.total_sales_days} days</Badge>
+                                        </td>
+                                        <td className="p-3 text-right text-blue-600 font-semibold">
+                                          {Math.round(item.average_daily_sales_qty * 30)} units
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr className="bg-purple-50 font-bold">
+                                      <td className="p-3 text-gray-900" colSpan="2">TOTALS</td>
+                                      <td className="p-3 text-right text-gray-900">
+                                        {currentMonthData.reduce((sum, item) => sum + item.average_daily_sales_qty, 0).toFixed(1)}
+                                      </td>
+                                      <td className="p-3 text-right text-gray-900">
+                                        {formatCurrency(currentMonthData.reduce((sum, item) => sum + item.average_daily_sales_value, 0))}
+                                      </td>
+                                      <td className="p-3 text-right text-gray-900">
+                                        {Math.round(currentMonthData.reduce((sum, item) => sum + item.total_sales_quantity, 0))}
+                                      </td>
+                                      <td className="p-3 text-right text-green-600">
+                                        {formatCurrency(currentMonthData.reduce((sum, item) => sum + item.total_sales_value, 0))}
+                                      </td>
+                                      <td className="p-3"></td>
+                                      <td className="p-3 text-right text-blue-600">
+                                        {Math.round(currentMonthData.reduce((sum, item) => sum + item.average_daily_sales_qty, 0) * 30)}
+                                      </td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </>
+                      );
+                    })()}
+
+                    {/* Info Card */}
+                    <Alert className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300">
+                      <AlertDescription>
+                        <div className="space-y-2">
+                          <p className="font-semibold text-blue-900">💡 How Historical Averages Work:</p>
+                          <ul className="text-sm text-blue-800 space-y-1 ml-4">
+                            <li>• <strong>Automatic Storage:</strong> When you reset stock data, historical averages are automatically calculated and stored</li>
+                            <li>• <strong>Smart Analytics:</strong> For the first 5 days of a new month, analytics use historical data for projections</li>
+                            <li>• <strong>Seamless Transition:</strong> After day 5, system automatically switches to current month's actual data</li>
+                            <li>• <strong>36-Month Retention:</strong> System keeps 3 years of historical data for seasonal pattern analysis</li>
+                            <li>• <strong>Projected Monthly:</strong> Shows expected sales for full month based on daily average (avg × 30 days)</li>
+                          </ul>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                ) : (
+                  <Card>
+                    <CardContent className="py-12">
+                      <div className="text-center">
+                        <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Historical Data Available</h3>
+                        <p className="text-gray-600 mb-4">
+                          Historical averages will be automatically created when you reset stock data at month end
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          After your first stock reset, this tab will show brand-wise sales patterns from previous months
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Upload History Tab */}
+              <TabsContent value="upload-history" className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <FileText className="h-5 w-5 text-green-600" />
+                      <span>Upload History</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Track all uploaded Excel files and data changes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {uploadHistory.length > 0 ? (
+                      <div className="space-y-4">
+                        {uploadHistory.map((upload, index) => (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-3">
+                                <div className={`p-2 rounded-lg ${
+                                  upload.upload_type === 'full_monthly' 
+                                    ? 'bg-green-100 text-green-600'
+                                    : 'bg-orange-100 text-orange-600'
+                                }`}>
+                                  {upload.upload_type === 'full_monthly' ? <Database className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-gray-900">{upload.filename}</h4>
+                                  <p className="text-sm text-gray-600">
+                                    {upload.upload_type === 'full_monthly' ? 'Full Monthly Data' : "Today's Data Update"}
+                                    {upload.undone_at && <span className="ml-2 text-red-600">(Undone)</span>}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Badge variant={upload.upload_type === 'full_monthly' ? 'default' : 'secondary'}>
+                                  {upload.records_count} records
+                                </Badge>
+                                {upload.can_undo && !upload.undone_at && (
+                                  <Button
+                                    onClick={() => handleUndoUpload(upload.id, upload.filename)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    Undo
+                                  </Button>
+                                )}
+                                <Button
+                                  onClick={() => handleDeleteUpload(upload.id, upload.filename)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs text-gray-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
+                              <div>
+                                <span className="font-medium">Uploaded:</span>
+                                <div>{formatDate(upload.upload_timestamp)}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium">File Size:</span>
+                                <div>{formatFileSize(upload.file_size)}</div>
+                              </div>
+                              <div>
+                                <span className="font-medium">Uploaded By:</span>
+                                <div>{upload.uploaded_by}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <FileSpreadsheet className="w-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Upload History</h3>
+                        <p className="text-gray-600">Upload your first Excel file to see history</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* User Management Tab removed - Auth disabled */}
+
+              {/* Historical Forecast Tab */}
+
+            </Tabs>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Module 1: Add Brand Modal */}
+      <Dialog open={showBrandModal} onOpenChange={setShowBrandModal}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="add-brand-modal">
+          <DialogHeader>
+            <DialogTitle>Add New Brand</DialogTitle>
+            <DialogDescription>
+              Enter the details for the new liquor brand you want to add to your inventory.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddBrand} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="index_number">Index Number *</Label>
+              <Input
+                id="index_number"
+                type="number"
+                required
+                value={brandFormData.index_number}
+                onChange={(e) => setBrandFormData({...brandFormData, index_number: e.target.value})}
+                placeholder="e.g., 63"
+                data-testid="brand-index-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brand_name">Brand Name *</Label>
+              <Input
+                id="brand_name"
+                type="text"
+                required
+                value={brandFormData.brand_name}
+                onChange={(e) => setBrandFormData({...brandFormData, brand_name: e.target.value})}
+                placeholder="e.g., Johnnie Walker Black Label"
+                data-testid="brand-name-input"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="wholesale_rate">Wholesale Rate *</Label>
+                <Input
+                  id="wholesale_rate"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={brandFormData.wholesale_rate}
+                  onChange={(e) => setBrandFormData({...brandFormData, wholesale_rate: e.target.value})}
+                  placeholder="e.g., 2500"
+                  data-testid="brand-wholesale-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="selling_rate">Retail Rate *</Label>
+                <Input
+                  id="selling_rate"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={brandFormData.selling_rate}
+                  onChange={(e) => setBrandFormData({...brandFormData, selling_rate: e.target.value})}
+                  placeholder="e.g., 2800"
+                  data-testid="brand-retail-input"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="initial_stock_qty">Initial Stock Quantity</Label>
+              <Input
+                id="initial_stock_qty"
+                type="number"
+                value={brandFormData.initial_stock_qty}
+                onChange={(e) => setBrandFormData({...brandFormData, initial_stock_qty: e.target.value})}
+                placeholder="e.g., 50 (optional)"
+                data-testid="brand-stock-input"
+              />
+              <p className="text-xs text-gray-500">Leave as 0 if you don't have stock yet</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowBrandModal(false)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+                data-testid="brand-submit-btn"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {loading ? 'Adding...' : 'Add Brand'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 1: Update Rates Modal */}
+      <Dialog open={showRatesModal} onOpenChange={setShowRatesModal}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="update-rates-modal">
+          <DialogHeader>
+            <DialogTitle>Update Brand Rates</DialogTitle>
+            <DialogDescription>
+              Upload an Excel file to update wholesale and retail rates for existing brands.
+              <br />
+              <span className="text-sm font-medium mt-2 block">Required columns:</span>
+              <span className="text-xs text-gray-600">Index, Brand Name, Wholesale Rate, Retail Rate</span>
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateRates} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rates-file">Select Excel File *</Label>
+              <Input
+                id="rates-file"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                required
+                onChange={(e) => setRatesFile(e.target.files[0])}
+                data-testid="rates-file-input"
+              />
+              <p className="text-xs text-gray-500">
+                File should contain: Index, Brand Name, Wholesale Rate, Retail Rate
+              </p>
+            </div>
+            {ratesFile && (
+              <Alert>
+                <AlertDescription className="flex items-center">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Selected: {ratesFile.name}
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowRatesModal(false);
+                  setRatesFile(null);
+                }}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading || !ratesFile}
+                data-testid="rates-submit-btn"
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading ? 'Updating...' : 'Update Rates'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 3: Stock Reset Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="reset-stock-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Reset Stock Data</span>
+            </DialogTitle>
+            <DialogDescription>
+              This action will delete all current stock data. A backup will be created automatically before reset.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Warning:</strong> This action cannot be undone. All date-wise stock data will be permanently deleted.
+              </AlertDescription>
+            </Alert>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-2">What happens during reset:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>✅ Automatic backup is created</li>
+                <li>✅ All stock records are deleted</li>
+                <li>✅ Next upload becomes the new D1 (first date)</li>
+                <li>✅ Fresh start for new cycle</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h4 className="font-semibold text-green-900 mb-2">Safety measures:</h4>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li>🛡️ Backup created before deletion</li>
+                <li>🛡️ Download backup anytime from "Backups" button</li>
+                <li>🛡️ Backup includes all data for recovery</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowResetDialog(false)}
+                disabled={resetting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleStockReset}
+                disabled={resetting}
+                data-testid="confirm-reset-btn"
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {resetting ? 'Resetting...' : 'Confirm Reset'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 3: Backups List Dialog */}
+      <Dialog open={showBackupsDialog} onOpenChange={setShowBackupsDialog}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto" data-testid="backups-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Database className="w-5 h-5 text-purple-600" />
+              <span>Stock Backups</span>
+            </DialogTitle>
+            <DialogDescription>
+              View and download stock data backups
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-gray-600">Total backups: {backupsList.length}</p>
+              <Button
+                onClick={handleCreateBackup}
+                size="sm"
+                disabled={loading || !hasData}
+                data-testid="create-backup-btn"
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Create Backup
+              </Button>
+            </div>
+
+            {backupsList.length > 0 ? (
+              <div className="space-y-3">
+                {backupsList.map((backup, index) => (
+                  <div 
+                    key={backup.id} 
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                    data-testid={`backup-item-${index}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">
+                          {backup.backup_reason === 'pre_reset_backup' ? '🔄 Pre-Reset Backup' : '💾 Manual Backup'}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          {formatDate(backup.backup_timestamp)}
+                        </p>
+                      </div>
+                      <Badge variant="secondary">
+                        {backup.total_records} records
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs text-gray-500">
+                        Created by: {backup.created_by}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleRestoreFromBackup(backup.id, backup.backup_reason, backup.total_records)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`restore-backup-${index}`}
+                          className="border-green-600 text-green-600 hover:bg-green-50"
+                          disabled={loading}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-1" />
+                          Restore
+                        </Button>
+                        <Button
+                          onClick={() => handleDownloadBackup(backup.id, backup.backup_timestamp)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`download-backup-${index}`}
+                          className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          Download
+                        </Button>
+                        <Button
+                          onClick={() => handleDeleteBackup(backup.id, backup.backup_reason)}
+                          size="sm"
+                          variant="outline"
+                          data-testid={`delete-backup-${index}`}
+                          className="border-red-600 text-red-600 hover:bg-red-50"
+                          disabled={loading}
+                        >
+                          <AlertTriangle className="w-4 h-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Database className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Backups Yet</h3>
+                <p className="text-gray-600">Create a backup to safely store your stock data</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Module 4: PDF Report Generation Modal */}
+      <Dialog open={showReportModal} onOpenChange={setShowReportModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-indigo-600" />
+              Generate PDF Report
+            </DialogTitle>
+            <DialogDescription>
+              Configure your monthly sales analytics report parameters
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Report Title */}
+            <div className="space-y-2">
+              <Label htmlFor="reportTitle">Report Title</Label>
+              <Input
+                id="reportTitle"
+                value={reportParameters.report_title}
+                onChange={(e) => handleReportParameterChange('report_title', e.target.value)}
+                placeholder="Monthly Sales Analytics Report"
+                className="w-full"
+              />
+            </div>
+
+            {/* Report Sections */}
+            <div className="space-y-4">
+              <h4 className="font-semibold text-gray-900">Report Sections</h4>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="executive_summary"
+                    checked={reportParameters.include_executive_summary}
+                    onChange={(e) => handleReportParameterChange('include_executive_summary', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="executive_summary" className="text-sm font-medium">
+                    📊 Executive Summary
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="top_sellers"
+                    checked={reportParameters.include_top_sellers}
+                    onChange={(e) => handleReportParameterChange('include_top_sellers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="top_sellers" className="text-sm font-medium">
+                    🏆 Top Sellers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="slow_sellers"
+                    checked={reportParameters.include_slow_sellers}
+                    onChange={(e) => handleReportParameterChange('include_slow_sellers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="slow_sellers" className="text-sm font-medium">
+                    🐌 Slow Sellers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="capital_blockers"
+                    checked={reportParameters.include_capital_blockers}
+                    onChange={(e) => handleReportParameterChange('include_capital_blockers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="capital_blockers" className="text-sm font-medium">
+                    💰 Capital Blockers
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="revenue_analysis"
+                    checked={reportParameters.include_revenue_analysis}
+                    onChange={(e) => handleReportParameterChange('include_revenue_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="revenue_analysis" className="text-sm font-medium">
+                    📈 Revenue Analysis
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="demand_forecast"
+                    checked={reportParameters.include_demand_forecast}
+                    onChange={(e) => handleReportParameterChange('include_demand_forecast', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="demand_forecast" className="text-sm font-medium">
+                    🎯 Demand Forecast
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="profit_analysis"
+                    checked={reportParameters.include_profit_analysis}
+                    onChange={(e) => handleReportParameterChange('include_profit_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="profit_analysis" className="text-sm font-medium">
+                    💹 Profit Analysis
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="recommendations"
+                    checked={reportParameters.include_recommendations}
+                    onChange={(e) => handleReportParameterChange('include_recommendations', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="recommendations" className="text-sm font-medium">
+                    💡 Recommendations
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="datewise_analysis"
+                    checked={reportParameters.include_datewise_analysis}
+                    onChange={(e) => handleReportParameterChange('include_datewise_analysis', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="datewise_analysis" className="text-sm font-medium">
+                    📊 Brand-Wise Sale Analysis
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowReportModal(false)}
+                disabled={generatingReport}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGeneratePDFReport}
+                disabled={generatingReport}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {generatingReport ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating PDF...
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Generate PDF Report
+                  </div>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Date Error Dialog */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-orange-600">
+              <AlertTriangle className="w-5 h-5" />
+              <span>Duplicate Date Detected</span>
+            </DialogTitle>
+            <DialogDescription>
+              The uploaded file contains dates that already exist in your database
+            </DialogDescription>
+          </DialogHeader>
+          
+          {duplicateError && (
+            <div className="mt-4 space-y-4">
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <h4 className="font-semibold text-orange-900 mb-2">📅 Duplicate Dates Found:</h4>
+                <div className="text-sm text-orange-800">
+                  <div className="font-medium">File: {duplicateError.filename}</div>
+                  <div className="mt-1">Dates: <span className="font-mono bg-white px-1 rounded">{duplicateError.duplicateDates.join(', ')}</span></div>
+                  {duplicateError.existing_dates_found && (
+                    <div className="mt-2">
+                      <div className="font-medium">Found in database:</div>
+                      <ul className="mt-1 ml-4 text-xs">
+                        {duplicateError.existing_dates_found.map((date, idx) => (
+                          <li key={idx} className="font-mono">• {date}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">💡 Solutions:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Upload data for a <strong>new date</strong> instead</li>
+                  <li>• Use <strong>"Full Monthly Data"</strong> to replace all existing data</li>
+                  <li>• Check your Excel file has the correct date columns</li>
+                </ul>
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDuplicateDialog(false);
+                    setDuplicateError(null);
+                  }}
+                  data-testid="duplicate-dialog-ok-btn"
+                >
+                  Got it
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      {/* Change Password Dialog removed - Auth disabled */}
     </div>
   );
 }
