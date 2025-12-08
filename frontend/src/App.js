@@ -1940,7 +1940,7 @@ function App() {
                   className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 data-[state=active]:border-blue-300"
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span>Charts</span>
+                  <span>Dashboard</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="overstocking" 
@@ -1959,6 +1959,15 @@ function App() {
                   <span>Top Brands</span>
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="historical-averages" 
+                  data-testid="historical-averages-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200 data-[state=active]:border-violet-300"
+                  onClick={() => fetchHistoricalAverages()}
+                >
+                  <History className="w-4 h-4" />
+                  <span>Sales History</span>
+                </TabsTrigger>
+                <TabsTrigger 
                   value="recommendations" 
                   data-testid="recommendations-tab"
                   className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200 data-[state=active]:border-indigo-300"
@@ -1967,29 +1976,20 @@ function App() {
                   <span>Forecast</span>
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="database-view" 
-                  data-testid="database-view-tab"
-                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300 data-[state=active]:border-gray-400"
-                >
-                  <Database className="w-4 h-4" />
-                  <span>Database</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="historical-averages" 
-                  data-testid="historical-averages-tab"
-                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-violet-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200 data-[state=active]:border-violet-300"
-                  onClick={() => fetchHistoricalAverages()}
-                >
-                  <History className="w-4 h-4" />
-                  <span>History</span>
-                </TabsTrigger>
-                <TabsTrigger 
                   value="upload-history" 
                   data-testid="upload-history-tab"
                   className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-green-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 data-[state=active]:border-green-300"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>Uploads</span>
+                  <span>Upload History</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="database-view" 
+                  data-testid="database-view-tab"
+                  className="flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-to-r data-[state=active]:from-gray-600 data-[state=active]:to-gray-700 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:transform data-[state=active]:scale-105 bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300 data-[state=active]:border-gray-400"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>Database View</span>
                 </TabsTrigger>
                 {/* User Management tab removed - Auth disabled */}
               </TabsList>
