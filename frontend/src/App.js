@@ -64,6 +64,7 @@ function App() {
   const [showPeriodSelectionModal, setShowPeriodSelectionModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState('pdf'); // 'pdf' or 'excel'
+  const [selectedReportPeriods, setSelectedReportPeriods] = useState([]); // Store selected periods
   const [reportParameters, setReportParameters] = useState({
     include_executive_summary: true,
     include_top_sellers: true,
