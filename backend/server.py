@@ -5138,10 +5138,13 @@ async def generate_excel_report(request_data: dict = None):
 
 @api_router.post("/reports/generate-pdf")
 async def generate_pdf_report(params: ReportParameters):
-    """Generate beautified PDF report with selected sections"""
+    """Generate beautified PDF report with selected sections - supports period selection"""
     try:
-        # Get report data
-        report_data = await generate_monthly_report_data()
+        # Extract selected periods if provided
+        selected_periods = params.dict().get('selected_periods', []) if params else []
+        
+        # Get report data (with period aggregation if multiple periods selected)
+        report_data = await generate_monthly_report_data(selected_periods)
         
         # Create PDF with A4 size (landscape for brand-wise analysis if requested)
         output = io.BytesIO()
