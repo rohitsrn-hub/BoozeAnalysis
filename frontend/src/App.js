@@ -1042,11 +1042,22 @@ function App() {
   };
 
   // Module 4: Report Generation Handlers
-  const handleGenerateExcelReport = async () => {
+  const handleGenerateReportWithPeriods = async (selectedPeriods, reportType) => {
     try {
       setGeneratingReport(true);
       
-      const response = await axios.post(`${API}/reports/generate-excel`, {}, {
+      // Prepare period IDs to send to backend
+      const periodIds = selectedPeriods.map(p => p.id);
+      
+      const endpoint = reportType === 'excel' 
+        ? `${API}/reports/generate-excel` 
+        : `${API}/reports/generate-pdf`;
+      
+      const payload = reportType === 'pdf' 
+        ? { ...reportParameters, selected_periods: periodIds }
+        : { selected_periods: periodIds };
+      
+      const response = await axios.post(endpoint, payload, {
         responseType: 'blob'
       });
       
@@ -1057,7 +1068,8 @@ function App() {
       
       // Extract filename from response headers
       const contentDisposition = response.headers['content-disposition'];
-      let filename = 'monthly_report.xlsx';
+      const extension = reportType === 'excel' ? 'xlsx' : 'pdf';
+      let filename = `monthly_report.${extension}`;
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
         if (filenameMatch && filenameMatch[1]) {
@@ -1071,56 +1083,32 @@ function App() {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      toast.success("Excel report generated successfully!");
+      const periodText = selectedPeriods.length === 1 
+        ? selectedPeriods[0].period_name 
+        : `${selectedPeriods.length} periods`;
+      
+      toast.success(`${reportType.toUpperCase()} report generated for ${periodText}!`);
+      setShowPeriodSelectionModal(false);
+      setShowReportModal(false);
       
     } catch (error) {
-      console.error("Error generating Excel report:", error);
-      const errorMessage = error.response?.data?.detail || "Failed to generate Excel report";
+      console.error(`Error generating ${reportType} report:`, error);
+      const errorMessage = error.response?.data?.detail || `Failed to generate ${reportType} report`;
       toast.error(errorMessage);
     } finally {
       setGeneratingReport(false);
     }
   };
 
+  const handleGenerateExcelReport = async () => {
+    // Open period selection modal for Excel reports
+    setSelectedReportType('excel');
+    setShowPeriodSelectionModal(true);
+  };
+
   const handleGeneratePDFReport = async () => {
-    try {
-      setGeneratingReport(true);
-      
-      const response = await axios.post(`${API}/reports/generate-pdf`, reportParameters, {
-        responseType: 'blob'
-      });
-      
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // Extract filename from response headers
-      const contentDisposition = response.headers['content-disposition'];
-      let filename = 'monthly_report.pdf';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1].replace(/['"]/g, '');
-        }
-      }
-      
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success("PDF report generated successfully!");
-      setShowReportModal(false);
-      
-    } catch (error) {
-      console.error("Error generating PDF report:", error);
-      const errorMessage = error.response?.data?.detail || "Failed to generate PDF report";
-      toast.error(errorMessage);
-    } finally {
-      setGeneratingReport(false);
-    }
+    // PDF report generation is triggered from report modal
+    // which now uses the period selection flow
   };
 
   const handleReportParameterChange = (key, value) => {
