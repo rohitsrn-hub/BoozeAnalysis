@@ -581,9 +581,6 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             # Check if column represents a date (more flexible detection)
             is_date_column = False
             
-            # DEBUG: Print all non-standard columns
-            print(f"🔍 Checking column: '{col}' (lower: '{col_lower}')")
-            
             # IMPORTANT: Skip columns that are clearly rate-related (even if not captured above)
             if ('rate' in col_lower or 'price' in col_lower or 'cost' in col_lower or 'value' in col_lower) and '/' in col_str:
                 # This is likely W/RATE, S/RATE, or similar - NOT a date column
@@ -592,7 +589,6 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             # Method 1: Check for month names (original logic)
             elif any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
                 is_date_column = True
-                print(f"✓ Month name found in: '{col}'")
             
             # Method 2: Check for date patterns using regex
             import re
