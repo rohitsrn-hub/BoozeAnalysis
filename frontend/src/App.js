@@ -61,7 +61,9 @@ function App() {
   const [resetting, setResetting] = useState(false);
 
   // Module 4: Monthly Report Generation state
+  const [showPeriodSelectionModal, setShowPeriodSelectionModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedReportType, setSelectedReportType] = useState('pdf'); // 'pdf' or 'excel'
   const [reportParameters, setReportParameters] = useState({
     include_executive_summary: true,
     include_top_sellers: true,
