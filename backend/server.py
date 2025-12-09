@@ -4921,11 +4921,14 @@ async def get_monthly_report_data():
     return await generate_monthly_report_data()
 
 @api_router.post("/reports/generate-excel")
-async def generate_excel_report():
-    """Generate comprehensive Excel report with all data"""
+async def generate_excel_report(request_data: dict = None):
+    """Generate comprehensive Excel report with all data - supports period selection"""
     try:
-        # Get report data
-        report_data = await generate_monthly_report_data()
+        # Extract selected periods if provided
+        selected_periods = request_data.get('selected_periods', []) if request_data else []
+        
+        # Get report data (with period aggregation if multiple periods selected)
+        report_data = await generate_monthly_report_data(selected_periods)
         
         # Create Excel file with multiple sheets
         output = io.BytesIO()
