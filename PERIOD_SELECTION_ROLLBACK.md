@@ -39,8 +39,12 @@ const [selectedReportType, setSelectedReportType] = useState('pdf');
 const [selectedReportPeriods, setSelectedReportPeriods] = useState([]);
 ```
 
-Revert the report generation handlers to original:
+Remove new handlers and revert to original:
 ```javascript
+// REMOVE THESE FUNCTIONS:
+// - handlePeriodSelectionComplete
+// - generateReport
+
 // REVERT TO ORIGINAL:
 const handleGenerateExcelReport = async () => {
   try {
@@ -50,7 +54,7 @@ const handleGenerateExcelReport = async () => {
       responseType: 'blob'
     });
     
-    // ... rest of original code
+    // ... rest of original code (create download link, etc.)
   }
 };
 
@@ -62,7 +66,7 @@ const handleGeneratePDFReport = async () => {
       responseType: 'blob'
     });
     
-    // ... rest of original code
+    // ... rest of original code (create download link, etc.)
   }
 };
 ```
