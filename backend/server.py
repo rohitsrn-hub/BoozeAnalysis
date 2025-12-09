@@ -570,7 +570,13 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             selling_rate_col = col
         elif 'rate' in col_lower and '/' not in col_lower and not wholesale_rate_col and not selling_rate_col:
             selling_rate_col = col  # Default to selling rate if only one rate column (but not W/RATE or S/RATE)
-        elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
+        elif len(col_str) <= 10 and (
+            'index' in col_lower or 
+            col_lower in ['sl', 'sr', 'no', 'no.', 's.no', 's.no.', 'id', 'sno'] or
+            col_lower.startswith('no.') or
+            col_lower.startswith('s.no')
+        ):
+            # More specific check for index columns to avoid matching "nov" in November dates
             index_col = col
         else:
             # Check if column represents a date (more flexible detection)
