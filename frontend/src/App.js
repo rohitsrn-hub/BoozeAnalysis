@@ -1737,7 +1737,7 @@ function App() {
                   </Button>
                   <Button 
                     size="sm"
-                    onClick={() => setShowReportModal(true)}
+                    onClick={() => { setSelectedReportType('pdf'); setShowPeriodSelectionModal(true); }}
                     disabled={loading || !hasData || generatingReport}
                     className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 whitespace-nowrap disabled:opacity-50"
                   >
