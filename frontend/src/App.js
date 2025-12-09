@@ -15,6 +15,7 @@ import { Upload, TrendingUp, AlertTriangle, BarChart3, Package, DollarSign, Cale
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import PeriodSelectionModal from "./components/PeriodSelectionModal";
 // AUTH REMOVED - Backup in /BACKUP_AUTH_CODE/
 // import UserManagement from "./auth/components/UserManagement";
 // import { PERMISSIONS } from "./auth/config";
