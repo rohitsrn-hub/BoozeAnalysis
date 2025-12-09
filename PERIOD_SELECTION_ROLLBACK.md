@@ -36,6 +36,7 @@ Remove the state variables:
 // REMOVE THESE:
 const [showPeriodSelectionModal, setShowPeriodSelectionModal] = useState(false);
 const [selectedReportType, setSelectedReportType] = useState('pdf');
+const [selectedReportPeriods, setSelectedReportPeriods] = useState([]);
 ```
 
 Revert the report generation handlers to original:
