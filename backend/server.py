@@ -197,6 +197,7 @@ class ReportParameters(BaseModel):
     include_datewise_analysis: bool = False
     report_title: str = "Monthly Sales Analytics Report"
     report_period: str = ""
+    selected_periods: list = []  # List of period IDs for multi-period reports
 
 # Module 5: Historical Sales Averages Models
 class HistoricalSalesAverage(BaseModel):
