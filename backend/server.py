@@ -2531,114 +2531,43 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         period_trends = {}
         
         for period_label, records in period_to_data.items():
-            # OPTION 1: Use pre-calculated total_sales_qty if available (most accurate)
-            # This is the value shown in History tab
-            has_totals = all('total_sales_qty' in r for r in records)
+            # Calculate daily sales from stock positions
+            # Sales = Previous Day Stock - Current Day Stock
+            all_daily_sales = {}
             
-            if has_totals:
-                # Use the stored total_sales_qty values (already calculated correctly)
-                # Distribute sales across days proportionally based on stock decreases
-                
-                all_daily_sales = {}
-                for record in records:
-                    daily_sales = record.get('daily_sales', {}) or {}
-                    for date_str, stock_qty in daily_sales.items():
-                        if date_str not in all_daily_sales:
-                            all_daily_sales[date_str] = []
-                        all_daily_sales[date_str].append(stock_qty)
-                
-                # Sort dates
-                sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
-                
-                # Get the correct total from total_sales_qty
-                correct_total = sum(r.get('total_sales_qty', 0) for r in records)
-                
-                # Calculate stock changes (can be negative if restocking happened)
-                stock_changes = []
-                for i, date in enumerate(sorted_dates):
-                    if i == 0:
-                        stock_changes.append(0)
-                    else:
-                        prev_total = sum(all_daily_sales[sorted_dates[i-1]])
-                        current_total = sum(all_daily_sales[date])
-                        change = prev_total - current_total
-                        stock_changes.append(change)
-                
-                # If all changes are non-positive (restocking happened), 
-                # distribute total sales proportionally across days based on stock levels
-                total_positive_changes = sum(c for c in stock_changes if c > 0)
-                
-                if total_positive_changes == 0 or correct_total > total_positive_changes * 1.5:
-                    # Restocking likely happened or calculation is very off
-                    # Distribute total_sales_qty evenly across days (excluding first day)
-                    num_days = len(sorted_dates) - 1
-                    if num_days > 0:
-                        sales_per_day = correct_total / num_days
-                        daily_sales_qty = {sorted_dates[0]: 0}
-                        for date in sorted_dates[1:]:
-                            daily_sales_qty[date] = sales_per_day
-                    else:
-                        daily_sales_qty = {sorted_dates[0]: correct_total}
+            for record in records:
+                daily_sales = record.get('daily_sales', {}) or {}
+                for date_str, stock_qty in daily_sales.items():
+                    if date_str not in all_daily_sales:
+                        all_daily_sales[date_str] = []
+                    all_daily_sales[date_str].append(stock_qty)
+            
+            # Calculate daily sales quantities by subtracting consecutive days
+            daily_sales_qty = {}
+            sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
+            
+            for i, date in enumerate(sorted_dates):
+                if i == 0:
+                    # First day has no previous day, so sales = 0
+                    daily_sales_qty[date] = 0
                 else:
-                    # Normal calculation with adjustment
-                    daily_sales_qty = {}
-                    for i, date in enumerate(sorted_dates):
-                        daily_sales_qty[date] = max(0, stock_changes[i])
-                    
-                    # Adjust to match correct total
-                    calculated_total = sum(daily_sales_qty.values())
-                    if calculated_total > 0:
-                        adjustment_factor = correct_total / calculated_total
-                        for date in daily_sales_qty:
-                            daily_sales_qty[date] = daily_sales_qty[date] * adjustment_factor
-                
-                # Create sequential day numbers
-                day_data = []
-                for day_num, date_str in enumerate(sorted_dates, start=1):
-                    date_obj = parse_date_for_sorting(date_str)
-                    day_data.append({
-                        "day": day_num,
-                        "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
-                        "sales": round(daily_sales_qty.get(date_str, 0), 2)
-                    })
-                
-                period_trends[period_label] = day_data
-                
-            else:
-                # OPTION 2: Fallback to calculating from daily_sales (for current month)
-                all_daily_sales = {}
-                
-                for record in records:
-                    daily_sales = record.get('daily_sales', {}) or {}
-                    for date_str, stock_qty in daily_sales.items():
-                        if date_str not in all_daily_sales:
-                            all_daily_sales[date_str] = []
-                        all_daily_sales[date_str].append(stock_qty)
-                
-                # Calculate daily sales quantities
-                daily_sales_qty = {}
-                sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
-                
-                for i, date in enumerate(sorted_dates):
-                    if i == 0:
-                        daily_sales_qty[date] = 0
-                    else:
-                        prev_date = sorted_dates[i-1]
-                        prev_total = sum(all_daily_sales[prev_date])
-                        current_total = sum(all_daily_sales[date])
-                        daily_sales_qty[date] = max(0, prev_total - current_total)
-                
-                # Create sequential day numbers
-                day_data = []
-                for day_num, date_str in enumerate(sorted_dates, start=1):
-                    date_obj = parse_date_for_sorting(date_str)
-                    day_data.append({
-                        "day": day_num,
-                        "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
-                        "sales": daily_sales_qty.get(date_str, 0)
-                    })
-                
-                period_trends[period_label] = day_data
+                    # Sales on current day = Previous day total stock - Current day total stock
+                    prev_date = sorted_dates[i-1]
+                    prev_total = sum(all_daily_sales[prev_date])
+                    current_total = sum(all_daily_sales[date])
+                    daily_sales_qty[date] = max(0, prev_total - current_total)
+            
+            # Create sequential day numbers for chart
+            day_data = []
+            for day_num, date_str in enumerate(sorted_dates, start=1):
+                date_obj = parse_date_for_sorting(date_str)
+                day_data.append({
+                    "day": day_num,
+                    "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
+                    "sales": round(daily_sales_qty.get(date_str, 0), 2)
+                })
+            
+            period_trends[period_label] = day_data
         
         # Sort periods chronologically
         sorted_periods = sorted(
