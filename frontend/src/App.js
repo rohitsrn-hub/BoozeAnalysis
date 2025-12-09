@@ -4575,10 +4575,10 @@ function App() {
       <PeriodSelectionModal
         isOpen={showPeriodSelectionModal}
         onClose={() => setShowPeriodSelectionModal(false)}
-        onGenerateReport={handleGenerateReportWithPeriods}
+        onGenerateReport={handlePeriodSelectionComplete}
         periods={historicalPeriods}
         reportType={selectedReportType}
-        isGenerating={generatingReport}
+        isGenerating={false}
       />
     </div>
   );
