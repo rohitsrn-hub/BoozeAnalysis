@@ -91,11 +91,21 @@ Remove the PeriodSelectionModal component from JSX (near end of file):
 <PeriodSelectionModal
   isOpen={showPeriodSelectionModal}
   onClose={() => setShowPeriodSelectionModal(false)}
-  onGenerateReport={handleGenerateReportWithPeriods}
+  onGenerateReport={handlePeriodSelectionComplete}
   periods={historicalPeriods}
   reportType={selectedReportType}
-  isGenerating={generatingReport}
+  isGenerating={false}
 />
+```
+
+Remove the selected periods display from report modal:
+```javascript
+// REMOVE THIS BLOCK from inside the PDF Report Modal:
+{selectedReportPeriods.length > 0 && (
+  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+    // ... period display code
+  </div>
+)}
 ```
 
 ### Step 3: Revert Backend Changes
