@@ -550,6 +550,10 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         # Fallback: create simple column names
         df.columns = [f"Column_{i}" for i in range(len(df.columns))]
     
+    # DEBUG: Print all columns to see what pandas is reading
+    print(f"🔍 DEBUG: Total columns found by pandas: {len(df.columns)}")
+    print(f"🔍 DEBUG: All column headers: {list(df.columns)}")
+    
     # Find key columns
     brand_col = None
     wholesale_rate_col = None
