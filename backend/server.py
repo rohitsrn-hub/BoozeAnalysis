@@ -2612,20 +2612,31 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     "dl_date": period_info[sales_month]['dl_str']
                 })
         
-        # Calculate summary
-        total_sales = sum(
-            sum(day_data["sales"] for day_data in series["data"])
-            for series in series_data
-        )
+        # Calculate summary - use actual total_sales_qty from records for accuracy
+        # This ensures the total matches the actual D1 - DL calculation per brand
+        series_with_totals = []
+        for series in series_data:
+            period_label = series["month"]
+            # Get the actual total_sales_qty from the records for this period
+            if period_label in period_to_data:
+                records_for_period = period_to_data[period_label]
+                actual_total = sum(r.get('total_sales_qty', 0) for r in records_for_period)
+                series["total_sales"] = round(actual_total, 2)
+            else:
+                # Fallback to summing daily sales from trend line
+                series["total_sales"] = round(sum(day_data["sales"] for day_data in series["data"]), 2)
+            series_with_totals.append(series)
+        
+        total_sales = sum(s.get("total_sales", 0) for s in series_with_totals)
         
         return {
             "period": period,
             "selected_month": sales_month,
             "available_months": sorted_periods,
-            "series": series_data,
+            "series": series_with_totals,
             "summary": {
-                "total_sales": total_sales,
-                "periods_count": len(series_data)
+                "total_sales": round(total_sales, 2),
+                "periods_count": len(series_with_totals)
             }
         }
         
