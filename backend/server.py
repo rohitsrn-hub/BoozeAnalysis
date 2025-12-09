@@ -4675,15 +4675,20 @@ async def get_aggregated_period_data(period_ids: list) -> list:
     Similar to the sales history tab aggregation logic
     """
     try:
+        logging.info(f"🔍 Aggregating data for period IDs: {period_ids}")
         aggregated_data = {}
         
         for period_id in period_ids:
+            logging.info(f"  Looking for backup with id: {period_id}")
             # Find the backup for this period
             backup = await collections.stock_backups.find_one({"id": period_id})
             if not backup:
+                logging.warning(f"  ⚠️ No backup found for period_id: {period_id}")
                 continue
             
+            logging.info(f"  ✅ Found backup for period: {backup.get('period_name', 'Unknown')}")
             data_snapshot = backup.get('data_snapshot', [])
+            logging.info(f"  Found {len(data_snapshot)} records in snapshot")
             
             for record in data_snapshot:
                 brand_name = record.get('brand_name')
