@@ -4729,12 +4729,22 @@ async def get_aggregated_period_data(period_ids: list) -> list:
 async def generate_monthly_report_data(selected_periods: list = None) -> MonthlyReportData:
     """Generate comprehensive monthly report data - supports multi-period aggregation"""
     try:
+        logging.info(f"Generating report data with selected_periods: {selected_periods}")
+        
         # If periods are selected, get aggregated data from those periods
         if selected_periods and len(selected_periods) > 0:
+            logging.info(f"Fetching aggregated data for {len(selected_periods)} periods")
             # Fetch data from selected historical periods
             liquor_records = await get_aggregated_period_data(selected_periods)
+            logging.info(f"Got {len(liquor_records)} records from aggregation")
+            
+            # If aggregation returns empty, fall back to current data
+            if not liquor_records:
+                logging.warning("Aggregation returned no data, falling back to current data")
+                liquor_records = await collections.liquor_data.find().to_list(1000)
         else:
             # Get current liquor data
+            logging.info("No periods selected, using current data")
             liquor_records = await collections.liquor_data.find().to_list(1000)
         
         if not liquor_records:
