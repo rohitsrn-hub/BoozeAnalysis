@@ -2195,7 +2195,9 @@ function App() {
                         <div className="grid gap-3">
                           <h4 className="font-medium text-gray-900">Sales Period Summary</h4>
                           {trendsData.series.map((periodSeries, index) => {
-                            const periodTotal = periodSeries.data.reduce((sum, day) => sum + day.sales, 0);
+                            // Use total_sales from backend (accurate D1-DL calculation) if available
+                            // Otherwise fallback to summing daily sales from trend line
+                            const periodTotal = periodSeries.total_sales || periodSeries.data.reduce((sum, day) => sum + day.sales, 0);
                             const avgDaily = periodTotal / periodSeries.data.length;
                             
                             return (
@@ -2212,7 +2214,7 @@ function App() {
                                     </div>
                                   </div>
                                   <div className="text-right">
-                                    <div className="text-lg font-bold text-indigo-600">{formatNumber(periodTotal)}</div>
+                                    <div className="text-lg font-bold text-indigo-600">{formatNumber(Math.round(periodTotal))}</div>
                                     <div className="text-xs text-gray-500">total units</div>
                                   </div>
                                 </div>
