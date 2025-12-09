@@ -4668,6 +4668,63 @@ async def clear_all_data():
 
 # MODULE 4: Monthly Report Generation APIs
 
+async def get_aggregated_period_data(period_ids: list) -> list:
+    """
+    Aggregate data from multiple selected historical periods
+    Similar to the sales history tab aggregation logic
+    """
+    try:
+        aggregated_data = {}
+        
+        for period_id in period_ids:
+            # Find the backup for this period
+            backup = await collections.stock_backups.find_one({"id": period_id})
+            if not backup:
+                continue
+            
+            data_snapshot = backup.get('data_snapshot', [])
+            
+            for record in data_snapshot:
+                brand_name = record.get('brand_name')
+                if not brand_name:
+                    continue
+                
+                if brand_name not in aggregated_data:
+                    # Initialize aggregated record for this brand
+                    aggregated_data[brand_name] = {
+                        'brand_name': brand_name,
+                        'wholesale_rate': record.get('wholesale_rate', 0),
+                        'selling_rate': record.get('selling_rate', record.get('rate', 0)),
+                        'rate': record.get('rate', record.get('selling_rate', 0)),
+                        'total_sales_qty': 0,
+                        'monthly_sale_value': 0,
+                        'monthly_sales_qty': 0,
+                        'stock_value_today': record.get('stock_value_today', 0),  # Use latest
+                        'current_stock_qty': record.get('current_stock_qty', 0),  # Use latest
+                        'stock_available_days': record.get('stock_available_days', 0),
+                        'stock_ratio': record.get('stock_ratio', 0),
+                        'avg_daily_sales_qty': 0
+                    }
+                
+                # Aggregate sales quantities and values
+                aggregated_data[brand_name]['total_sales_qty'] += record.get('total_sales_qty', 0)
+                aggregated_data[brand_name]['monthly_sale_value'] += record.get('monthly_sale_value', 0)
+                aggregated_data[brand_name]['monthly_sales_qty'] += record.get('monthly_sales_qty', 0)
+                aggregated_data[brand_name]['avg_daily_sales_qty'] += record.get('avg_daily_sales_qty', 0)
+                
+                # Update latest stock position (from most recent period)
+                aggregated_data[brand_name]['stock_value_today'] = record.get('stock_value_today', 0)
+                aggregated_data[brand_name]['current_stock_qty'] = record.get('current_stock_qty', 0)
+                aggregated_data[brand_name]['stock_available_days'] = record.get('stock_available_days', 0)
+                aggregated_data[brand_name]['stock_ratio'] = record.get('stock_ratio', 0)
+        
+        # Convert dict to list
+        return list(aggregated_data.values())
+        
+    except Exception as e:
+        logging.error(f"Error aggregating period data: {e}")
+        return []
+
 async def generate_monthly_report_data(selected_periods: list = None) -> MonthlyReportData:
     """Generate comprehensive monthly report data - supports multi-period aggregation"""
     try:
