@@ -625,7 +625,8 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 print(f"✅ Detected date column: '{col}'")
     
     # Filter and sort date columns properly 
-    print(f"Date columns BEFORE filtering: {date_columns}")
+    print(f"📅 Date columns BEFORE filtering: {date_columns}")
+    print(f"📋 All columns: {list(df.columns)}")
     
     # Smart two-pass parsing system to handle ambiguous DD/MM vs MM/DD formats
     def detect_date_format(date_columns_list):
