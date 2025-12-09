@@ -1043,7 +1043,23 @@ function App() {
   };
 
   // Module 4: Report Generation Handlers
-  const handleGenerateReportWithPeriods = async (selectedPeriods, reportType) => {
+  const handlePeriodSelectionComplete = (selectedPeriods, reportType) => {
+    // Store selected periods
+    setSelectedReportPeriods(selectedPeriods);
+    
+    // Close period selection modal
+    setShowPeriodSelectionModal(false);
+    
+    if (reportType === 'excel') {
+      // Excel: Generate directly
+      generateReport(selectedPeriods, reportType);
+    } else {
+      // PDF: Open report parameters modal
+      setShowReportModal(true);
+    }
+  };
+
+  const generateReport = async (selectedPeriods, reportType) => {
     try {
       setGeneratingReport(true);
       
@@ -1089,7 +1105,6 @@ function App() {
         : `${selectedPeriods.length} periods`;
       
       toast.success(`${reportType.toUpperCase()} report generated for ${periodText}!`);
-      setShowPeriodSelectionModal(false);
       setShowReportModal(false);
       
     } catch (error) {
@@ -1108,8 +1123,8 @@ function App() {
   };
 
   const handleGeneratePDFReport = async () => {
-    // PDF report generation is triggered from report modal
-    // which now uses the period selection flow
+    // Called from report parameters modal - generate PDF with stored periods
+    generateReport(selectedReportPeriods, 'pdf');
   };
 
   const handleReportParameterChange = (key, value) => {
