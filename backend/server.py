@@ -4680,8 +4680,48 @@ async def generate_monthly_report_data() -> MonthlyReportData:
         # Extract date range from first record for report period
         sample_record = liquor_records[0]
         d1_date = sample_record.get('D1_date', 'N/A')
-        dl_date = sample_record.get('DL_date', 'N/A') 
-        report_period = f"Sep-Oct 2025 Sales Period ({d1_date} to {dl_date})"
+        dl_date = sample_record.get('DL_date', 'N/A')
+        
+        # Generate period label dynamically from D1 and DL dates
+        try:
+            from datetime import datetime
+            import re
+            
+            # Parse D1 date
+            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(d1_date), re.IGNORECASE)
+            if match:
+                day, month_name, year_suffix = match.groups()
+                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                d1_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+            else:
+                d1_parsed = None
+            
+            # Parse DL date
+            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(dl_date), re.IGNORECASE)
+            if match:
+                day, month_name, year_suffix = match.groups()
+                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                dl_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+            else:
+                dl_parsed = None
+            
+            # Generate period name
+            if d1_parsed and dl_parsed:
+                d1_month = d1_parsed.strftime("%b")
+                dl_month = dl_parsed.strftime("%b")
+                year = dl_parsed.strftime("%Y")
+                
+                if d1_month == dl_month:
+                    period_name = f"{d1_month} {year}"
+                else:
+                    period_name = f"{d1_month}-{dl_month} {year}"
+                
+                report_period = f"{period_name} Sales Period ({d1_date} to {dl_date})"
+            else:
+                report_period = f"Sales Period ({d1_date} to {dl_date})"
+        except Exception as e:
+            logging.warning(f"Error parsing dates for report period: {e}")
+            report_period = f"Sales Period ({d1_date} to {dl_date})"
         
         # Convert to working format
         data_list = []
