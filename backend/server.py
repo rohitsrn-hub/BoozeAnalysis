@@ -566,23 +566,21 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         col_str = str(col) if col is not None else ""
         col_lower = col_str.lower().strip()
         
-        print(f"🔍 Processing column: '{col}' (lower: '{col_lower}')")
-        
         if 'brand' in col_lower and 'name' in col_lower:
             brand_col = col
-            print(f"  ➜ Identified as BRAND column")
         elif ('wholesale' in col_lower or 'w/' in col_lower or col_lower == 'w/rate') and 'rate' in col_lower:
             wholesale_rate_col = col
-            print(f"  ➜ Identified as WHOLESALE RATE column")
         elif ('selling' in col_lower or 'retail' in col_lower or col_lower == 'rate' or col_lower == 's/rate') and 'rate' in col_lower:
             selling_rate_col = col
-            print(f"  ➜ Identified as SELLING RATE column")
         elif 'rate' in col_lower and '/' not in col_lower and not wholesale_rate_col and not selling_rate_col:
             selling_rate_col = col  # Default to selling rate if only one rate column (but not W/RATE or S/RATE)
-            print(f"  ➜ Identified as RATE column (default to selling)")
+        # IMPORTANT: Check for date patterns BEFORE checking for index
+        # This prevents November dates (containing "nov" -> "no") from being mistaken as index columns
+        elif any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+            # This is a date column - will be processed in the else block below
+            pass
         elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
             index_col = col
-            print(f"  ➜ Identified as INDEX column")
         else:
             # Check if column represents a date (more flexible detection)
             is_date_column = False
