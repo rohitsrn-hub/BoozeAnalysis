@@ -4755,10 +4755,28 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
         if not liquor_records:
             raise HTTPException(status_code=404, detail="No data found")
         
-        # Extract date range from first record for report period
-        sample_record = liquor_records[0]
-        d1_date = sample_record.get('D1_date', 'N/A')
-        dl_date = sample_record.get('DL_date', 'N/A')
+        # Extract date range for report period
+        # If using aggregated periods, get dates from the backups
+        if selected_periods and len(selected_periods) > 0:
+            # Get D1 from first period, DL from last period
+            first_backup = await collections.stock_backups.find_one({"id": selected_periods[0]})
+            last_backup = await collections.stock_backups.find_one({"id": selected_periods[-1]})
+            
+            if first_backup and last_backup:
+                d1_date = first_backup.get('d1_date', 'N/A')
+                dl_date = last_backup.get('dl_date', 'N/A')
+            else:
+                # Fallback: try to get from records
+                sample_record = liquor_records[0]
+                d1_date = sample_record.get('D1_date', 'N/A')
+                dl_date = sample_record.get('DL_date', 'N/A')
+        else:
+            # Using current data - get from first record
+            sample_record = liquor_records[0]
+            d1_date = sample_record.get('D1_date', 'N/A')
+            dl_date = sample_record.get('DL_date', 'N/A')
+        
+        logging.info(f"Report period dates: D1={d1_date}, DL={dl_date}")
         
         # Generate period label dynamically from D1 and DL dates
         try:
