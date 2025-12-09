@@ -4763,8 +4763,19 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             last_backup = await collections.stock_backups.find_one({"id": selected_periods[-1]})
             
             if first_backup and last_backup:
-                d1_date = first_backup.get('d1_date', 'N/A')
-                dl_date = last_backup.get('dl_date', 'N/A')
+                d1_raw = first_backup.get('d1_date', 'N/A')
+                dl_raw = last_backup.get('dl_date', 'N/A')
+                
+                # Convert datetime objects to string format if needed
+                if isinstance(d1_raw, datetime):
+                    d1_date = d1_raw.strftime("%d-%b-%y")
+                else:
+                    d1_date = str(d1_raw).split()[0] if ' ' in str(d1_raw) else str(d1_raw)
+                
+                if isinstance(dl_raw, datetime):
+                    dl_date = dl_raw.strftime("%d-%b-%y")
+                else:
+                    dl_date = str(dl_raw).split()[0] if ' ' in str(dl_raw) else str(dl_raw)
             else:
                 # Fallback: try to get from records
                 sample_record = liquor_records[0]
