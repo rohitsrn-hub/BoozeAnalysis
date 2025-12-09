@@ -4668,11 +4668,16 @@ async def clear_all_data():
 
 # MODULE 4: Monthly Report Generation APIs
 
-async def generate_monthly_report_data() -> MonthlyReportData:
-    """Generate comprehensive monthly report data"""
+async def generate_monthly_report_data(selected_periods: list = None) -> MonthlyReportData:
+    """Generate comprehensive monthly report data - supports multi-period aggregation"""
     try:
-        # Get all liquor data
-        liquor_records = await collections.liquor_data.find().to_list(1000)
+        # If periods are selected, get aggregated data from those periods
+        if selected_periods and len(selected_periods) > 0:
+            # Fetch data from selected historical periods
+            liquor_records = await get_aggregated_period_data(selected_periods)
+        else:
+            # Get current liquor data
+            liquor_records = await collections.liquor_data.find().to_list(1000)
         
         if not liquor_records:
             raise HTTPException(status_code=404, detail="No data found")
