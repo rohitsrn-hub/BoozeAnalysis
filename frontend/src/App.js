@@ -4342,6 +4342,25 @@ function App() {
           </DialogHeader>
           
           <div className="space-y-6 py-4">
+            {/* Selected Periods Display */}
+            {selectedReportPeriods.length > 0 && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-900 mb-2">Selected Period(s)</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedReportPeriods.map((period) => (
+                    <Badge key={period.id} variant="secondary" className="text-sm">
+                      {period.period_name}
+                    </Badge>
+                  ))}
+                </div>
+                {selectedReportPeriods.length > 1 && (
+                  <p className="text-xs text-blue-700 mt-2">
+                    Data from {selectedReportPeriods.length} periods will be aggregated
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Report Title */}
             <div className="space-y-2">
               <Label htmlFor="reportTitle">Report Title</Label>
