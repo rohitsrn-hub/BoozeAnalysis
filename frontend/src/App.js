@@ -4554,6 +4554,16 @@ function App() {
 
       {/* Change Password Dialog */}
       {/* Change Password Dialog removed - Auth disabled */}
+
+      {/* Period Selection Modal for Reports */}
+      <PeriodSelectionModal
+        isOpen={showPeriodSelectionModal}
+        onClose={() => setShowPeriodSelectionModal(false)}
+        onGenerateReport={handleGenerateReportWithPeriods}
+        periods={historicalPeriods}
+        reportType={selectedReportType}
+        isGenerating={generatingReport}
+      />
     </div>
   );
 }
