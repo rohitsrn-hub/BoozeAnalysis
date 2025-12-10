@@ -3616,20 +3616,32 @@ async def get_historical_periods():
                 
                 # Only keep the most recent backup for each period
                 if period_key not in period_map:
-                    # Determine period name from D1 and DL dates
+                    # Determine period name from D1 and DL dates - same format as sales trends
                     try:
                         # Try ISO format first
                         d1_dt = datetime.fromisoformat(d1_date.replace(' ', 'T'))
                         dl_dt = datetime.fromisoformat(dl_date.replace(' ', 'T'))
-                        period_name = f"{d1_dt.day} {d1_dt.strftime('%b')} - {dl_dt.day} {dl_dt.strftime('%b')} {dl_dt.year}"
                     except:
                         # Try parsing "20-Sep-25" format
                         try:
                             d1_dt = datetime.strptime(d1_date, "%d-%b-%y")
                             dl_dt = datetime.strptime(dl_date, "%d-%b-%y")
-                            period_name = f"{d1_dt.day} {d1_dt.strftime('%b')} - {dl_dt.day} {dl_dt.strftime('%b')} {d1_dt.year}"
                         except:
-                            period_name = "Historical Period"
+                            d1_dt = None
+                            dl_dt = None
+                    
+                    # Generate period name in "Month-Month Year" format (same as trends)
+                    if d1_dt and dl_dt:
+                        d1_month = d1_dt.strftime("%b")
+                        dl_month = dl_dt.strftime("%b")
+                        year = dl_dt.strftime("%Y")
+                        
+                        if d1_month == dl_month:
+                            period_name = f"{d1_month} {year}"
+                        else:
+                            period_name = f"{d1_month}-{dl_month} {year}"
+                    else:
+                        period_name = "Historical Period"
                     
                     period_map[period_key] = {
                         "id": backup.get('id') or backup.get('backup_id'),  # Try both field names
