@@ -3586,8 +3586,11 @@ async def get_historical_periods():
                     "total_records": len(current_data)
                 })
         
-        # 2. Add historical periods from backups
-        backups = await collections.stock_backups.find().sort("backup_timestamp", -1).to_list(100)
+        # 2. Add historical periods from backups - ONLY pre_reset_backup types
+        # These represent complete sales periods that were committed to history
+        backups = await collections.stock_backups.find({
+            "backup_reason": "pre_reset_backup"
+        }).sort("backup_timestamp", -1).to_list(100)
         
         # Group backups by period (D1-DL combination) to avoid duplicates
         period_map = {}
