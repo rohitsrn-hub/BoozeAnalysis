@@ -2435,8 +2435,11 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         # 1. Get CURRENT month data from liquor_data
         current_data = await collections.liquor_data.find().to_list(10000)
         
-        # 2. Get HISTORICAL data from stock_backups (most recent only per period)
-        backups = await collections.stock_backups.find().sort("backup_timestamp", -1).to_list(100)
+        # 2. Get HISTORICAL data from stock_backups - ONLY pre_reset_backup types
+        # These represent complete sales periods that were committed to history
+        backups = await collections.stock_backups.find({
+            "backup_reason": "pre_reset_backup"
+        }).sort("backup_timestamp", -1).to_list(100)
         
         # Create a dict to store data by period - use most recent backup only
         period_to_data = {}
