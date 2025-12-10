@@ -3576,9 +3576,36 @@ async def get_historical_periods():
                 d1_date = min(d1_dates)
                 dl_date = max(dl_dates)
                 
+                # Generate proper period name for current period
+                try:
+                    # Try ISO format first
+                    d1_dt = datetime.fromisoformat(str(d1_date).replace(' ', 'T').split('.')[0])
+                    dl_dt = datetime.fromisoformat(str(dl_date).replace(' ', 'T').split('.')[0])
+                except:
+                    # Try parsing "15-Nov-25" format
+                    try:
+                        d1_dt = datetime.strptime(str(d1_date), "%d-%b-%y")
+                        dl_dt = datetime.strptime(str(dl_date), "%d-%b-%y")
+                    except:
+                        d1_dt = None
+                        dl_dt = None
+                
+                # Generate period name in "Month-Month Year" format
+                if d1_dt and dl_dt:
+                    d1_month = d1_dt.strftime("%b")
+                    dl_month = dl_dt.strftime("%b")
+                    year = dl_dt.strftime("%Y")
+                    
+                    if d1_month == dl_month:
+                        current_period_name = f"{d1_month} {year}"
+                    else:
+                        current_period_name = f"{d1_month}-{dl_month} {year}"
+                else:
+                    current_period_name = "Current Period"
+                
                 periods.append({
                     "id": "current",
-                    "period_name": "Current Period",
+                    "period_name": current_period_name,
                     "d1_date": d1_date,
                     "dl_date": dl_date,
                     "has_data": True,
