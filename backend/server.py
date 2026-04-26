@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -98,6 +99,7 @@ class LiquorData(BaseModel):
     avg_daily_sales_qty: float = Field(default=0.0)
     days_analyzed: int = Field(default=0)
     current_stock_qty: int = Field(default=0)
+    total_purchases_qty: float = Field(default=0.0)
     upload_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UploadHistory(BaseModel):
@@ -947,8 +949,31 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             
             print(f"  {brand_name}: D1={D1_date}({D1_stock}), DL={DL_date}({DL_stock})")
             
-            # Calculate total sales between D1 and DL
-            total_sales_qty = max(0, D1_stock - DL_stock)
+            # Calculate total sales and purchases between D1 and DL by observing all stock movements
+            # Any increase in stock between consecutive dates is treated as a purchase/restock
+            total_sales_qty = 0
+            total_purchases_qty = 0
+
+            # Use the sorted_stock_values (date_col, stock_val) for accurate movement tracking
+            # But filter to only include dates between global_D1_date and global_DL_date
+            relevant_movements = []
+            for date_col, stock_val in sorted_stock_values:
+                if global_D1_date <= date_col <= global_DL_date:
+                    relevant_movements.append(stock_val)
+
+            if len(relevant_movements) >= 2:
+                for i in range(1, len(relevant_movements)):
+                    prev = relevant_movements[i-1]
+                    curr = relevant_movements[i]
+                    if curr > prev:
+                        # Stock increased -> Purchase
+                        total_purchases_qty += (curr - prev)
+                    elif curr < prev:
+                        # Stock decreased -> Sale
+                        total_sales_qty += (prev - curr)
+            else:
+                # Fallback to simple D1-DL if only one date or movement parsing fails
+                total_sales_qty = max(0, D1_stock - DL_stock)
             
             # Calculate number of days between D1 and DL using actual date arithmetic
             try:
@@ -1014,6 +1039,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 'DL_stock': float(DL_stock),
                 'current_stock_qty': int(max(0, DL_stock)),
                 'total_sales_qty': float(total_sales_qty),
+                'total_purchases_qty': float(total_purchases_qty),
                 'avg_daily_sales_qty': float(avg_daily_sales_qty),
                 'monthly_sales_qty': float(monthly_sales_qty),
                 'monthly_sale_value': float(monthly_sales_value),
@@ -1154,8 +1180,8 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
-        # Parse the data
-        parsed_data = parse_excel_data(content, "full_monthly")
+        # Parse the data in a threadpool to avoid blocking the event loop
+        parsed_data = await run_in_threadpool(parse_excel_data, content, "full_monthly")
         
         if not parsed_data:
             raise HTTPException(status_code=400, detail="No valid data found in the file")
@@ -1273,9 +1299,9 @@ async def upload_todays_data(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
-        # Parse today's data (different from full monthly data parsing)
+        # Parse today's data in a threadpool to avoid blocking the event loop
         try:
-            todays_data = parse_todays_data(content)
+            todays_data = await run_in_threadpool(parse_todays_data, content)
         except HTTPException as parse_error:
             # Add specific guidance for Today's Data upload errors
             if "utf-8" in str(parse_error.detail).lower() or "codec" in str(parse_error.detail).lower():
@@ -1528,8 +1554,29 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 except:
                     days_analyzed = existing_brand.get('days_analyzed', 1) + 1
                 
-                # Recalculate all dependent values
-                total_sales_qty = max(0, D1_stock - new_stock_qty)
+                # Calculate total sales by observing all stock movements including the new one
+                # Fetch all previous stock values and add the new one
+                # Normalize existing daily_sales keys to consistent format
+                current_daily_sales = existing_brand.get('daily_sales', {}) or {}
+
+                # Sort all dates (existing + new) to track movements accurately
+                all_stock_dates = sorted(current_daily_sales.keys(), key=lambda d: parse_date_string(d) or datetime.min)
+
+                total_sales_qty = 0
+                total_purchases_qty = 0
+
+                if len(all_stock_dates) >= 2:
+                    for i in range(1, len(all_stock_dates)):
+                        prev_qty = current_daily_sales.get(all_stock_dates[i-1], 0)
+                        curr_qty = current_daily_sales.get(all_stock_dates[i], 0)
+                        if curr_qty > prev_qty:
+                            total_purchases_qty += (curr_qty - prev_qty)
+                        elif curr_qty < prev_qty:
+                            total_sales_qty += (prev_qty - curr_qty)
+                else:
+                    # Fallback for fresh/small datasets
+                    total_sales_qty = max(0, D1_stock - new_stock_qty)
+
                 avg_daily_sales_qty = total_sales_qty / days_analyzed if days_analyzed > 0 else 0
                 monthly_sales_qty = avg_daily_sales_qty * 24
                 monthly_sales_value = monthly_sales_qty * selling_rate
@@ -1545,6 +1592,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     "current_stock_qty": int(new_stock_qty),
                     "days_analyzed": int(days_analyzed),
                     "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
                     "avg_daily_sales_qty": float(avg_daily_sales_qty),
                     "monthly_sales_qty": float(monthly_sales_qty),
                     "monthly_sale_qty": int(monthly_sales_qty),
@@ -2555,11 +2603,19 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     # First day has no previous day, so sales = 0
                     daily_sales_qty[date] = 0
                 else:
-                    # Sales on current day = Previous day total stock - Current day total stock
+                    # Calculate daily sales by summing all individual brand decreases
+                    # This correctly accounts for days where some brands had purchases and others had sales
                     prev_date = sorted_dates[i-1]
-                    prev_total = sum(all_daily_sales[prev_date])
-                    current_total = sum(all_daily_sales[date])
-                    daily_sales_qty[date] = max(0, prev_total - current_total)
+                    day_sales = 0
+
+                    for record in records:
+                        brand_daily = record.get('daily_sales', {}) or {}
+                        p_val = brand_daily.get(prev_date, 0)
+                        c_val = brand_daily.get(date, 0)
+                        if c_val < p_val:
+                            day_sales += (p_val - c_val)
+
+                    daily_sales_qty[date] = day_sales
             
             # Create sequential day numbers for chart
             day_data = []
@@ -2683,8 +2739,25 @@ async def refresh_analytics():
                 selling_rate = record.get('selling_rate', record.get('rate', 0))
                 days_analyzed = record.get('days_analyzed', 1)
                 
-                # Recalculate derived values
-                total_sales_qty = max(0, D1_stock - DL_stock)
+                # Recalculate derived values by observing all stock movements
+                daily_sales_dict = record.get('daily_sales', {}) or {}
+                # Sort dates chronologically for this brand
+                sorted_dates = sorted(daily_sales_dict.keys(), key=lambda d: parse_date_for_sorting(d))
+
+                total_sales_qty = 0
+                total_purchases_qty = 0
+
+                if len(sorted_dates) >= 2:
+                    for i in range(1, len(sorted_dates)):
+                        prev_stock = daily_sales_dict.get(sorted_dates[i-1], 0)
+                        curr_stock = daily_sales_dict.get(sorted_dates[i], 0)
+                        if curr_stock > prev_stock:
+                            total_purchases_qty += (curr_stock - prev_stock)
+                        elif curr_stock < prev_stock:
+                            total_sales_qty += (prev_stock - curr_stock)
+                else:
+                    total_sales_qty = max(0, D1_stock - DL_stock)
+
                 avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
                 monthly_sales_qty = avg_daily_sales_qty * 24
                 monthly_sales_value = monthly_sales_qty * selling_rate
@@ -2695,6 +2768,7 @@ async def refresh_analytics():
                 # Update record with recalculated values
                 update_data = {
                     "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
                     "avg_daily_sales_qty": float(avg_daily_sales_qty),
                     "monthly_sales_qty": float(monthly_sales_qty),
                     "monthly_sale_qty": int(monthly_sales_qty),
@@ -2763,6 +2837,7 @@ async def get_calculation_details():
                 'DL_stock': record.get('DL_stock', 0),
                 'total_sales_qty': record.get('total_sales_qty', 0),
                 'avg_daily_sales_qty': record.get('avg_daily_sales_qty', 0),
+                'total_purchases_qty': record.get('total_purchases_qty', 0),
                 'days_analyzed': record.get('days_analyzed', 0),
                 'stock_available_days': record.get('stock_available_days', 0)
             }
@@ -3049,17 +3124,28 @@ async def update_rates_from_excel(file: UploadFile = File(...)):
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         
-        # Parse Excel file
-        try:
-            df = pd.read_excel(io.BytesIO(content))
-        except Exception:
+        # Parse Excel file in a threadpool
+        def parse_rates_file(content):
             try:
-                df = pd.read_csv(io.BytesIO(content))
-            except Exception as e:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Unable to parse file. Error: {str(e)}"
-                )
+                return pd.read_excel(io.BytesIO(content))
+            except Exception:
+                try:
+                    return pd.read_csv(io.BytesIO(content))
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Unable to parse file. Error: {str(e)}"
+                    )
+
+        try:
+            df = await run_in_threadpool(parse_rates_file, content)
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unable to parse file. Error: {str(e)}"
+            )
         
         # Clean column names
         df.columns = df.columns.str.strip().str.lower()
@@ -3773,10 +3859,15 @@ async def get_historical_data_view(period_ids: List[str]):
                            record.get('total_sale_qty') or 0)
             monthly_sale_value = record.get('monthly_sale_value', record.get('total_sale_value', 0))
             
-            # Calculate qty procured (DL_stock + monthly_sales - D1_stock)
-            qty_procured = dl_stock + monthly_sales - d1_stock
+            # Calculate actual qty procured (purchases) from movements if available
+            # If the record has total_purchases_qty, use it. Otherwise derive it.
+            actual_purchases = record.get('total_purchases_qty', 0)
+            if actual_purchases == 0:
+                # Derive it from stock movement formula: Purchases = Closing - Opening + Sales
+                # Note: monthly_sales here is total sales in the period
+                actual_purchases = dl_stock - d1_stock + monthly_sales
             
-            brand_data[key]['total_qty_procured'] += max(0, qty_procured)
+            brand_data[key]['total_qty_procured'] += max(0, actual_purchases)
             brand_data[key]['total_qty_sold'] += monthly_sales
             brand_data[key]['total_revenue'] += monthly_sale_value
             
@@ -4323,19 +4414,26 @@ async def calculate_and_store_historical_averages(source_records=None):
             # RELAXED CONDITION: Store if there's any meaningful data
             # Changed from strict "days_analyzed > 0 and total_sales_qty > 0"
             # to allow records with at least 1 day analyzed OR any stock data
+            total_purchases_qty = record.get('total_purchases_qty', 0.0)
+
+            # RELAXED CONDITION: Store if there's any meaningful data
             if days_analyzed >= 1 or total_sales_qty > 0:
-                historical_avg = HistoricalSalesAverage(
-                    brand_name=brand_name,
-                    month_year=month_year,
-                    average_daily_sales_qty=float(avg_daily_sales_qty),
-                    average_daily_sales_value=float(avg_daily_sales_value),
-                    total_sales_quantity=float(total_sales_qty),
-                    total_sales_value=float(total_sales_value),
-                    total_sales_days=int(days_analyzed),
-                    wholesale_rate=float(wholesale_rate),
-                    selling_rate=float(selling_rate)
-                )
-                historical_records.append(historical_avg.dict())
+                historical_avg_dict = {
+                    "id": str(uuid.uuid4()),
+                    "brand_name": brand_name,
+                    "month_year": month_year,
+                    "average_daily_sales_qty": float(avg_daily_sales_qty),
+                    "average_daily_sales_value": float(avg_daily_sales_value),
+                    "total_sales_quantity": float(total_sales_qty),
+                    "total_sales_value": float(total_sales_value),
+                    "total_sales_days": int(days_analyzed),
+                    "wholesale_rate": float(wholesale_rate),
+                    "selling_rate": float(selling_rate),
+                    "total_purchases_qty": float(total_purchases_qty),
+                    "calculation_date": datetime.now(timezone.utc),
+                    "created_at": datetime.now(timezone.utc)
+                }
+                historical_records.append(historical_avg_dict)
                 brands_with_sales += 1
             else:
                 brands_without_sales += 1

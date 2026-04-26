@@ -1565,6 +1565,7 @@ function App() {
                                 <th className="text-left p-3 font-semibold">Index</th>
                                 <th className="text-left p-3 font-semibold">Brand Name</th>
                                 <th className="text-left p-3 font-semibold">D1 Stock</th>
+                                <th className="text-left p-3 font-semibold">Purchases</th>
                                 <th className="text-left p-3 font-semibold">DL Stock</th>
                                 <th className="text-left p-3 font-semibold">Wholesale Rate</th>
                                 <th className="text-left p-3 font-semibold">Selling Rate</th>
@@ -1580,6 +1581,7 @@ function App() {
                                   <td className="p-3 font-medium">{row.index}</td>
                                   <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
                                   <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
+                                  <td className="p-3 font-medium text-green-600">+{row.total_purchases_qty || 0}</td>
                                   <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
                                   <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
                                   <td className="p-3">{formatCurrency(row.selling_rate)}</td>
@@ -3050,12 +3052,13 @@ function App() {
                         // Export calculation data as CSV for easy comparison
                         const csvContent = [
                           // Header row
-                          'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
+                              'Index,Brand Name,D1 Stock,Purchases,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
                           // Data rows
                           ...calculationData.map(row => [
                             row.index,
                             `"${row.brand_name}"`,
                             row.D1_stock,
+                                row.total_purchases_qty || 0,
                             row.DL_stock,
                             row.D1_date,
                             row.DL_date,
@@ -3154,8 +3157,9 @@ function App() {
                           <div className="p-4 bg-blue-50 rounded-lg">
                             <h5 className="font-semibold text-blue-900 mb-2">Monthly Sales Calculation</h5>
                             <ol className="text-blue-800 space-y-1">
-                              <li>1. Total Sales = D1 Stock - DL Stock</li>
-                              <li>2. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
+                              <li>1. Total Sales = Σ(Stock Decreases between dates)</li>
+                              <li>2. Purchases = Σ(Stock Increases between dates)</li>
+                              <li>3. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
                               <li>3. Monthly Sales Qty = Average Daily Sales × 24</li>
                               <li>4. Monthly Sales Value = Monthly Sales Qty × Selling Rate</li>
                             </ol>
@@ -3191,7 +3195,10 @@ function App() {
                                 <p><strong>Index:</strong> {blackDogExample.index}</p>
                                 <p>• <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
                                 <p>• <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
-                                <p>• <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
+                                <p>• <strong>Total Sales:</strong> <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span> (derived from movements)</p>
+                                {blackDogExample.total_purchases_qty > 0 && (
+                                  <p>• <strong>Total Purchases:</strong> <span className="text-green-600 font-medium">+{blackDogExample.total_purchases_qty} units</span> detected</p>
+                                )}
                                 <p>• <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
                                 <p>• <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} ÷ {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
                                 <p>• <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
