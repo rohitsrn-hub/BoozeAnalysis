@@ -64,6 +64,45 @@ class Collections:
 # Initialize collections
 collections = Collections()
 
+def normalize_date_key_global(date_str):
+    """Normalize date to DD-MMM-YY format for consistent storage"""
+    import re
+    from datetime import datetime
+
+    try:
+        if not date_str:
+            return str(date_str)
+
+        date_str = str(date_str).strip()
+
+        # Method 1: Handle datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
+        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
+            try:
+                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                return dt.strftime("%d-%b-%y")  # Format: 16-Nov-25
+            except:
+                pass
+
+        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY format
+        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+        if match:
+            day, month_name, year_suffix = match.groups()
+            # Normalize to 2-digit year
+            if not year_suffix or len(year_suffix) < 2:
+                year_suffix = '25'  # Default to 2025
+            elif len(year_suffix) == 4:
+                year_suffix = year_suffix[2:]  # Convert 2025 to 25
+            # Ensure 2-digit day with leading zero
+            day = day.zfill(2)
+            # Capitalize month name properly
+            month_name = month_name.capitalize()
+            return f"{day}-{month_name}-{year_suffix}"
+
+    except Exception as e:
+        logging.warning(f"Could not normalize date '{date_str}': {e}")
+
+    return str(date_str)
+
 # Create the main app without a prefix
 app = FastAPI()
 
@@ -1468,55 +1507,19 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     "stock_value_today": existing_brand.get('stock_value_today'),
                     "stock_available_days": existing_brand.get('stock_available_days'),
                     "stock_ratio": existing_brand.get('stock_ratio'),
+                    "total_purchases_qty": existing_brand.get('total_purchases_qty', 0.0),
                     "daily_sales": existing_brand.get('daily_sales', {})  # CRITICAL: Store daily_sales before update
                 }
-                
-                # Normalize the date format before storing
-                def normalize_date_key(date_str):
-                    """Normalize date to DD-MMM-YY format for consistent storage"""
-                    import re
-                    from datetime import datetime
-                    
-                    try:
-                        date_str = str(date_str).strip()
-                        
-                        # Method 1: Handle datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
-                        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                            try:
-                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                                return dt.strftime("%d-%b-%y")  # Format: 16-Nov-25
-                            except:
-                                pass
-                        
-                        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY format
-                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                        if match:
-                            day, month_name, year_suffix = match.groups()
-                            # Normalize to 2-digit year
-                            if not year_suffix or len(year_suffix) < 2:
-                                year_suffix = '25'  # Default to 2025
-                            elif len(year_suffix) == 4:
-                                year_suffix = year_suffix[2:]  # Convert 2025 to 25
-                            # Ensure 2-digit day with leading zero
-                            day = day.zfill(2)
-                            # Capitalize month name properly
-                            month_name = month_name.capitalize()
-                            return f"{day}-{month_name}-{year_suffix}"
-                        
-                    except Exception as e:
-                        logging.warning(f"Could not normalize date '{date_str}': {e}")
-                    
-                    return str(date_str)
                 
                 # Normalize existing daily_sales keys to consistent format
                 current_daily_sales = existing_brand.get('daily_sales', {}) or {}
                 normalized_daily_sales = {}
                 for old_date_key, value in current_daily_sales.items():
-                    normalized_key = normalize_date_key(old_date_key)
+                    normalized_key = normalize_date_key_global(old_date_key)
                     normalized_daily_sales[normalized_key] = value
                 
                 # Normalize the new date column and add it
-                normalized_new_date = normalize_date_key(new_date_column)
+                normalized_new_date = normalize_date_key_global(new_date_column)
                 normalized_daily_sales[normalized_new_date] = new_stock_qty
                 
                 # Use the normalized dictionary
@@ -1797,14 +1800,17 @@ async def undo_upload(upload_id: str):
             date_added = changes_snapshot.get("date_added")
             
             # Revert updated brands
+            # Normalize the date to match daily_sales format
+            normalized_date_to_remove = normalize_date_key_global(date_added) if date_added else None
+
             for brand_id, previous_state in brands_updated.items():
                 brand_record = await collections.liquor_data.find_one({"id": brand_id})
                 
                 if brand_record:
                     # Remove the date that was added
                     current_daily_sales = brand_record.get('daily_sales', {})
-                    if date_added and date_added in current_daily_sales:
-                        del current_daily_sales[date_added]
+                    if normalized_date_to_remove and normalized_date_to_remove in current_daily_sales:
+                        del current_daily_sales[normalized_date_to_remove]
                     
                     # Restore previous values
                     update_data = {
@@ -1813,13 +1819,15 @@ async def undo_upload(upload_id: str):
                         "DL_stock": previous_state.get("DL_stock"),
                         "current_stock_qty": previous_state.get("current_stock_qty"),
                         "total_sales_qty": previous_state.get("total_sales_qty"),
+                        "total_purchases_qty": previous_state.get("total_purchases_qty", 0.0),
                         "avg_daily_sales_qty": previous_state.get("avg_daily_sales_qty"),
                         "days_analyzed": previous_state.get("days_analyzed"),
                         "monthly_sale_value": previous_state.get("monthly_sale_value"),
                         "avg_daily_sale": previous_state.get("avg_daily_sale"),
                         "stock_value_today": previous_state.get("stock_value_today"),
                         "stock_available_days": previous_state.get("stock_available_days"),
-                        "stock_ratio": previous_state.get("stock_ratio")
+                        "stock_ratio": previous_state.get("stock_ratio"),
+                        "total_purchases_qty": previous_state.get("total_purchases_qty", 0.0)
                     }
                     
                     await collections.liquor_data.update_one(
@@ -1832,6 +1840,14 @@ async def undo_upload(upload_id: str):
             if brands_added:
                 result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
                 brands_deleted = result.deleted_count
+
+            # FAILSAFE: Ensure the date is removed from ALL brands, even those not in snapshot
+            if normalized_date_to_remove:
+                logging.info(f"Failsafe cleanup in undo for date '{normalized_date_to_remove}'...")
+                await collections.liquor_data.update_many(
+                    {},
+                    {"$unset": {f"daily_sales.{normalized_date_to_remove}": ""}}
+                )
         
         elif upload_type == "full_monthly":
             # For Full Monthly upload, restore from backup
@@ -3312,9 +3328,10 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                         # Build update operation
                         update_data = {}
                         for field in ["DL_date", "DL_stock", "current_stock_qty", 
-                                      "days_analyzed", "total_sales_qty", "avg_daily_sales_qty",
-                                      "monthly_sales_qty", "monthly_sale_qty", "monthly_sale_value",
-                                      "stock_value_today", "stock_available_days", "stock_ratio"]:
+                                      "days_analyzed", "total_sales_qty", "total_purchases_qty",
+                                      "avg_daily_sales_qty", "monthly_sales_qty", "monthly_sale_qty",
+                                      "monthly_sale_value", "stock_value_today", "stock_available_days",
+                                      "stock_ratio"]:
                             value = previous_state.get(field)
                             if value is not None:
                                 update_data[field] = value
@@ -3341,32 +3358,10 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                 
                 # FAILSAFE: If snapshot is incomplete, remove the date from ALL brands
                 # This handles cases where the snapshot didn't capture all brands
-                if date_added and len(brands_updated) < total_brands_in_db:
-                    logging.warning(f"Snapshot incomplete ({len(brands_updated)} < {total_brands_in_db}). Running failsafe cleanup...")
+                if date_added:
+                    logging.info(f"Running failsafe cleanup for date '{date_added}'...")
                     
-                    # Normalize the date to match daily_sales format
-                    def normalize_date_key_for_cleanup(date_str):
-                        import re
-                        try:
-                            date_str = str(date_str).strip()
-                            if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                                return dt.strftime("%d-%b-%y")
-                            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                            if match:
-                                day, month_name, year_suffix = match.groups()
-                                if not year_suffix or len(year_suffix) < 2:
-                                    year_suffix = '25'
-                                elif len(year_suffix) == 4:
-                                    year_suffix = year_suffix[2:]
-                                day = day.zfill(2)
-                                month_name = month_name.capitalize()
-                                return f"{day}-{month_name}-{year_suffix}"
-                        except Exception as e:
-                            logging.warning(f"Could not normalize date '{date_str}': {e}")
-                        return str(date_str)
-                    
-                    normalized_date = normalize_date_key_for_cleanup(date_added)
+                    normalized_date = normalize_date_key_global(date_added)
                     
                     # Remove the date key from ALL brands using $unset
                     result = await collections.liquor_data.update_many(
