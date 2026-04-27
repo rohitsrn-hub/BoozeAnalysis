@@ -1457,46 +1457,34 @@ async def upload_todays_data(
             return str(date_str)
         
         # Normalize the new date for comparison
-        normalized_new_date = normalize_date_for_comparison(new_date_column)
-        print(f"📅 New date to upload: '{new_date_column}' -> normalized: '{normalized_new_date}'")
+        # Use the universal parser for better compatibility
+        new_dt = parse_date_for_comparison_global(new_date_column)
+        print(f"📅 New date to upload: '{new_date_column}' -> parsed: {new_dt}")
         
-        # Get existing dates and normalize them (check ALL records, not just first 10)
-        existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(1000)
-        existing_dates = set()
-        existing_dates_raw = []
+        # Get existing dates and filter by active range (D1 to DL)
+        existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1, "D1_date": 1}).to_list(1000)
+        existing_dates_set = set()
+        matching_dates = []
         
         for record in existing_records:
-            # Check DL_date
-            if record.get('DL_date'):
-                raw_dl_date = record['DL_date']
-                normalized_dl_date = normalize_date_for_comparison(raw_dl_date)
-                existing_dates.add(normalized_dl_date)
-                existing_dates_raw.append(f"DL_date: {raw_dl_date}")
+            d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+            dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
+            # Check if new date matches the record's current DL date
+            if new_dt != datetime.min and new_dt == dl_dt:
+                matching_dates.append(f"Current DL_date: {record.get('DL_date')}")
+                existing_dates_set.add(dl_dt)
             
-            # Check daily_sales dates  
+            # Also check if new date exists in daily_sales WITHIN the active range
             daily_sales = record.get('daily_sales', {}) or {}
-            if daily_sales:
-                for date_key in daily_sales.keys():
-                    normalized_daily_date = normalize_date_for_comparison(date_key)
-                    existing_dates.add(normalized_daily_date)
-                    existing_dates_raw.append(f"daily_sales: {date_key}")
+            for date_key in daily_sales.keys():
+                curr_dt = parse_date_for_comparison_global(date_key)
+                if curr_dt != datetime.min and d1_dt <= curr_dt <= dl_dt:
+                    if curr_dt == new_dt:
+                        matching_dates.append(f"Active daily_sales: {date_key}")
+                        existing_dates_set.add(curr_dt)
         
-        print(f"📅 Existing dates in database: {sorted(list(existing_dates))}")
-        print(f"📅 Raw existing dates: {existing_dates_raw[:5]}")  # Show first 5
-        
-        if normalized_new_date in existing_dates:
-            # Show detailed information about the conflict
-            matching_dates = []
-            for record in existing_records[:3]:  # Show details for first 3 records
-                if record.get('DL_date'):
-                    raw_date = record['DL_date']
-                    if normalize_date_for_comparison(raw_date) == normalized_new_date:
-                        matching_dates.append(f"DL_date: {raw_date}")
-                
-                daily_sales = record.get('daily_sales', {}) or {}
-                for date_key in daily_sales.keys():
-                    if normalize_date_for_comparison(date_key) == normalized_new_date:
-                        matching_dates.append(f"daily_sales: {date_key}")
+        if existing_dates_set:
             
             raise HTTPException(
                 status_code=409,
