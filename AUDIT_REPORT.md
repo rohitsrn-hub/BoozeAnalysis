@@ -88,6 +88,12 @@ def calculate_accurate_sales(daily_stock_data, sorted_dates):
 - **Risk**: `pd.read_excel` is vulnerable to Excel External Entity (XXE) attacks if `lxml` is used under the hood with older versions.
 - **Fix**: Ensure `defusedxml` is used or strictly validate the file header bytes before passing to pandas.
 
+### 2. Automated Sales Period Reset on Purchase
+- **Scenario**: User uploads new stock data where a brand's quantity has increased (indicating a purchase).
+- **Previous Behavior**: User had to manually press "Reset Stock" before uploading to ensure the purchase day became D1. Failure to do so would lead to negative sales calculations or messy trendlines.
+- **New Behavior**: The system automatically detects the purchase, triggers a backup/reset of the previous period, and sets the current upload as D1 for the new period.
+- **Fix (code)**: Implemented `execute_stock_reset` helper and integrated it into `upload_todays_data`.
+
 ---
 
 ## H. Safe Refactoring Plan

@@ -1475,6 +1475,34 @@ async def upload_todays_data(file: UploadFile = File(...)):
         
         if is_fresh_start:
             print("🆕 Database is empty - treating Today's Data as initial D1 upload")
+        else:
+            # AUTOMATIC RESET DETECTION: Check if any brand in the upload has more stock than currently held
+            # This indicates a purchase/restock, which triggers a new sales period (D1)
+            purchase_detected = False
+            detected_brand = ""
+
+            for brand_name, brand_info in brands_data.items():
+                new_stock_qty = brand_info['stock_qty']
+                index_number = brand_info['index_number']
+
+                # Try to find existing brand
+                existing_brand = await collections.liquor_data.find_one({"brand_name": brand_name})
+                if not existing_brand and index_number:
+                    existing_brand = await collections.liquor_data.find_one({"index_number": index_number})
+
+                if existing_brand:
+                    current_qty = existing_brand.get('current_stock_qty', 0)
+                    if new_stock_qty > current_qty:
+                        purchase_detected = True
+                        detected_brand = brand_name
+                        break
+
+            if purchase_detected:
+                print(f"🚀 PURCHASE DETECTED for '{detected_brand}'! Triggering automatic stock reset...")
+                reset_result = await execute_stock_reset("auto_reset_on_purchase")
+                if reset_result:
+                    print(f"✅ Automatic reset complete. Current upload will now be the new D1.")
+                    is_fresh_start = True # Force fresh start logic for the rest of the function
         
         # Track changes for undo functionality
         brands_updated = {}  # {brand_id: previous_state}
@@ -4611,59 +4639,66 @@ async def get_projected_data_from_historical():
         return []
 
 @api_router.post("/stock/reset")
+async def execute_stock_reset(reason: str = "pre_reset_backup"):
+    """Internal helper to execute the full stock reset sequence"""
+    # STEP 1: Calculate and store historical sales averages
+    historical_result = await calculate_and_store_historical_averages()
+
+    # STEP 2: Create automatic backup
+    liquor_records = await collections.liquor_data.find().to_list(10000)
+
+    if not liquor_records:
+        return None
+
+    # Remove MongoDB _id for backup
+    backup_data = []
+    for record in liquor_records:
+        record_copy = record.copy()
+        if '_id' in record_copy:
+            del record_copy['_id']
+        backup_data.append(record_copy)
+
+    # Create backup
+    backup = StockBackup(
+        total_records=len(backup_data),
+        backup_reason=reason,
+        data_snapshot=backup_data
+    )
+
+    await collections.stock_backups.insert_one(backup.dict())
+
+    # STEP 3: Delete all liquor data (brands_master is preserved for rate persistence)
+    delete_result = await collections.liquor_data.delete_many({})
+
+    historical_count = historical_result.get('historical_records_created', 0)
+    historical_month = historical_result.get('month_year', 'N/A')
+
+    logging.info(f"Reset completed: Stored {historical_count} historical averages for {historical_month}, backed up and deleted {delete_result.deleted_count} records")
+
+    # Create detailed message based on historical data creation
+    if historical_count > 0:
+        hist_message = f"✅ Saved {historical_count} brands' sales history for {historical_month}"
+    else:
+        hist_message = f"⚠️ No historical data saved - brands need at least 1 day of sales data"
+
+    return {
+        "backup_id": backup.id,
+        "records_backed_up": len(backup_data),
+        "records_deleted": delete_result.deleted_count,
+        "historical_records_created": historical_count,
+        "historical_month": historical_month,
+        "historical_message": hist_message,
+        "message": f"Stock data reset successfully. {hist_message}. Backup created.",
+        "next_upload_becomes_d1": True
+    }
+
 async def reset_stock_data():
     """Reset all date-wise stock data after calculating historical averages and creating backup"""
     try:
-        # STEP 1: Calculate and store historical sales averages
-        historical_result = await calculate_and_store_historical_averages()
-        
-        # STEP 2: Create automatic backup
-        liquor_records = await collections.liquor_data.find().to_list(10000)
-        
-        if not liquor_records:
+        result = await execute_stock_reset("pre_reset_backup")
+        if not result:
             raise HTTPException(status_code=404, detail="No data to reset")
-        
-        # Remove MongoDB _id for backup
-        backup_data = []
-        for record in liquor_records:
-            record_copy = record.copy()
-            if '_id' in record_copy:
-                del record_copy['_id']
-            backup_data.append(record_copy)
-        
-        # Create backup
-        backup = StockBackup(
-            total_records=len(backup_data),
-            backup_reason="pre_reset_backup",
-            data_snapshot=backup_data
-        )
-        
-        await collections.stock_backups.insert_one(backup.dict())
-        
-        # STEP 3: Delete all liquor data (brands_master is preserved for rate persistence)
-        delete_result = await collections.liquor_data.delete_many({})
-        
-        historical_count = historical_result.get('historical_records_created', 0)
-        historical_month = historical_result.get('month_year', 'N/A')
-        
-        logging.info(f"Reset completed: Stored {historical_count} historical averages for {historical_month}, backed up and deleted {delete_result.deleted_count} records")
-        
-        # Create detailed message based on historical data creation
-        if historical_count > 0:
-            hist_message = f"✅ Saved {historical_count} brands' sales history for {historical_month}"
-        else:
-            hist_message = f"⚠️ No historical data saved - brands need at least 1 day of sales data"
-        
-        return {
-            "backup_id": backup.id,
-            "records_backed_up": len(backup_data),
-            "records_deleted": delete_result.deleted_count,
-            "historical_records_created": historical_count,
-            "historical_month": historical_month,
-            "historical_message": hist_message,
-            "message": f"Stock data reset successfully. {hist_message}. Backup created.",
-            "next_upload_becomes_d1": True
-        }
+        return result
         
     except HTTPException:
         raise
