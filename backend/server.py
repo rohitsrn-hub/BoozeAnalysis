@@ -42,6 +42,44 @@ db = client[os.environ['DB_NAME']]
 # Collection name prefixes for data separation
 LIQUOR_PREFIX = "liquor_"  # Prefix for all liquor app collections
 
+def parse_date_for_comparison_global(date_str):
+    """Universal date parser for filtering data points within D1-DL bounds"""
+    try:
+        import re
+        from datetime import datetime
+
+        if not date_str or date_str == 'N/A':
+            return datetime.min
+
+        date_str = str(date_str).strip()
+
+        # Handle ISO/Full datetime
+        if 'T' in date_str or len(date_str) > 15:
+            try:
+                return datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+            except:
+                pass
+
+        # Match DD-MMM-YY or DD-MMM-YYYY
+        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', date_str, re.IGNORECASE)
+        if match:
+            day, month_name, year_suffix = match.groups()
+            year = f"20{year_suffix}" if len(year_suffix) == 2 else (year_suffix if year_suffix else "2025")
+            try:
+                return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+            except:
+                pass
+
+        # Match DD-MMM
+        match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
+        if match:
+            day, month_name = match.groups()
+            return datetime.strptime(f"{day}-{month_name}-2025", "%d-%b-%Y")
+
+        return datetime.min
+    except:
+        return datetime.min
+
 # Collection references with proper prefixing
 class Collections:
     """Centralized collection references for the Liquor app"""
@@ -1512,6 +1550,7 @@ async def upload_todays_data(
                     }
                 )
 
+            auto_reset_backup_id = None
             if purchase_detected:
                 if not confirm_purchase:
                     # Return error requiring user confirmation
@@ -1529,6 +1568,7 @@ async def upload_todays_data(
                 reset_result = await execute_stock_reset("auto_reset_on_purchase")
                 if reset_result:
                     print(f"✅ Automatic reset complete. Current upload will now be the new D1.")
+                    auto_reset_backup_id = reset_result.get("backup_id")
                     is_fresh_start = True # Force fresh start logic for the rest of the function
         
         # Track changes for undo functionality
@@ -1742,7 +1782,8 @@ async def upload_todays_data(
             changes_snapshot={
                 "brands_updated": brands_updated,
                 "brands_added": brands_added,
-                "date_added": new_date_column
+                "date_added": new_date_column,
+                "auto_reset_backup_id": auto_reset_backup_id
             }
         )
         await collections.upload_history.insert_one(upload_history.dict())
@@ -1853,6 +1894,23 @@ async def undo_upload(upload_id: str):
             brands_updated = changes_snapshot.get("brands_updated", {})
             brands_added = changes_snapshot.get("brands_added", [])
             date_added = changes_snapshot.get("date_added")
+            auto_reset_backup_id = changes_snapshot.get("auto_reset_backup_id")
+
+            if auto_reset_backup_id:
+                # This upload triggered an automatic reset. We must restore the backup to undo it properly.
+                logging.info(f"Undo: Restoring auto-reset backup {auto_reset_backup_id}")
+                await restore_from_backup(auto_reset_backup_id, recalculate_historical=True)
+                # After restoring, we mark as undone and return early as the whole state is reverted
+                await collections.upload_history.update_one(
+                    {"id": upload_id},
+                    {"$set": {"undone_at": datetime.now(timezone.utc)}}
+                )
+                return {
+                    "success": True,
+                    "upload_id": upload_id,
+                    "upload_type": upload_type,
+                    "message": "Successfully undone upload and restored previous sales period."
+                }
             
             # Revert updated brands
             # Normalize the date to match daily_sales format
@@ -2453,11 +2511,17 @@ async def get_database_view():
             if record.get('DL_date'):
                 dl_dates.add(str(record['DL_date']))
             
-            # Collect daily_sales dates
+            # Collect daily_sales dates - filtered by record bounds
             daily_sales = record.get('daily_sales', {}) or {}
             if daily_sales:
+                # Ensure we only show dates that are currently "active" for the record
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
                 for date_key in daily_sales.keys():
-                    all_dates.add(str(date_key))
+                    curr_dt = parse_date_for_comparison_global(date_key)
+                    if d1_dt <= curr_dt <= dl_dt:
+                        all_dates.add(str(date_key))
         
         # Prepare clean data for frontend (remove MongoDB ObjectId if present)
         clean_data = []
@@ -2660,10 +2724,17 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
             
             for record in records:
                 daily_sales = record.get('daily_sales', {}) or {}
+                # Filter to only include dates between record's D1 and DL
+                # Use the new global parser for reliability
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
                 for date_str, stock_qty in daily_sales.items():
-                    if date_str not in all_daily_sales:
-                        all_daily_sales[date_str] = []
-                    all_daily_sales[date_str].append(stock_qty)
+                    curr_dt = parse_date_for_comparison_global(date_str)
+                    if d1_dt <= curr_dt <= dl_dt:
+                        if date_str not in all_daily_sales:
+                            all_daily_sales[date_str] = []
+                        all_daily_sales[date_str].append(stock_qty)
             
             # Calculate daily sales quantities by subtracting consecutive days
             daily_sales_qty = {}
