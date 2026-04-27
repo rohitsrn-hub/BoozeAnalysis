@@ -91,8 +91,10 @@ def calculate_accurate_sales(daily_stock_data, sorted_dates):
 ### 2. Automated Sales Period Reset on Purchase
 - **Scenario**: User uploads new stock data where a brand's quantity has increased (indicating a purchase).
 - **Previous Behavior**: User had to manually press "Reset Stock" before uploading to ensure the purchase day became D1. Failure to do so would lead to negative sales calculations or messy trendlines.
-- **New Behavior**: The system automatically detects the purchase, triggers a backup/reset of the previous period, and sets the current upload as D1 for the new period.
-- **Fix (code)**: Implemented `execute_stock_reset` helper and integrated it into `upload_todays_data`.
+- **New Behavior**: The system automatically detects the purchase, prompts the user for confirmation via a dialog, and if confirmed, triggers a backup/reset of the previous period. The current upload then becomes D1 for the new period.
+- **Safety Feature**: If the user identifies the detected purchase as an error, the upload is cancelled, and they are prompted to check their data.
+- **Identical Data Guard**: Added a check to prevent consecutive uploads of the exact same data file, ensuring data progression.
+- **Fix (code)**: Implemented `execute_stock_reset` helper and integrated it into `upload_todays_data` with confirmation parameters. Updated React frontend with a `Purchase Confirmation Dialog`.
 
 ---
 

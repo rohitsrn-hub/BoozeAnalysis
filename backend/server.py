@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.responses import JSONResponse
@@ -1318,7 +1318,10 @@ async def upload_full_monthly_data(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @api_router.post("/upload-todays-data")
-async def upload_todays_data(file: UploadFile = File(...)):
+async def upload_todays_data(
+    file: UploadFile = File(...),
+    confirm_purchase: bool = Form(False)
+):
     """Upload today's stock data - appends to existing data by updating stock positions"""
     try:
         # Validate file type
@@ -1476,8 +1479,8 @@ async def upload_todays_data(file: UploadFile = File(...)):
         if is_fresh_start:
             print("🆕 Database is empty - treating Today's Data as initial D1 upload")
         else:
-            # AUTOMATIC RESET DETECTION: Check if any brand in the upload has more stock than currently held
-            # This indicates a purchase/restock, which triggers a new sales period (D1)
+            # IDENTICAL DATA DETECTION: Check if all uploaded stock values are exact same as current held stock
+            identical_data = True
             purchase_detected = False
             detected_brand = ""
 
@@ -1485,20 +1488,44 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 new_stock_qty = brand_info['stock_qty']
                 index_number = brand_info['index_number']
 
-                # Try to find existing brand
                 existing_brand = await collections.liquor_data.find_one({"brand_name": brand_name})
                 if not existing_brand and index_number:
                     existing_brand = await collections.liquor_data.find_one({"index_number": index_number})
 
                 if existing_brand:
                     current_qty = existing_brand.get('current_stock_qty', 0)
+                    if new_stock_qty != current_qty:
+                        identical_data = False
                     if new_stock_qty > current_qty:
                         purchase_detected = True
                         detected_brand = brand_name
-                        break
+                else:
+                    # New brand found that wasn't in DB, so data is not identical
+                    identical_data = False
+
+            if identical_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "Identical data detected",
+                        "message": "The uploaded data contains exact same stock values as the current data in the database. This suggests that the same file has been erroneously uploaded twice. Please upload the correct data with actual stock of the current day."
+                    }
+                )
 
             if purchase_detected:
-                print(f"🚀 PURCHASE DETECTED for '{detected_brand}'! Triggering automatic stock reset...")
+                if not confirm_purchase:
+                    # Return error requiring user confirmation
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "Purchase detected",
+                            "requires_confirmation": True,
+                            "detected_brand": detected_brand,
+                            "message": f"A purchase/restock has been detected (e.g. for '{detected_brand}'). This will trigger an automatic stock reset and start a new sales period. Has an actual purchase taken place?"
+                        }
+                    )
+
+                print(f"🚀 PURCHASE CONFIRMED for '{detected_brand}'! Triggering automatic stock reset...")
                 reset_result = await execute_stock_reset("auto_reset_on_purchase")
                 if reset_result:
                     print(f"✅ Automatic reset complete. Current upload will now be the new D1.")

@@ -37,6 +37,9 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showVerifyDialog, setShowVerifyDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
+  const [pendingTodaysFile, setPendingTodaysFile] = useState(null);
+  const [detectedPurchaseBrand, setDetectedPurchaseBrand] = useState("");
   const [duplicateError, setDuplicateError] = useState(null);
   const [databaseView, setDatabaseView] = useState(null);
   const [currentDateRange, setCurrentDateRange] = useState(null);
@@ -466,16 +469,19 @@ function App() {
   };
 
   // Handle today's data upload
-  const handleTodaysDataUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleTodaysDataUpload = async (event, confirmPurchase = false) => {
+    const file = event?.target?.files?.[0] || pendingTodaysFile;
     if (!file) return;
 
     const formData = new FormData();
     formData.append("file", file);
+    if (confirmPurchase) {
+      formData.append("confirm_purchase", "true");
+    }
 
     try {
       setLoading(true);
-      setUploadProgress(10);
+      if (!confirmPurchase) setUploadProgress(10);
       
       const response = await axios.post(`${API}/upload-todays-data`, formData, {
         headers: {
@@ -488,6 +494,9 @@ function App() {
       });
 
       setUploadProgress(100);
+      setShowPurchaseConfirm(false);
+      setPendingTodaysFile(null);
+
       toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
       
       // Fetch analytics, trends, and upload history after successful upload
@@ -503,6 +512,16 @@ function App() {
       if (error.response?.data?.detail) {
         const detail = error.response.data.detail;
         
+        // Handle purchase confirmation requirement
+        if (error.response.status === 409 && detail.requires_confirmation) {
+          setPendingTodaysFile(file);
+          setDetectedPurchaseBrand(detail.detected_brand);
+          setShowPurchaseConfirm(true);
+          setUploadProgress(0);
+          setLoading(false);
+          return;
+        }
+
         // Handle duplicate date error specially
         if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
           setDuplicateError({
@@ -515,21 +534,15 @@ function App() {
           return; // Exit early for duplicate date error
         }
         
+        // Handle identical data error
+        if (error.response.status === 400 && detail.error === "Identical data detected") {
+          toast.error(detail.message, { duration: 6000 });
+          return;
+        }
+
         // Handle other errors
         if (typeof detail === 'object') {
           errorMessage = detail.message || errorMessage;
-          
-          // Show available columns if provided
-          if (detail.available_columns && Array.isArray(detail.available_columns)) {
-            const columns = detail.available_columns.join(', ');
-            errorMessage += `\n\nColumns found in your file: ${columns}`;
-          }
-          
-          // Show additional suggestions if available
-          if (detail.suggestions && Array.isArray(detail.suggestions)) {
-            const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
-            errorMessage += `\n\nSuggestions:\n${suggestions}`;
-          }
         } else {
           errorMessage = detail;
         }
@@ -539,7 +552,7 @@ function App() {
     } finally {
       setLoading(false);
       setUploadProgress(0);
-      event.target.value = "";
+      if (event?.target) event.target.value = "";
     }
   };
 
@@ -4529,6 +4542,53 @@ function App() {
                     Generate PDF Report
                   </div>
                 )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Purchase Confirmation Dialog */}
+      <Dialog open={showPurchaseConfirm} onOpenChange={setShowPurchaseConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-blue-600">
+              <Package className="w-5 h-5" />
+              <span>Purchase Detected</span>
+            </DialogTitle>
+            <DialogDescription>
+              A stock increase was detected for <strong>{detectedPurchaseBrand}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="font-semibold text-blue-900 mb-2">⚠️ Automatic Reset Trigger:</h4>
+              <p className="text-sm text-blue-800">
+                Detecting a purchase will trigger an <strong>automatic stock reset</strong> for the previous sales period.
+              </p>
+              <p className="text-sm text-blue-800 mt-2 font-bold">
+                Has an actual purchase taken place?
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPurchaseConfirm(false);
+                  setPendingTodaysFile(null);
+                  toast.error("Upload cancelled. Please check your data for erroneous entries and re-upload corrected data.", { duration: 8000 });
+                }}
+              >
+                No, check data
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => handleTodaysDataUpload(null, true)}
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Yes, confirm purchase"}
               </Button>
             </div>
           </div>
