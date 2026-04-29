@@ -53,28 +53,37 @@ def parse_date_for_comparison_global(date_str):
 
         date_str = str(date_str).strip()
 
-        # Handle ISO/Full datetime
-        if 'T' in date_str or len(date_str) > 15:
+        # Method 1: Handle ISO/Full datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
+        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
             try:
-                return datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                return dt
             except:
                 pass
 
-        # Match DD-MMM-YY or DD-MMM-YYYY
-        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', date_str, re.IGNORECASE)
+        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY or DD MMM YY formats
+        # Supports -, /, or space as separators
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})[-/\s]?(\d{0,4})', date_str, re.IGNORECASE)
         if match:
             day, month_name, year_suffix = match.groups()
-            year = f"20{year_suffix}" if len(year_suffix) == 2 else (year_suffix if year_suffix else "2025")
+            # Normalize to 4-digit year, defaulting to 2026 if missing
+            if not year_suffix or len(year_suffix) < 2:
+                year = '2026'
+            elif len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+
             try:
                 return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             except:
                 pass
 
-        # Match DD-MMM
-        match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
+        # Method 3: Match DD-MMM (missing year)
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})$', date_str, re.IGNORECASE)
         if match:
             day, month_name = match.groups()
-            return datetime.strptime(f"{day}-{month_name}-2025", "%d-%b-%Y")
+            return datetime.strptime(f"{day}-{month_name}-2026", "%d-%b-%Y")
 
         return datetime.min
     except:
@@ -104,38 +113,10 @@ collections = Collections()
 
 def normalize_date_key_global(date_str):
     """Normalize date to DD-MMM-YY format for consistent storage"""
-    import re
-    from datetime import datetime
-
     try:
-        if not date_str:
-            return str(date_str)
-
-        date_str = str(date_str).strip()
-
-        # Method 1: Handle datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
-        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-            try:
-                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                return dt.strftime("%d-%b-%y")  # Format: 16-Nov-25
-            except:
-                pass
-
-        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY format
-        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-        if match:
-            day, month_name, year_suffix = match.groups()
-            # Normalize to 2-digit year
-            if not year_suffix or len(year_suffix) < 2:
-                year_suffix = '25'  # Default to 2025
-            elif len(year_suffix) == 4:
-                year_suffix = year_suffix[2:]  # Convert 2025 to 25
-            # Ensure 2-digit day with leading zero
-            day = day.zfill(2)
-            # Capitalize month name properly
-            month_name = month_name.capitalize()
-            return f"{day}-{month_name}-{year_suffix}"
-
+        dt = parse_date_for_comparison_global(date_str)
+        if dt != datetime.min:
+            return dt.strftime("%d-%b-%y")
     except Exception as e:
         logging.warning(f"Could not normalize date '{date_str}': {e}")
 
@@ -917,11 +898,11 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
         raise HTTPException(status_code=400, detail="No valid date columns found in the Excel file")
     
     # D1 = First valid date column (e.g., 20-Sep)
-    global_D1_date = date_columns[0]
+    global_D1_date = normalize_date_key_global(date_columns[0])
     print(f"*** D1 (First Valid Date Column): {global_D1_date} ***")
     
     # DL = Last valid date column (e.g., 03-Oct) 
-    global_DL_date = date_columns[-1]
+    global_DL_date = normalize_date_key_global(date_columns[-1])
     print(f"*** DL (Last Valid Date Column): {global_DL_date} ***")
     
     # STEP 2: Process each brand with the SIMPLE D1 and DL logic
@@ -975,6 +956,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             valid_stock_values = []
             
             for date_col in date_columns:
+                # Normalize the date column name for internal storage
+                normalized_date_col = normalize_date_key_global(date_col)
+
                 try:
                     raw_value = row[date_col]
                     if pd.notna(raw_value) and str(raw_value).strip() != '':
@@ -987,15 +971,15 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                             except:
                                 stock_qty = 0
                         
-                        daily_stock_data[date_col] = stock_qty
+                        daily_stock_data[normalized_date_col] = stock_qty
                         
                         if stock_qty >= 0:
-                            valid_stock_values.append((date_col, stock_qty))
+                            valid_stock_values.append((normalized_date_col, stock_qty))
                     else:
-                        daily_stock_data[date_col] = 0
+                        daily_stock_data[normalized_date_col] = 0
                         
                 except Exception:
-                    daily_stock_data[date_col] = 0
+                    daily_stock_data[normalized_date_col] = 0
             
             if not valid_stock_values:
                 print(f"WARNING: No valid stock data found for {brand_name}")
@@ -1670,10 +1654,15 @@ async def upload_todays_data(
                 stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
                 stock_available_days = (new_stock_qty / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
                 
+                # Normalize all date fields before saving
+                normalized_new_dl_date = normalize_date_key_global(new_date_column)
+                normalized_old_d1_date = normalize_date_key_global(old_D1_date) if old_D1_date else "N/A"
+
                 # Update the brand in database (daily uploads always extend existing period)
                 update_data = {
                     "daily_sales": current_daily_sales,
-                    "DL_date": new_date_column,
+                    "DL_date": normalized_new_dl_date,
+                    "D1_date": normalized_old_d1_date,
                     "DL_stock": float(new_stock_qty),
                     "current_stock_qty": int(new_stock_qty),
                     "days_analyzed": int(days_analyzed),
@@ -1722,6 +1711,9 @@ async def upload_todays_data(
                             selling_rate = 0.0
                             print(f"⚠️ No rate in Excel or brands_master for '{brand_name}', using 0.0")
                     
+                    # Normalize date for fresh start
+                    normalized_date = normalize_date_key_global(new_date_column)
+
                     # Create fresh brand record with this date as D1 and DL
                     new_brand_data = {
                         'id': str(uuid.uuid4()),
@@ -1731,12 +1723,13 @@ async def upload_todays_data(
                         'wholesale_rate': wholesale_rate,  # Loaded from brands_master
                         'selling_rate': selling_rate,      # Loaded from brands_master
                         'rate': selling_rate,
-                        'D1_date': new_date_column,
+                        'D1_date': normalized_date,
                         'D1_stock': new_stock_qty,
-                        'DL_date': new_date_column,
+                        'DL_date': normalized_date,
                         'DL_stock': new_stock_qty,
                         'current_stock_qty': int(new_stock_qty),
                         'total_sales_qty': 0.0,  # No sales yet (only one day)
+                        'total_purchases_qty': 0.0,
                         'avg_daily_sales_qty': 0.0,
                         'monthly_sales_qty': 0.0,
                         'monthly_sale_value': 0.0,
@@ -1747,7 +1740,7 @@ async def upload_todays_data(
                         'avg_daily_sale': 0.0,
                         'stock_value_before': selling_rate * new_stock_qty,  # Same as today for D1
 
-                        'daily_sales': {new_date_column: new_stock_qty},
+                        'daily_sales': {normalized_date: new_stock_qty},
                         'days_analyzed': 1,
                         'upload_timestamp': datetime.now(timezone.utc)
                     }
@@ -2555,61 +2548,16 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         from collections import defaultdict
         import re
         
-        def parse_date_for_sorting(date_str):
-            """Parse various date formats for chronological sorting"""
-            try:
-                if not date_str:
-                    return datetime.min
-                
-                date_str = str(date_str).strip()
-                
-                # Handle full datetime strings (YYYY-MM-DD HH:MM:SS format)
-                if 'T' in date_str or len(date_str) > 15:
-                    try:
-                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
-                        # Validate year is reasonable (2020-2030)
-                        if dt.year < 2020 or dt.year > 2030:
-                            logging.warning(f"Invalid year {dt.year} in date '{date_str}', attempting correction")
-                            # Try to fix common issues (2052 -> 2025)
-                            if dt.year > 2030:
-                                dt = dt.replace(year=2025)
-                        return dt
-                    except Exception as e:
-                        logging.warning(f"Failed to parse datetime '{date_str}': {e}")
-                
-                # Parse various date formats
-                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    full_date = f"{day}-{month_name}-{year}"
-                    dt = datetime.strptime(full_date, "%d-%b-%Y")
-                    # Validate year
-                    if dt.year < 2020 or dt.year > 2030:
-                        dt = dt.replace(year=2025)
-                    return dt
-                
-                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name = match.groups()
-                    year = "2025"
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-                
-                logging.warning(f"Could not parse date '{date_str}'")
-                return datetime.min
-                
-            except Exception as e:
-                logging.warning(f"Could not parse date '{date_str}': {e}")
-                return datetime.min
+        # Use the robust global parser for consistent date comparison across history
+        parse_date_for_sorting = parse_date_for_comparison_global
         
         # 1. Get CURRENT month data from liquor_data
         current_data = await collections.liquor_data.find().to_list(10000)
         
-        # 2. Get HISTORICAL data from stock_backups - ONLY pre_reset_backup types
+        # 2. Get HISTORICAL data from stock_backups - Include both manual and auto-reset types
         # These represent complete sales periods that were committed to history
         backups = await collections.stock_backups.find({
-            "backup_reason": "pre_reset_backup"
+            "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
         }).sort("backup_timestamp", -1).to_list(100)
         
         # Create a dict to store data by period - use most recent backup only
@@ -3808,10 +3756,10 @@ async def get_historical_periods():
                     "total_records": len(current_data)
                 })
         
-        # 2. Add historical periods from backups - ONLY pre_reset_backup types
+        # 2. Add historical periods from backups - Include both manual and auto-reset types
         # These represent complete sales periods that were committed to history
         backups = await collections.stock_backups.find({
-            "backup_reason": "pre_reset_backup"
+            "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
         }).sort("backup_timestamp", -1).to_list(100)
         
         # Group backups by period (D1-DL combination) to avoid duplicates
