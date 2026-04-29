@@ -2581,13 +2581,17 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                         year = dl_parsed.strftime("%Y")
                         
                         if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
+                            period_display = f"{d1_month} {year}"
                         else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
+                            period_display = f"{d1_month}-{dl_month} {year}"
+
+                        # Use exact dates as internal key to prevent collisions
+                        period_label = f"{d1_date}_{dl_date}"
                         
                         if period_label not in period_to_data:
                             period_to_data[period_label] = []
                             period_info[period_label] = {
+                                'display': period_display,
                                 'd1': d1_parsed,
                                 'dl': dl_parsed,
                                 'd1_str': d1_date,
@@ -2621,14 +2625,18 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                         year = dl_parsed.strftime("%Y")
                         
                         if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
+                            period_display = f"{d1_month} {year}"
                         else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
+                            period_display = f"{d1_month}-{dl_month} {year}"
+
+                        # Use exact dates as internal key
+                        period_label = f"{d1_date}_{dl_date}"
                         
                         backup_periods[period_label].append(record)
                         
                         if period_label not in period_info:
                             period_info[period_label] = {
+                                'display': period_display,
                                 'd1': d1_parsed,
                                 'dl': dl_parsed,
                                 'd1_str': d1_date,
@@ -2686,10 +2694,14 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     prev_date = sorted_dates[i-1]
                     day_sales = 0
 
+                    # Normalize dates for robust lookup
+                    norm_prev = normalize_date_key_global(prev_date)
+                    norm_curr = normalize_date_key_global(date)
+
                     for record in records:
                         brand_daily = record.get('daily_sales', {}) or {}
-                        p_val = brand_daily.get(prev_date, 0)
-                        c_val = brand_daily.get(date, 0)
+                        p_val = brand_daily.get(norm_prev, 0)
+                        c_val = brand_daily.get(norm_curr, 0)
                         if c_val < p_val:
                             day_sales += (p_val - c_val)
 
@@ -2722,7 +2734,8 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label]['display'],
+                        "period_key": period_label,
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
@@ -2734,27 +2747,39 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label]['display'],
+                        "period_key": period_label,
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
                     })
         
         elif period == "single" and sales_month:
-            # Safely access period_info to avoid KeyError
-            if sales_month in period_trends and sales_month in period_info:
+            # For single period, we might need to find by display name or key
+            target_key = None
+            if sales_month in period_info:
+                target_key = sales_month
+            else:
+                # Find by display name
+                for key, info in period_info.items():
+                    if info['display'] == sales_month:
+                        target_key = key
+                        break
+
+            if target_key and target_key in period_trends:
                 series_data.append({
-                    "month": sales_month,
-                    "data": period_trends[sales_month],
-                    "d1_date": period_info[sales_month]['d1_str'],
-                    "dl_date": period_info[sales_month]['dl_str']
+                    "month": period_info[target_key]['display'],
+                    "period_key": target_key,
+                    "data": period_trends[target_key],
+                    "d1_date": period_info[target_key]['d1_str'],
+                    "dl_date": period_info[target_key]['dl_str']
                 })
         
         # Calculate summary - use actual total_sales_qty from records for accuracy
         # This ensures the total matches the actual D1 - DL calculation per brand
         series_with_totals = []
         for series in series_data:
-            period_label = series["month"]
+            period_label = series.get("period_key", series["month"])
             # Get the actual total_sales_qty from the records for this period
             if period_label in period_to_data:
                 records_for_period = period_to_data[period_label]
@@ -2770,7 +2795,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         return {
             "period": period,
             "selected_month": sales_month,
-            "available_months": sorted_periods,
+            "available_months": [period_info[p]['display'] for p in sorted_periods],
             "series": series_with_totals,
             "summary": {
                 "total_sales": round(total_sales, 2),
