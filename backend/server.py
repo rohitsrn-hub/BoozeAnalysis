@@ -2550,8 +2550,150 @@ async def get_database_view():
         }
         
     except Exception as e:
-        logging.error(f"Error getting database view: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching database view: {str(e)}")
+        logging.error(f"Error in database integrity fix: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fixing database: {str(e)}")
+
+@api_router.post("/admin/migrate-historical-data")
+async def migrate_historical_data():
+    """
+    Migrates and corrects historical sales data across all backups and averages.
+    Uses the 'Sum of Decreases' method to fix inaccuracies from the old D1-DL logic.
+    """
+    try:
+        migration_results = {
+            "backups_processed": 0,
+            "averages_corrected": 0,
+            "current_data_corrected": 0,
+            "errors": []
+        }
+
+        # 1. Correct Current Data in liquor_data
+        current_records = await collections.liquor_data.find().to_list(10000)
+        for record in current_records:
+            try:
+                daily_sales = record.get('daily_sales', {}) or {}
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
+                # Filter and sort dates
+                relevant_dates = []
+                for k in daily_sales.keys():
+                    dt = parse_date_for_comparison_global(k)
+                    if d1_dt <= dt <= dl_dt:
+                        relevant_dates.append((dt, k))
+
+                relevant_dates.sort(key=lambda x: x[0])
+
+                total_sales = 0
+                total_purchases = 0
+
+                if len(relevant_dates) >= 2:
+                    for i in range(1, len(relevant_dates)):
+                        prev_qty = daily_sales.get(relevant_dates[i-1][1], 0)
+                        curr_qty = daily_sales.get(relevant_dates[i][1], 0)
+                        if curr_qty > prev_qty:
+                            total_purchases += (curr_qty - prev_qty)
+                        elif curr_qty < prev_qty:
+                            total_sales += (prev_qty - curr_qty)
+
+                    # Update record
+                    days = record.get('days_analyzed', 1)
+                    avg_qty = total_sales / days if days > 0 else 0
+                    selling_rate = record.get('selling_rate', record.get('rate', 0))
+
+                    await collections.liquor_data.update_one(
+                        {"id": record['id']},
+                        {"$set": {
+                            "total_sales_qty": float(total_sales),
+                            "total_purchases_qty": float(total_purchases),
+                            "avg_daily_sales_qty": float(avg_qty),
+                            "monthly_sales_qty": float(avg_qty * 24),
+                            "monthly_sale_qty": int(avg_qty * 24),
+                            "monthly_sale_value": float(avg_qty * 24 * selling_rate)
+                        }}
+                    )
+                    migration_results["current_data_corrected"] += 1
+            except Exception as e:
+                migration_results["errors"].append(f"Current Data Error ({record.get('brand_name')}): {str(e)}")
+
+        # 2. Correct Historical Backups
+        backups = await collections.stock_backups.find().to_list(1000)
+        for backup in backups:
+            try:
+                data_snapshot = backup.get('data_snapshot', [])
+                updated_snapshot = []
+                backup_changed = False
+
+                for record in data_snapshot:
+                    daily_sales = record.get('daily_sales', {}) or {}
+                    d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                    dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
+                    relevant_dates = []
+                    for k in daily_sales.keys():
+                        dt = parse_date_for_comparison_global(k)
+                        if d1_dt <= dt <= dl_dt:
+                            relevant_dates.append((dt, k))
+                    relevant_dates.sort(key=lambda x: x[0])
+
+                    if len(relevant_dates) >= 2:
+                        t_sales = 0
+                        t_purchases = 0
+                        for i in range(1, len(relevant_dates)):
+                            p_q = daily_sales.get(relevant_dates[i-1][1], 0)
+                            c_q = daily_sales.get(relevant_dates[i][1], 0)
+                            if c_q > p_q: t_purchases += (c_q - p_q)
+                            elif c_q < p_q: t_sales += (p_q - c_q)
+
+                        record['total_sales_qty'] = float(t_sales)
+                        record['total_purchases_qty'] = float(t_purchases)
+
+                        # Update derived fields in backup for report consistency
+                        days = record.get('days_analyzed', 1)
+                        avg_qty = t_sales / days if days > 0 else 0
+                        selling_rate = record.get('selling_rate', record.get('rate', 0))
+
+                        record['avg_daily_sales_qty'] = float(avg_qty)
+                        record['monthly_sales_qty'] = float(avg_qty * 24)
+                        record['monthly_sale_qty'] = int(avg_qty * 24)
+                        record['monthly_sale_value'] = float(avg_qty * 24 * selling_rate)
+
+                        backup_changed = True
+
+                    updated_snapshot.append(record)
+
+                if backup_changed:
+                    await collections.stock_backups.update_one(
+                        {"_id": backup['_id']},
+                        {"$set": {"data_snapshot": updated_snapshot}}
+                    )
+                    migration_results["backups_processed"] += 1
+            except Exception as e:
+                migration_results["errors"].append(f"Backup Error ({backup.get('id')}): {str(e)}")
+
+        # 3. Refresh Historical Sales Averages from corrected backups
+        # Find all backups that were used for historical resets
+        reset_backups = await collections.stock_backups.find({
+            "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
+        }).to_list(1000)
+
+        for backup in reset_backups:
+            try:
+                # Calculate and store averages using the corrected snapshot
+                # This ensures Demand Forecasts use accurate historical data
+                await calculate_and_store_historical_averages(source_records=backup.get('data_snapshot', []))
+                migration_results["averages_corrected"] += 1
+            except Exception as e:
+                migration_results["errors"].append(f"Averages Refresh Error (Backup {backup.get('id')}): {str(e)}")
+
+        return {
+            "status": "success",
+            "message": f"Migration complete. Corrected {migration_results['current_data_corrected']} current records, {migration_results['backups_processed']} backups, and refreshed {migration_results['averages_corrected']} months of historical averages.",
+            "results": migration_results
+        }
+    except Exception as e:
+        logging.error(f"Error during historical migration: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error during migration: {str(e)}")
 
 @api_router.get("/sales-trends")
 async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str] = None):
@@ -2696,7 +2838,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     curr_dt = parse_date_for_comparison_global(date_str)
                     if d1_dt <= curr_dt <= dl_dt:
                         period_dates_set.add(normalize_date_key_global(date_str))
-            
+
             # Sort all dates found in this period chronologically
             sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
 
@@ -3586,8 +3728,10 @@ async def fix_database_integrity():
     Administrative utility to fix database integrity issues.
     This endpoint will:
     1. Fix any records where daily_sales is null (set to empty dict)
-    2. Ensure all numeric fields have valid values
-    3. Return a summary of fixes applied
+    2. Ensure all numeric fields have valid values and correct types
+    3. Normalize all date keys to DD-MMM-YY
+    4. Remove date entries in daily_sales that fall outside D1-DL range
+    5. Return a summary of fixes applied
     """
     try:
         issues_found = []
@@ -3610,7 +3754,7 @@ async def fix_database_integrity():
             record_updated = False
             update_data = {}
             
-            # Fix 1: Ensure daily_sales is a dict, not null, and normalize keys
+            # Fix 1: Ensure daily_sales is a dict and normalize keys
             daily_sales = record.get('daily_sales')
             if daily_sales is None:
                 issues_found.append(f"Brand '{brand_name}': daily_sales was null")
@@ -3620,37 +3764,54 @@ async def fix_database_integrity():
             
             if isinstance(daily_sales, dict):
                 normalized_sales = {}
-                needs_normalization = False
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+
                 for k, v in daily_sales.items():
                     norm_k = normalize_date_key_global(k)
-                    if norm_k != k:
-                        needs_normalization = True
-                    normalized_sales[norm_k] = v
+                    curr_dt = parse_date_for_comparison_global(norm_k)
 
-                if needs_normalization:
-                    issues_found.append(f"Brand '{brand_name}': daily_sales had unnormalized keys")
+                    # Keep if it's within range (or range is undefined)
+                    if d1_dt == datetime.min or dl_dt == datetime.min or (d1_dt <= curr_dt <= dl_dt):
+                        normalized_sales[norm_k] = v
+                    else:
+                        issues_found.append(f"Brand '{brand_name}': Removed out-of-range date {norm_k}")
+                        record_updated = True
+
+                if normalized_sales != daily_sales:
                     update_data['daily_sales'] = normalized_sales
                     record_updated = True
 
-            # Fix 2: Ensure numeric fields are not None
+            # Fix 2: Ensure numeric fields have valid types and values
             numeric_fields = {
-                'current_stock_qty': 0,
-                'total_sales_qty': 0.0,
-                'avg_daily_sales_qty': 0.0,
-                'monthly_sales_qty': 0.0,
-                'monthly_sale_qty': 0,
-                'monthly_sale_value': 0.0,
-                'stock_available_days': 0.0,
-                'stock_ratio': 0.0,
-                'D1_stock': 0.0,
-                'DL_stock': 0.0,
-                'days_analyzed': 1
+                'current_stock_qty': int,
+                'total_sales_qty': float,
+                'total_purchases_qty': float,
+                'avg_daily_sales_qty': float,
+                'monthly_sales_qty': float,
+                'monthly_sale_qty': int,
+                'monthly_sale_value': float,
+                'stock_available_days': float,
+                'stock_ratio': float,
+                'D1_stock': float,
+                'DL_stock': float,
+                'days_analyzed': int,
+                'wholesale_rate': float,
+                'selling_rate': float,
+                'rate': float
             }
             
-            for field, default_value in numeric_fields.items():
-                if record.get(field) is None:
-                    issues_found.append(f"Brand '{brand_name}': {field} was None")
-                    update_data[field] = default_value
+            for field, target_type in numeric_fields.items():
+                val = record.get(field)
+                try:
+                    if val is None:
+                        update_data[field] = target_type(0)
+                        record_updated = True
+                    elif not isinstance(val, target_type):
+                        update_data[field] = target_type(val)
+                        record_updated = True
+                except:
+                    update_data[field] = target_type(0)
                     record_updated = True
             
             # Fix 3: Normalize D1_date and DL_date
@@ -3669,11 +3830,11 @@ async def fix_database_integrity():
                     {"id": brand_id},
                     {"$set": update_data}
                 )
-                fixes_applied.append(f"Fixed {len(update_data)} fields for brand '{brand_name}'")
+                fixes_applied.append(f"Fixed brand '{brand_name}'")
         
         return {
             "status": "success",
-            "message": f"Database integrity check complete. Fixed {len(fixes_applied)} records.",
+            "message": f"Database integrity check complete. Updated {len(fixes_applied)} records.",
             "total_records_checked": len(all_records),
             "issues_found": len(issues_found),
             "fixes_applied": len(fixes_applied),
