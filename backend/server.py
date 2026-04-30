@@ -51,6 +51,10 @@ def parse_date_for_comparison_global(date_str):
         if not date_str or date_str == 'N/A':
             return datetime.min
 
+        # If it's already a datetime object
+        if isinstance(date_str, datetime):
+            return date_str.replace(hour=0, minute=0, second=0, microsecond=0)
+
         date_str = str(date_str).strip()
 
         # Method 1: Handle ISO/Full datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
@@ -79,7 +83,20 @@ def parse_date_for_comparison_global(date_str):
             except:
                 pass
 
-        # Method 3: Match DD-MMM (missing year)
+        # Method 3: Handle numeric dates DD-MM-YY or DD/MM/YY
+        match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
+        if match:
+            day, month, year_suffix = match.groups()
+            if len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+            try:
+                return datetime(int(year), int(month), int(day))
+            except:
+                pass
+
+        # Method 4: Match DD-MMM (missing year)
         match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})$', date_str, re.IGNORECASE)
         if match:
             day, month_name = match.groups()
@@ -1017,10 +1034,19 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
 
             # Use the sorted_stock_values (date_col, stock_val) for accurate movement tracking
             # But filter to only include dates between global_D1_date and global_DL_date
-            relevant_movements = []
+            # CRITICAL: We must use chronological sorting, not string sorting for keys
+            relevant_data_points = []
             for date_col, stock_val in sorted_stock_values:
-                if global_D1_date <= date_col <= global_DL_date:
-                    relevant_movements.append(stock_val)
+                # date_col is already normalized DD-MMM-YY
+                dt = parse_date_for_comparison_global(date_col)
+                d1_dt = parse_date_for_comparison_global(global_D1_date)
+                dl_dt = parse_date_for_comparison_global(global_DL_date)
+                if d1_dt <= dt <= dl_dt:
+                    relevant_data_points.append((dt, stock_val))
+
+            # Sort by actual date objects
+            relevant_data_points.sort(key=lambda x: x[0])
+            relevant_movements = [x[1] for x in relevant_data_points]
 
             if len(relevant_movements) >= 2:
                 for i in range(1, len(relevant_movements)):
@@ -1443,7 +1469,8 @@ async def upload_todays_data(
         # Normalize the new date for comparison
         # Use the universal parser for better compatibility
         new_dt = parse_date_for_comparison_global(new_date_column)
-        print(f"📅 New date to upload: '{new_date_column}' -> parsed: {new_dt}")
+        normalized_new_date = normalize_date_key_global(new_date_column)
+        print(f"📅 New date to upload: '{new_date_column}' -> parsed: {new_dt}, normalized: {normalized_new_date}")
         
         # Get existing dates and filter by active range (D1 to DL)
         existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1, "D1_date": 1}).to_list(1000)
@@ -1469,7 +1496,6 @@ async def upload_todays_data(
                         existing_dates_set.add(curr_dt)
         
         if existing_dates_set:
-            
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -1602,19 +1628,10 @@ async def upload_todays_data(
                 
                 # Calculate new number of days with updated date range
                 try:
-                    def parse_date_string(date_str):
-                        import re
-                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                        if match:
-                            day, month_name, year_suffix = match.groups()
-                            year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
-                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
-                        return None
+                    d1_datetime = parse_date_for_comparison_global(old_D1_date) if old_D1_date else None
+                    new_dl_datetime = parse_date_for_comparison_global(new_date_column)
                     
-                    d1_datetime = parse_date_string(old_D1_date) if old_D1_date else None
-                    new_dl_datetime = parse_date_string(new_date_column)
-                    
-                    if d1_datetime and new_dl_datetime:
+                    if d1_datetime and new_dl_datetime and d1_datetime != datetime.min:
                         days_analyzed = (new_dl_datetime - d1_datetime).days + 1
                     else:
                         days_analyzed = existing_brand.get('days_analyzed', 1) + 1
@@ -1630,7 +1647,7 @@ async def upload_todays_data(
                 current_daily_sales = existing_brand.get('daily_sales', {}) or {}
 
                 # Sort all dates (existing + new) to track movements accurately
-                all_stock_dates = sorted(current_daily_sales.keys(), key=lambda d: parse_date_string(d) or datetime.min)
+                all_stock_dates = sorted(current_daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
 
                 total_sales_qty = 0
                 total_purchases_qty = 0
@@ -2502,7 +2519,7 @@ async def get_database_view():
                 for date_key in daily_sales.keys():
                     curr_dt = parse_date_for_comparison_global(date_key)
                     if d1_dt <= curr_dt <= dl_dt:
-                        all_dates.add(str(date_key))
+                        all_dates.add(normalize_date_key_global(date_key))
         
         # Prepare clean data for frontend (remove MongoDB ObjectId if present)
         clean_data = []
@@ -2565,41 +2582,42 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         period_info = {}
         
         # First, process current data (highest priority)
+        # We group all records in liquor_data into a single active period
         if current_data:
+            active_d1s = []
+            active_dls = []
             for record in current_data:
-                d1_date = record.get('D1_date')
-                dl_date = record.get('DL_date')
-                
-                # Skip records with None, 'N/A', or empty dates
-                if d1_date and dl_date and d1_date != 'N/A' and dl_date != 'N/A':
-                    d1_parsed = parse_date_for_sorting(d1_date)
-                    dl_parsed = parse_date_for_sorting(dl_date)
-                    
-                    if d1_parsed != datetime.min and dl_parsed != datetime.min:
-                        d1_month = d1_parsed.strftime("%b")
-                        dl_month = dl_parsed.strftime("%b")
-                        year = dl_parsed.strftime("%Y")
-                        
-                        if d1_month == dl_month:
-                            period_display = f"{d1_month} {year}"
-                        else:
-                            period_display = f"{d1_month}-{dl_month} {year}"
+                d1_parsed = parse_date_for_sorting(record.get('D1_date'))
+                dl_parsed = parse_date_for_sorting(record.get('DL_date'))
+                if d1_parsed != datetime.min: active_d1s.append(d1_parsed)
+                if dl_parsed != datetime.min: active_dls.append(dl_parsed)
 
-                        # Use exact dates as internal key to prevent collisions
-                        period_label = f"{d1_date}_{dl_date}"
-                        
-                        if period_label not in period_to_data:
-                            period_to_data[period_label] = []
-                            period_info[period_label] = {
-                                'display': period_display,
-                                'd1': d1_parsed,
-                                'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
-                                'source': 'current'
-                            }
-                        
-                        period_to_data[period_label].append(record)
+            if active_d1s and active_dls:
+                min_d1 = min(active_d1s)
+                max_dl = max(active_dls)
+                
+                d1_month = min_d1.strftime("%b")
+                dl_month = max_dl.strftime("%b")
+                year = max_dl.strftime("%Y")
+
+                if d1_month == dl_month:
+                    period_display = f"{d1_month} {year}"
+                else:
+                    period_display = f"{d1_month}-{dl_month} {year}"
+
+                norm_d1 = min_d1.strftime("%d-%b-%y")
+                norm_dl = max_dl.strftime("%d-%b-%y")
+                period_label = f"{norm_d1}_{norm_dl}"
+
+                period_to_data[period_label] = current_data
+                period_info[period_label] = {
+                    'display': period_display,
+                    'd1': min_d1,
+                    'dl': max_dl,
+                    'd1_str': norm_d1,
+                    'dl_str': norm_dl,
+                    'source': 'current'
+                }
         
         # Then, process historical backups (only if period not already in current data)
         periods_seen_in_backups = set()
@@ -2629,8 +2647,10 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                         else:
                             period_display = f"{d1_month}-{dl_month} {year}"
 
-                        # Use exact dates as internal key
-                        period_label = f"{d1_date}_{dl_date}"
+                        # Use normalized dates as internal key
+                        norm_d1 = normalize_date_key_global(d1_date)
+                        norm_dl = normalize_date_key_global(dl_date)
+                        period_label = f"{norm_d1}_{norm_dl}"
                         
                         backup_periods[period_label].append(record)
                         
@@ -2639,8 +2659,8 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                                 'display': period_display,
                                 'd1': d1_parsed,
                                 'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
+                                'd1_str': norm_d1,
+                                'dl_str': norm_dl,
                                 'source': 'historical'
                             }
             
@@ -2664,46 +2684,46 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         for period_label, records in period_to_data.items():
             # Calculate daily sales from stock positions
             # Sales = Previous Day Stock - Current Day Stock
-            all_daily_sales = {}
+            # We use a set of normalized dates found across all records in this period
+            period_dates_set = set()
             
             for record in records:
                 daily_sales = record.get('daily_sales', {}) or {}
-                # Filter to only include dates between record's D1 and DL
-                # Use the new global parser for reliability
                 d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
                 dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
 
-                for date_str, stock_qty in daily_sales.items():
+                for date_str in daily_sales.keys():
                     curr_dt = parse_date_for_comparison_global(date_str)
                     if d1_dt <= curr_dt <= dl_dt:
-                        if date_str not in all_daily_sales:
-                            all_daily_sales[date_str] = []
-                        all_daily_sales[date_str].append(stock_qty)
+                        period_dates_set.add(normalize_date_key_global(date_str))
             
-            # Calculate daily sales quantities by subtracting consecutive days
+            # Sort all dates found in this period chronologically
+            sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
+
+            # Calculate daily sales quantities by summing all individual brand decreases between consecutive days
             daily_sales_qty = {}
-            sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
             
             for i, date in enumerate(sorted_dates):
                 if i == 0:
                     # First day has no previous day, so sales = 0
                     daily_sales_qty[date] = 0
                 else:
-                    # Calculate daily sales by summing all individual brand decreases
-                    # This correctly accounts for days where some brands had purchases and others had sales
                     prev_date = sorted_dates[i-1]
                     day_sales = 0
 
-                    # Normalize dates for robust lookup
-                    norm_prev = normalize_date_key_global(prev_date)
-                    norm_curr = normalize_date_key_global(date)
-
                     for record in records:
                         brand_daily = record.get('daily_sales', {}) or {}
-                        p_val = brand_daily.get(norm_prev, 0)
-                        c_val = brand_daily.get(norm_curr, 0)
-                        if c_val < p_val:
-                            day_sales += (p_val - c_val)
+                        # Use normalized keys for lookup
+                        # We must normalize because keys in DB might not be perfectly uniform
+                        brand_daily_normalized = {normalize_date_key_global(k): v for k, v in brand_daily.items()}
+
+                        p_val = brand_daily_normalized.get(prev_date)
+                        c_val = brand_daily_normalized.get(date)
+
+                        # Only calculate if we have both values
+                        if p_val is not None and c_val is not None:
+                            if c_val < p_val:
+                                day_sales += (p_val - c_val)
 
                     daily_sales_qty[date] = day_sales
             
@@ -3590,13 +3610,28 @@ async def fix_database_integrity():
             record_updated = False
             update_data = {}
             
-            # Fix 1: Ensure daily_sales is a dict, not null
+            # Fix 1: Ensure daily_sales is a dict, not null, and normalize keys
             daily_sales = record.get('daily_sales')
             if daily_sales is None:
                 issues_found.append(f"Brand '{brand_name}': daily_sales was null")
-                update_data['daily_sales'] = {}
+                daily_sales = {}
+                update_data['daily_sales'] = daily_sales
                 record_updated = True
             
+            if isinstance(daily_sales, dict):
+                normalized_sales = {}
+                needs_normalization = False
+                for k, v in daily_sales.items():
+                    norm_k = normalize_date_key_global(k)
+                    if norm_k != k:
+                        needs_normalization = True
+                    normalized_sales[norm_k] = v
+
+                if needs_normalization:
+                    issues_found.append(f"Brand '{brand_name}': daily_sales had unnormalized keys")
+                    update_data['daily_sales'] = normalized_sales
+                    record_updated = True
+
             # Fix 2: Ensure numeric fields are not None
             numeric_fields = {
                 'current_stock_qty': 0,
@@ -3618,6 +3653,16 @@ async def fix_database_integrity():
                     update_data[field] = default_value
                     record_updated = True
             
+            # Fix 3: Normalize D1_date and DL_date
+            for date_field in ['D1_date', 'DL_date']:
+                orig_val = record.get(date_field)
+                if orig_val and orig_val != 'N/A':
+                    norm_val = normalize_date_key_global(orig_val)
+                    if norm_val != orig_val:
+                        issues_found.append(f"Brand '{brand_name}': {date_field} unnormalized ({orig_val})")
+                        update_data[date_field] = norm_val
+                        record_updated = True
+
             # Apply updates if any
             if record_updated and brand_id:
                 await collections.liquor_data.update_one(
