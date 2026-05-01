@@ -2714,30 +2714,39 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         current_data = await collections.liquor_data.find().to_list(10000)
         
         # 2. Get HISTORICAL data from stock_backups - Include both manual and auto-reset types
-        # These represent complete sales periods that were committed to history
         backups = await collections.stock_backups.find({
             "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
         }).sort("backup_timestamp", -1).to_list(100)
         
-        # Create a dict to store data by period - use most recent backup only
+        # Create a dict to store data by period
         period_to_data = {}
         period_info = {}
         
-        # First, process current data (highest priority)
-        # We group all records in liquor_data into a single active period
+        # First, process current data
         if current_data:
             active_d1s = []
             active_dls = []
+            all_current_dates = []
+
             for record in current_data:
+                # Collect D1/DL
                 d1_parsed = parse_date_for_sorting(record.get('D1_date'))
                 dl_parsed = parse_date_for_sorting(record.get('DL_date'))
                 if d1_parsed != datetime.min: active_d1s.append(d1_parsed)
                 if dl_parsed != datetime.min: active_dls.append(dl_parsed)
-
-            if active_d1s and active_dls:
-                min_d1 = min(active_d1s)
-                max_dl = max(active_dls)
                 
+                # Also collect ALL dates from daily_sales to ensure we don't miss anything due to un-updated D1/DL fields
+                daily_sales = record.get('daily_sales', {}) or {}
+                for d_str in daily_sales.keys():
+                    dt = parse_date_for_sorting(d_str)
+                    if dt != datetime.min:
+                        all_current_dates.append(dt)
+
+            if all_current_dates:
+                # Use absolute min/max dates found in all current records for the grouping
+                min_d1 = min(all_current_dates)
+                max_dl = max(all_current_dates)
+
                 d1_month = min_d1.strftime("%b")
                 dl_month = max_dl.strftime("%b")
                 year = max_dl.strftime("%Y")
@@ -2747,13 +2756,13 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 else:
                     period_display = f"{d1_month}-{dl_month} {year}"
 
-                norm_d1 = min_d1.strftime("%d-%b-%y")
-                norm_dl = max_dl.strftime("%d-%b-%y")
+                norm_d1 = normalize_date_key_global(min_d1.strftime("%d-%b-%y"))
+                norm_dl = normalize_date_key_global(max_dl.strftime("%d-%b-%y"))
                 period_label = f"{norm_d1}_{norm_dl}"
 
                 period_to_data[period_label] = current_data
                 period_info[period_label] = {
-                    'display': period_display,
+                    'display': f"{period_display} (Current)",
                     'd1': min_d1,
                     'dl': max_dl,
                     'd1_str': norm_d1,
@@ -2825,44 +2834,45 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         
         for period_label, records in period_to_data.items():
             # Calculate daily sales from stock positions
-            # Sales = Previous Day Stock - Current Day Stock
-            # We use a set of normalized dates found across all records in this period
             period_dates_set = set()
+
+            p_info = period_info.get(period_label)
+            if not p_info: continue
+
+            p_min_d1 = p_info['d1']
+            p_max_dl = p_info['dl']
             
             for record in records:
                 daily_sales = record.get('daily_sales', {}) or {}
-                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
-                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
-
                 for date_str in daily_sales.keys():
                     curr_dt = parse_date_for_comparison_global(date_str)
-                    if d1_dt <= curr_dt <= dl_dt:
+                    # Use the period's overall bounds to ensure we capture all available dates for the group
+                    if p_min_d1 <= curr_dt <= p_max_dl:
                         period_dates_set.add(normalize_date_key_global(date_str))
 
             # Sort all dates found in this period chronologically
             sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
 
-            # Calculate daily sales quantities by summing all individual brand decreases between consecutive days
+            # Calculate daily sales quantities
             daily_sales_qty = {}
             
+            # Create a normalized version of all brand daily sales once to avoid repeated normalization in loops
+            normalized_records_sales = []
+            for record in records:
+                brand_daily = record.get('daily_sales', {}) or {}
+                normalized_records_sales.append({normalize_date_key_global(k): v for k, v in brand_daily.items()})
+
             for i, date in enumerate(sorted_dates):
                 if i == 0:
-                    # First day has no previous day, so sales = 0
                     daily_sales_qty[date] = 0
                 else:
                     prev_date = sorted_dates[i-1]
                     day_sales = 0
 
-                    for record in records:
-                        brand_daily = record.get('daily_sales', {}) or {}
-                        # Use normalized keys for lookup
-                        # We must normalize because keys in DB might not be perfectly uniform
-                        brand_daily_normalized = {normalize_date_key_global(k): v for k, v in brand_daily.items()}
-
+                    for brand_daily_normalized in normalized_records_sales:
                         p_val = brand_daily_normalized.get(prev_date)
                         c_val = brand_daily_normalized.get(date)
 
-                        # Only calculate if we have both values
                         if p_val is not None and c_val is not None:
                             if c_val < p_val:
                                 day_sales += (p_val - c_val)
