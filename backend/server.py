@@ -1485,7 +1485,7 @@ async def upload_todays_data(
             if new_dt != datetime.min and new_dt == dl_dt:
                 matching_dates.append(f"Current DL_date: {record.get('DL_date')}")
                 existing_dates_set.add(dl_dt)
-            
+
             # Also check if new date exists in daily_sales WITHIN the active range
             daily_sales = record.get('daily_sales', {}) or {}
             for date_key in daily_sales.keys():
@@ -2724,23 +2724,28 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         
         # First, process current data
         if current_data:
-            active_d1s = []
-            active_dls = []
             all_current_dates = []
 
             for record in current_data:
-                # Collect D1/DL
-                d1_parsed = parse_date_for_sorting(record.get('D1_date'))
-                dl_parsed = parse_date_for_sorting(record.get('DL_date'))
-                if d1_parsed != datetime.min: active_d1s.append(d1_parsed)
-                if dl_parsed != datetime.min: active_dls.append(dl_parsed)
+                # Collect D1/DL fields
+                d1_val = record.get('D1_date')
+                dl_val = record.get('DL_date')
                 
-                # Also collect ALL dates from daily_sales to ensure we don't miss anything due to un-updated D1/DL fields
+                d1_dt = parse_date_for_sorting(d1_val) if d1_val and d1_val != 'N/A' else datetime.min
+                dl_dt = parse_date_for_sorting(dl_val) if dl_val and dl_val != 'N/A' else datetime.min
+
+                if d1_dt != datetime.min: all_current_dates.append(d1_dt)
+                if dl_dt != datetime.min: all_current_dates.append(dl_dt)
+
+                # Also collect dates from daily_sales, but only those that are "near" the DL date
+                # to avoid including ancient ghost data in the range (e.g. from previous years)
                 daily_sales = record.get('daily_sales', {}) or {}
                 for d_str in daily_sales.keys():
                     dt = parse_date_for_sorting(d_str)
                     if dt != datetime.min:
-                        all_current_dates.append(dt)
+                        # Only include if no DL set, or within 60 days of current DL
+                        if dl_dt == datetime.min or abs((dt - dl_dt).days) < 60:
+                            all_current_dates.append(dt)
 
             if all_current_dates:
                 # Use absolute min/max dates found in all current records for the grouping
@@ -2756,9 +2761,10 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 else:
                     period_display = f"{d1_month}-{dl_month} {year}"
 
-                norm_d1 = normalize_date_key_global(min_d1.strftime("%d-%b-%y"))
-                norm_dl = normalize_date_key_global(max_dl.strftime("%d-%b-%y"))
-                period_label = f"{norm_d1}_{norm_dl}"
+                norm_d1 = min_d1.strftime("%d-%b-%y")
+                norm_dl = max_dl.strftime("%d-%b-%y")
+                # Use a unique prefix to ensure the current period is always distinct
+                period_label = f"current_{norm_d1}_{norm_dl}"
 
                 period_to_data[period_label] = current_data
                 period_info[period_label] = {
