@@ -2724,57 +2724,57 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         
         # First, process current data
         if current_data:
-            all_current_dates = []
-
+            # 1. Collect ALL possible dates from the current active records
+            raw_dates = []
             for record in current_data:
-                # Collect D1/DL fields
-                d1_val = record.get('D1_date')
-                dl_val = record.get('DL_date')
+                # Collect from D1/DL fields
+                for f in ['D1_date', 'DL_date']:
+                    val = record.get(f)
+                    if val and val != 'N/A':
+                        dt = parse_date_for_sorting(val)
+                        if dt != datetime.min: raw_dates.append(dt)
                 
-                d1_dt = parse_date_for_sorting(d1_val) if d1_val and d1_val != 'N/A' else datetime.min
-                dl_dt = parse_date_for_sorting(dl_val) if dl_val and dl_val != 'N/A' else datetime.min
-
-                if d1_dt != datetime.min: all_current_dates.append(d1_dt)
-                if dl_dt != datetime.min: all_current_dates.append(dl_dt)
-
-                # Also collect dates from daily_sales, but only those that are "near" the DL date
-                # to avoid including ancient ghost data in the range (e.g. from previous years)
+                # Collect from daily_sales keys
                 daily_sales = record.get('daily_sales', {}) or {}
                 for d_str in daily_sales.keys():
                     dt = parse_date_for_sorting(d_str)
-                    if dt != datetime.min:
-                        # Only include if no DL set, or within 60 days of current DL
-                        if dl_dt == datetime.min or abs((dt - dl_dt).days) < 60:
-                            all_current_dates.append(dt)
+                    if dt != datetime.min: raw_dates.append(dt)
 
-            if all_current_dates:
-                # Use absolute min/max dates found in all current records for the grouping
-                min_d1 = min(all_current_dates)
-                max_dl = max(all_current_dates)
+            if raw_dates:
+                # 2. Determine the anchor point (the most recent date)
+                latest_date = max(raw_dates)
 
-                d1_month = min_d1.strftime("%b")
-                dl_month = max_dl.strftime("%b")
-                year = max_dl.strftime("%Y")
+                # 3. Filter to keep only dates within a reasonable window of the latest activity (e.g., 60 days)
+                # This prunes ancient ghost data that stretches the trendline range
+                active_dates = [d for d in raw_dates if (latest_date - d).days <= 60]
 
-                if d1_month == dl_month:
-                    period_display = f"{d1_month} {year}"
-                else:
-                    period_display = f"{d1_month}-{dl_month} {year}"
+                if active_dates:
+                    min_d1 = min(active_dates)
+                    max_dl = max(active_dates)
 
-                norm_d1 = min_d1.strftime("%d-%b-%y")
-                norm_dl = max_dl.strftime("%d-%b-%y")
-                # Use a unique prefix to ensure the current period is always distinct
-                period_label = f"current_{norm_d1}_{norm_dl}"
+                    d1_month = min_d1.strftime("%b")
+                    dl_month = max_dl.strftime("%b")
+                    year = max_dl.strftime("%Y")
 
-                period_to_data[period_label] = current_data
-                period_info[period_label] = {
-                    'display': f"{period_display} (Current)",
-                    'd1': min_d1,
-                    'dl': max_dl,
-                    'd1_str': norm_d1,
-                    'dl_str': norm_dl,
-                    'source': 'current'
-                }
+                    if d1_month == dl_month:
+                        period_display = f"{d1_month} {year}"
+                    else:
+                        period_display = f"{d1_month}-{dl_month} {year}"
+
+                    norm_d1 = min_d1.strftime("%d-%b-%y")
+                    norm_dl = max_dl.strftime("%d-%b-%y")
+
+                    # Group all current records into this single active period
+                    period_label = "current_active_period"
+                    period_to_data[period_label] = current_data
+                    period_info[period_label] = {
+                        'display': f"{period_display} (Current)",
+                        'd1': min_d1,
+                        'dl': max_dl,
+                        'd1_str': norm_d1,
+                        'dl_str': norm_dl,
+                        'source': 'current'
+                    }
         
         # Then, process historical backups (only if period not already in current data)
         periods_seen_in_backups = set()
