@@ -70,9 +70,9 @@ def parse_date_for_comparison_global(date_str):
         match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})[-/\s]?(\d{0,4})', date_str, re.IGNORECASE)
         if match:
             day, month_name, year_suffix = match.groups()
-            # Normalize to 4-digit year, defaulting to 2026 if missing
+            # Normalize to 4-digit year, defaulting to str(datetime.now().year) if missing
             if not year_suffix or len(year_suffix) < 2:
-                year = '2026'
+                year = str(datetime.now().year)
             elif len(year_suffix) == 2:
                 year = f"20{year_suffix}"
             else:
@@ -100,7 +100,7 @@ def parse_date_for_comparison_global(date_str):
         match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})$', date_str, re.IGNORECASE)
         if match:
             day, month_name = match.groups()
-            return datetime.strptime(f"{day}-{month_name}-2026", "%d-%b-%Y")
+            return datetime.strptime(f"{day}-{month_name}-" + str(datetime.now().year) + "", "%d-%b-%Y")
 
         return datetime.min
     except:
@@ -281,7 +281,7 @@ class HistoricalSalesAverage(BaseModel):
     """Model for storing historical sales averages before reset"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     brand_name: str
-    month_year: str  # Format: "Sep-2025"
+    month_year: str  # Format: "Sep-str(datetime.now().year - 1)"
     average_daily_sales_qty: float  # Average bottles sold per day
     average_daily_sales_value: float  # Average revenue per day
     total_sales_quantity: float  # Total bottles sold in the month
@@ -675,7 +675,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',     # 20/09/25, 03-10-25
                 r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}',      # 20-Sep-25, 03-Oct-25  
                 r'\w{3}[-/]\d{1,2}[-/]?\d{0,4}',      # Sep-20-25, Oct-03-25
-                r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',       # 2025-09-20, 2025-10-03
+                r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',       # str(datetime.now().year - 1)-09-20, str(datetime.now().year - 1)-10-03
                 r'\d{1,2}\s+\w+\s+\d{2,4}',          # 20 Sep 25, 03 Oct 25
             ]
             
@@ -773,9 +773,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 
                 # Handle year - be strict about valid years
                 if not year_suffix:
-                    year = '2025'
+                    year = str(datetime.now().year)
                 elif len(year_suffix) == 2 and year_suffix.isdigit():
-                    year = f"20{year_suffix}"  # 25 -> 2025
+                    year = f"20{year_suffix}"  # 25 -> str(datetime.now().year - 1)
                 elif len(year_suffix) == 4 and year_suffix.isdigit():
                     year = year_suffix
                 else:
@@ -1072,7 +1072,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
                     if match:
                         day, month_name, year_suffix = match.groups()
-                        year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                        year = str(datetime.now().year) if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
                         return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
                     return None
                 
@@ -1438,9 +1438,9 @@ async def upload_todays_data(
                 
                 # Parse various date formats
                 patterns = [
-                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
-                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
-                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
+                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-str(datetime.now().year - 1)
+                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # str(datetime.now().year - 1)-10-04
+                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/str(datetime.now().year - 1)
                 ]
                 
                 for pattern, fmt in patterns:
@@ -2108,11 +2108,11 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
-                # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                # Second try: dates without year (21-Sep, 22-Sep) - assume str(datetime.now().year - 1)
                 match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                 if match:
                     day, month_name = match.groups()
-                    year = "2025"  # Default to 2025
+                    year = str(datetime.now().year)  # Default to str(datetime.now().year - 1)
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
@@ -2700,13 +2700,13 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
     """
     Get sales trends with D1-DL sales periods from current AND historical data
     period: 'quarterly' (last 3 sales periods), 'yearly' (last 12 periods), 'single' (specific period)
-    sales_month: Format 'Sep-Oct 2025' - required when period='single'
+    sales_month: Format 'Sep-Oct str(datetime.now().year - 1)' - required when period='single'
     Returns: dict with 'series' (list of sales periods with daily data from current + history)
     """
     try:
         from collections import defaultdict
         import re
-        
+
         # Use the robust global parser for consistent date comparison across history
         parse_date_for_sorting = parse_date_for_comparison_global
         
@@ -4673,7 +4673,7 @@ async def calculate_and_store_historical_averages(source_records=None):
                 if isinstance(d1_date, datetime):
                     d1_dt = d1_date
                 else:
-                    # Try ISO format (2025-10-19)
+                    # Try ISO format (str(datetime.now().year - 1)-10-19)
                     try:
                         d1_dt = datetime.fromisoformat(str(d1_date).replace(' ', 'T'))
                     except:
@@ -4688,7 +4688,7 @@ async def calculate_and_store_historical_averages(source_records=None):
                                 d1_dt = None  # Already formatted
                 
                 if d1_dt:
-                    month_year = d1_dt.strftime("%b-%Y")  # Format as "Oct-2025"
+                    month_year = d1_dt.strftime("%b-%Y")  # Format as "Oct-str(datetime.now().year - 1)"
                 elif 'month_year' not in locals():
                     month_year = datetime.now().strftime("%b-%Y")
             else:
@@ -4819,7 +4819,7 @@ async def get_projected_data_from_historical():
             else:
                 # Compare months and keep the most recent
                 existing_month = brand_latest_data[brand_name].get('month_year', '')
-                if month_year > existing_month:  # Newer month (string comparison works for "Oct-2025" > "Sep-2025")
+                if month_year > existing_month:  # Newer month (string comparison works for "Oct-str(datetime.now().year - 1)" > "Sep-str(datetime.now().year - 1)")
                     brand_latest_data[brand_name] = record
         
         # Convert back to list (now with unique brands only)
@@ -5252,7 +5252,7 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(d1_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                year = str(datetime.now().year) if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
                 d1_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 d1_parsed = None
@@ -5261,7 +5261,7 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(dl_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                year = str(datetime.now().year) if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
                 dl_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 dl_parsed = None
@@ -5618,20 +5618,20 @@ async def generate_excel_report(request_data: dict = None):
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
-                    # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                    # Second try: dates without year (21-Sep, 22-Sep) - assume str(datetime.now().year - 1)
                     match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                     if match:
                         day, month_name = match.groups()
-                        year = "2025"  # Default to 2025 for dates without year
+                        year = str(datetime.now().year)  # Default to str(datetime.now().year - 1) for dates without year
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
-                    # Third try: ISO format (2025-10-04)
+                    # Third try: ISO format (str(datetime.now().year - 1)-10-04)
                     match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
                     if match:
                         return datetime.strptime(match.group(0), "%Y-%m-%d")
                     
-                    # Fourth try: numeric dates (04-10-25, 04/10/2025)
+                    # Fourth try: numeric dates (04-10-25, 04/10/str(datetime.now().year - 1))
                     match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
                     if match:
                         day, month, year = match.groups()
