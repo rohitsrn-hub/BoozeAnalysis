@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import traceback
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -45,9 +46,6 @@ LIQUOR_PREFIX = "liquor_"  # Prefix for all liquor app collections
 def parse_date_for_comparison_global(date_str):
     """Universal date parser for filtering data points within D1-DL bounds"""
     try:
-        import re
-        from datetime import datetime
-
         if not date_str or date_str == 'N/A':
             return datetime.min
 
@@ -138,6 +136,33 @@ def normalize_date_key_global(date_str):
         logging.warning(f"Could not normalize date '{date_str}': {e}")
 
     return str(date_str)
+
+def calculate_movements_logic(daily_sales_dict, d1_dt, dl_dt):
+    """
+    Centralized helper to calculate total sales and purchases from daily stock movements.
+    Uses the 'Sum of Decreases' method.
+    """
+    relevant_dates = []
+    for k, v in daily_sales_dict.items():
+        dt = parse_date_for_comparison_global(k)
+        if dt != datetime.min and d1_dt <= dt <= dl_dt:
+            relevant_dates.append((dt, v))
+
+    relevant_dates.sort(key=lambda x: x[0])
+
+    total_sales = 0
+    total_purchases = 0
+
+    if len(relevant_dates) >= 2:
+        for i in range(1, len(relevant_dates)):
+            prev_qty = relevant_dates[i-1][1]
+            curr_qty = relevant_dates[i][1]
+            if curr_qty > prev_qty:
+                total_purchases += (curr_qty - prev_qty)
+            elif curr_qty < prev_qty:
+                total_sales += (prev_qty - curr_qty)
+
+    return float(total_sales), float(total_purchases)
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -1028,39 +1053,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             print(f"  {brand_name}: D1={D1_date}({D1_stock}), DL={DL_date}({DL_stock})")
             
             # Calculate total sales and purchases between D1 and DL by observing all stock movements
-            # Any increase in stock between consecutive dates is treated as a purchase/restock
-            total_sales_qty = 0
-            total_purchases_qty = 0
-
-            # Use the sorted_stock_values (date_col, stock_val) for accurate movement tracking
-            # But filter to only include dates between global_D1_date and global_DL_date
-            # CRITICAL: We must use chronological sorting, not string sorting for keys
-            relevant_data_points = []
-            for date_col, stock_val in sorted_stock_values:
-                # date_col is already normalized DD-MMM-YY
-                dt = parse_date_for_comparison_global(date_col)
-                d1_dt = parse_date_for_comparison_global(global_D1_date)
-                dl_dt = parse_date_for_comparison_global(global_DL_date)
-                if d1_dt <= dt <= dl_dt:
-                    relevant_data_points.append((dt, stock_val))
-
-            # Sort by actual date objects
-            relevant_data_points.sort(key=lambda x: x[0])
-            relevant_movements = [x[1] for x in relevant_data_points]
-
-            if len(relevant_movements) >= 2:
-                for i in range(1, len(relevant_movements)):
-                    prev = relevant_movements[i-1]
-                    curr = relevant_movements[i]
-                    if curr > prev:
-                        # Stock increased -> Purchase
-                        total_purchases_qty += (curr - prev)
-                    elif curr < prev:
-                        # Stock decreased -> Sale
-                        total_sales_qty += (prev - curr)
-            else:
-                # Fallback to simple D1-DL if only one date or movement parsing fails
-                total_sales_qty = max(0, D1_stock - DL_stock)
+            d1_dt = parse_date_for_comparison_global(global_D1_date)
+            dl_dt = parse_date_for_comparison_global(global_DL_date)
+            total_sales_qty, total_purchases_qty = calculate_movements_logic(daily_stock_data, d1_dt, dl_dt)
             
             # Calculate number of days between D1 and DL using actual date arithmetic
             try:
@@ -1642,25 +1637,9 @@ async def upload_todays_data(
                     days_analyzed = existing_brand.get('days_analyzed', 1) + 1
                 
                 # Calculate total sales by observing all stock movements including the new one
-                # current_daily_sales already contains the new date point from the logic above
-
-                # Sort all dates (existing + new) to track movements accurately
-                all_stock_dates = sorted(current_daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
-
-                total_sales_qty = 0
-                total_purchases_qty = 0
-
-                if len(all_stock_dates) >= 2:
-                    for i in range(1, len(all_stock_dates)):
-                        prev_qty = current_daily_sales.get(all_stock_dates[i-1], 0)
-                        curr_qty = current_daily_sales.get(all_stock_dates[i], 0)
-                        if curr_qty > prev_qty:
-                            total_purchases_qty += (curr_qty - prev_qty)
-                        elif curr_qty < prev_qty:
-                            total_sales_qty += (prev_qty - curr_qty)
-                else:
-                    # Fallback for fresh/small datasets
-                    total_sales_qty = max(0, D1_stock - new_stock_qty)
+                d1_dt = parse_date_for_comparison_global(old_D1_date) if old_D1_date else datetime.min
+                dl_dt = parse_date_for_comparison_global(new_date_column)
+                total_sales_qty, total_purchases_qty = calculate_movements_logic(current_daily_sales, d1_dt, dl_dt)
 
                 avg_daily_sales_qty = total_sales_qty / days_analyzed if days_analyzed > 0 else 0
                 monthly_sales_qty = avg_daily_sales_qty * 24
@@ -2548,8 +2527,8 @@ async def get_database_view():
         }
         
     except Exception as e:
-        logging.error(f"Error in database integrity fix: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fixing database: {str(e)}")
+        logging.error(f"Error in database view: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching database view: {str(e)}")
 
 @api_router.post("/admin/migrate-historical-data")
 async def migrate_historical_data():
@@ -2573,27 +2552,9 @@ async def migrate_historical_data():
                 d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
                 dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
 
-                # Filter and sort dates
-                relevant_dates = []
-                for k in daily_sales.keys():
-                    dt = parse_date_for_comparison_global(k)
-                    if d1_dt <= dt <= dl_dt:
-                        relevant_dates.append((dt, k))
+                total_sales, total_purchases = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
 
-                relevant_dates.sort(key=lambda x: x[0])
-
-                total_sales = 0
-                total_purchases = 0
-
-                if len(relevant_dates) >= 2:
-                    for i in range(1, len(relevant_dates)):
-                        prev_qty = daily_sales.get(relevant_dates[i-1][1], 0)
-                        curr_qty = daily_sales.get(relevant_dates[i][1], 0)
-                        if curr_qty > prev_qty:
-                            total_purchases += (curr_qty - prev_qty)
-                        elif curr_qty < prev_qty:
-                            total_sales += (prev_qty - curr_qty)
-
+                if total_sales > 0 or total_purchases > 0:
                     # Update record
                     days = record.get('days_analyzed', 1)
                     avg_qty = total_sales / days if days > 0 else 0
@@ -2627,22 +2588,9 @@ async def migrate_historical_data():
                     d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
                     dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
 
-                    relevant_dates = []
-                    for k in daily_sales.keys():
-                        dt = parse_date_for_comparison_global(k)
-                        if d1_dt <= dt <= dl_dt:
-                            relevant_dates.append((dt, k))
-                    relevant_dates.sort(key=lambda x: x[0])
+                    t_sales, t_purchases = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
 
-                    if len(relevant_dates) >= 2:
-                        t_sales = 0
-                        t_purchases = 0
-                        for i in range(1, len(relevant_dates)):
-                            p_q = daily_sales.get(relevant_dates[i-1][1], 0)
-                            c_q = daily_sales.get(relevant_dates[i][1], 0)
-                            if c_q > p_q: t_purchases += (c_q - p_q)
-                            elif c_q < p_q: t_sales += (p_q - c_q)
-
+                    if t_sales > 0 or t_purchases > 0:
                         record['total_sales_qty'] = float(t_sales)
                         record['total_purchases_qty'] = float(t_purchases)
 
@@ -2860,32 +2808,36 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
 
             # Sort all dates found in this period chronologically
             sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
-
-            # Calculate daily sales quantities
-            daily_sales_qty = {}
             
+            # Calculate daily sales quantities
+            daily_sales_qty = {d: 0 for d in sorted_dates}
+
             # Create a normalized version of all brand daily sales once to avoid repeated normalization in loops
             normalized_records_sales = []
             for record in records:
                 brand_daily = record.get('daily_sales', {}) or {}
-                normalized_records_sales.append({normalize_date_key_global(k): v for k, v in brand_daily.items()})
+                if brand_daily:
+                    normalized_records_sales.append({normalize_date_key_global(k): v for k, v in brand_daily.items()})
 
-            for i, date in enumerate(sorted_dates):
-                if i == 0:
-                    daily_sales_qty[date] = 0
-                else:
-                    prev_date = sorted_dates[i-1]
-                    day_sales = 0
+            for brand_daily_normalized in normalized_records_sales:
+                # Sort this brand's report dates chronologically
+                brand_report_dates = sorted(brand_daily_normalized.keys(), key=lambda d: parse_date_for_sorting(d))
 
-                    for brand_daily_normalized in normalized_records_sales:
-                        p_val = brand_daily_normalized.get(prev_date)
-                        c_val = brand_daily_normalized.get(date)
+                if len(brand_report_dates) < 2:
+                    continue
 
-                        if p_val is not None and c_val is not None:
-                            if c_val < p_val:
-                                day_sales += (p_val - c_val)
+                for i in range(1, len(brand_report_dates)):
+                    curr_date = brand_report_dates[i]
+                    prev_date = brand_report_dates[i-1]
 
-                    daily_sales_qty[date] = day_sales
+                    p_val = brand_daily_normalized[prev_date]
+                    c_val = brand_daily_normalized[curr_date]
+
+                    if c_val < p_val:
+                        # Stock decreased -> Sale. Attribute to curr_date.
+                        # Ensure curr_date is actually in our period's sorted_dates
+                        if curr_date in daily_sales_qty:
+                            daily_sales_qty[curr_date] += (p_val - c_val)
             
             # Create sequential day numbers for chart based on actual date difference from D1
             day_data = []
