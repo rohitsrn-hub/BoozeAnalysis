@@ -1642,9 +1642,7 @@ async def upload_todays_data(
                     days_analyzed = existing_brand.get('days_analyzed', 1) + 1
                 
                 # Calculate total sales by observing all stock movements including the new one
-                # Fetch all previous stock values and add the new one
-                # Normalize existing daily_sales keys to consistent format
-                current_daily_sales = existing_brand.get('daily_sales', {}) or {}
+                # current_daily_sales already contains the new date point from the logic above
 
                 # Sort all dates (existing + new) to track movements accurately
                 all_stock_dates = sorted(current_daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
@@ -2848,6 +2846,10 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
             p_min_d1 = p_info['d1']
             p_max_dl = p_info['dl']
             
+            # Ensure D1 and DL are always included in the dates set for the period
+            period_dates_set.add(p_info['d1_str'])
+            period_dates_set.add(p_info['dl_str'])
+
             for record in records:
                 daily_sales = record.get('daily_sales', {}) or {}
                 for date_str in daily_sales.keys():
@@ -3830,14 +3832,23 @@ async def fix_database_integrity():
                     update_data[field] = target_type(0)
                     record_updated = True
             
-            # Fix 3: Normalize D1_date and DL_date
-            for date_field in ['D1_date', 'DL_date']:
+            # Fix 3: Normalize D1_date and DL_date AND ensure they exist in daily_sales
+            daily_sales = update_data.get('daily_sales', record.get('daily_sales', {}))
+
+            for date_field, stock_field in [('D1_date', 'D1_stock'), ('DL_date', 'DL_stock')]:
                 orig_val = record.get(date_field)
                 if orig_val and orig_val != 'N/A':
                     norm_val = normalize_date_key_global(orig_val)
                     if norm_val != orig_val:
                         issues_found.append(f"Brand '{brand_name}': {date_field} unnormalized ({orig_val})")
                         update_data[date_field] = norm_val
+                        record_updated = True
+
+                    # Ensure normalized date exists in daily_sales
+                    if norm_val not in daily_sales:
+                        issues_found.append(f"Brand '{brand_name}': Restored missing {date_field} ({norm_val}) to daily_sales")
+                        daily_sales[norm_val] = record.get(stock_field, 0.0)
+                        update_data['daily_sales'] = daily_sales
                         record_updated = True
 
             # Apply updates if any
