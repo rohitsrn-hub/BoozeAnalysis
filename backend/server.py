@@ -2845,7 +2845,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
 
             p_min_d1 = p_info['d1']
             p_max_dl = p_info['dl']
-            
+
             # Ensure D1 and DL are always included in the dates set for the period
             period_dates_set.add(p_info['d1_str'])
             period_dates_set.add(p_info['dl_str'])
@@ -2887,10 +2887,17 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
 
                     daily_sales_qty[date] = day_sales
             
-            # Create sequential day numbers for chart
+            # Create sequential day numbers for chart based on actual date difference from D1
             day_data = []
-            for day_num, date_str in enumerate(sorted_dates, start=1):
+            for i, date_str in enumerate(sorted_dates):
                 date_obj = parse_date_for_sorting(date_str)
+
+                # Calculate day number relative to p_min_d1
+                if p_min_d1 and date_obj != datetime.min:
+                    day_num = (date_obj - p_min_d1).days + 1
+                else:
+                    day_num = i + 1
+
                 day_data.append({
                     "day": day_num,
                     "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
