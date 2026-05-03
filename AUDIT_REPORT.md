@@ -20,87 +20,109 @@
 
 ### 1. The "Missing Purchases" Flaw
 - **Issue**: The core sales formula `total_sales_qty = max(0, D1_stock - DL_stock)` and daily trend logic `max(0, prev_stock - current_stock)` completely ignore stock replenishments (purchases).
-- **Location**: `backend/server.py` lines 951, 1532, 2687, and 3072.
-- **Real-world impact**: If a brand starts with 10 units, the owner buys 50 units mid-month, and ends with 5 units, the actual sales are **55 units**. The current app calculates sales as `max(0, 10 - 5) = 5 units`. This results in a **1,000% underestimation** of sales, leading to catastrophic restocking failures.
-- **Fix (code)**:
-  The system needs to detect stock increases between date columns and treat them as purchases, OR support a dedicated "Purchases" column.
+- **Location**: `backend/server.py` (Lines 951, 1532, 2687, 3072 in original code).
+- **Real-world impact**: If a brand starts with 10 units, the owner buys 50 units mid-month, and ends with 5 units, the actual sales are **55 units**. The current app calculates sales as `max(0, 10 - 5) = 5 units`. This results in a **1,000% underestimation** of sales.
+- **FIX WITH CODE**:
+  Replace the D1-DL subtraction with a "Sum of Decreases" algorithm.
 
 ```python
-# In backend/server.py - within sales calculation loops
-# REPLACING: total_sales_qty = max(0, D1_stock - DL_stock)
-# WITH logic that accounts for all movements:
+def calculate_movements_logic(daily_sales_dict, d1_dt, dl_dt):
+    # Sort dates chronologically
+    sorted_dates = sorted(
+        [k for k in daily_sales_dict.keys()],
+        key=lambda x: parse_date_for_comparison_global(x)
+    )
 
-def calculate_accurate_sales(daily_stock_data, sorted_dates):
     total_sales = 0
+    total_purchases = 0
+
     for i in range(1, len(sorted_dates)):
-        prev_stock = daily_stock_data.get(sorted_dates[i-1], 0)
-        curr_stock = daily_stock_data.get(sorted_dates[i], 0)
-        # If curr > prev, it's a purchase/restock.
-        # We assume Sales = max(0, prev_stock + purchases - curr_stock)
-        # Without a purchase column, we must assume any increase is a purchase
-        # and that sales occurred only when stock decreased.
-        # BUT a better way if we only have daily snapshots:
-        if curr_stock < prev_stock:
-            total_sales += (prev_stock - curr_stock)
-    return total_sales
+        prev_qty = daily_sales_dict[sorted_dates[i-1]]
+        curr_qty = daily_sales_dict[sorted_dates[i]]
+        if curr_qty > prev_qty:
+            total_purchases += (curr_qty - prev_qty)
+        elif curr_qty < prev_qty:
+            total_sales += (prev_qty - curr_qty)
+
+    return float(total_sales), float(total_purchases)
 ```
 
-- **Existing data impact**: **YES**. All historical analytics and demand forecasts generated in periods where restocks occurred are mathematically incorrect.
+- **Existing data impact**: **YES**. Past reports underestimate sales for any item restocked mid-period.
 
 ---
 
 ## C. Data Integrity Risks
-- **Historical impact**: High. The `historical_sales_averages` collection contains corrupted data because it was derived from the flawed `D1 - DL` formula.
-- **Correction strategy**:
-  1. **DO NOT** delete historical data yet.
-  2. Implement a migration script that iterates through `liquor_stock_backups` (which contains the full `daily_sales` snapshots), recalculates the sales using the "Sum of Decreases" method (or supports a new Purchase column), and updates the `historical_sales_averages`.
+- **Historical impact**: Data in `historical_sales_averages` is derived from the flawed formula and is incorrect for items with mid-period purchases.
+- **Correction strategy**: Run a recalculation script on all historical backups.
+- **RECALCULATION SCRIPT**:
+
+```python
+# Migration script to fix historical data
+import motor.motor_asyncio
+import asyncio
+
+async def migrate():
+    client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://localhost:27017")
+    db = client["your_db_name"]
+
+    # Process all backups
+    backups = await db.liquor_stock_backups.find().to_list(None)
+    for backup in backups:
+        data = backup["data_snapshot"]
+        for record in data:
+            sales, purchases = calculate_movements_logic(
+                record["daily_sales"],
+                parse(record["D1_date"]),
+                parse(record["DL_date"])
+            )
+            record["total_sales_qty"] = sales
+            record["total_purchases_qty"] = purchases
+            # ... update derived fields (monthly_sale_value etc.)
+
+        await db.liquor_stock_backups.update_one(
+            {"_id": backup["_id"]}, {"": {"data_snapshot": data}}
+        )
+    print("Migration complete")
+```
 
 ---
 
 ## D. Bugs
-### 1. Blocking Synchronous I/O in Async Endpoints
-- **Issue**: Heavy pandas `read_excel` and processing operations are running directly inside `async def` routes.
-- **Severity**: Medium/High (can cause API timeouts during concurrent uploads).
-- **Fix**: Use `run_in_threadpool` or `anyio.to_thread.run_sync` to offload pandas processing.
-
-### 2. Date Format Ambiguity
-- **Issue**: The logic in `detect_date_format` defaults to `DD/MM` (Indian standard) but might still fail on specific ambiguous Excel serial numbers.
+### 1. Blocking Synchronous I/O
+- **Issue**: Pandas operations block the async event loop.
 - **Severity**: Medium.
-- **Fix**: Force the user to select the date format in the UI during upload.
+- **Fix**: Wrap `pd.read_excel` in `run_in_threadpool`.
+
+### 2. Trendline Discontinuity
+- **Issue**: Recharts stops drawing lines if a brand is missing a data point for a specific date.
+- **Severity**: Low (Visual).
+- **Fix**: Set `connectNulls={true}` on the `LineChart` components in `frontend/src/App.js`.
 
 ---
 
 ## E. Performance Improvements
-- **Problem**: The system recalculates *everything* for all brands on every "Refresh Analytics" or upload.
-- **Optimization**: Use **vectorized pandas operations** instead of row-by-row iteration in `parse_tabular_format`.
-- **Benefit**: Reductions in processing time from seconds to milliseconds for large inventories (>1000 brands).
+- **Problem**: Row-by-row iteration on large Excel files.
+- **Optimization**: Use Vectorization.
+- **Benefit**: Faster uploads.
 
 ---
 
 ## F. Inventory Edge Case Gaps
-- **Scenario**: Missing stock entry for a mid-period day.
-- **Risk**: The current logic `prev_total - current_total` in `get_sales_trends` (line 3072) will treat a missing day (0 stock) as a massive sales spike, then the next day as a massive purchase.
-- **Fix**: Implement linear interpolation for missing daily stock values or skip gaps in the trendline rather than assuming 0.
+- **Scenario**: Missing stock entries for a day.
+- **Risk**: Spikes in sales trends.
+- **Fix**: Data validation to detect and interpolate 0-stock gaps that aren't actual sales (e.g., if stock goes 100 -> 0 -> 98).
 
 ---
 
 ## G. Security Issues
-- **Risk**: `pd.read_excel` is vulnerable to Excel External Entity (XXE) attacks if `lxml` is used under the hood with older versions.
-- **Fix**: Ensure `defusedxml` is used or strictly validate the file header bytes before passing to pandas.
-
-### 2. Automated Sales Period Reset on Purchase
-- **Scenario**: User uploads new stock data where a brand's quantity has increased (indicating a purchase).
-- **Previous Behavior**: User had to manually press "Reset Stock" before uploading to ensure the purchase day became D1. Failure to do so would lead to negative sales calculations or messy trendlines.
-- **New Behavior**: The system automatically detects the purchase, prompts the user for confirmation via a dialog, and if confirmed, triggers a backup/reset of the previous period. The current upload then becomes D1 for the new period.
-- **Safety Feature**: If the user identifies the detected purchase as an error, the upload is cancelled, and they are prompted to check their data.
-- **Identical Data Guard**: Added a check to prevent consecutive uploads of the exact same data file, ensuring data progression.
-- **Fix (code)**: Implemented `execute_stock_reset` helper and integrated it into `upload_todays_data` with confirmation parameters. Updated React frontend with a `Purchase Confirmation Dialog`.
+- **Risk**: Malicious Excel files (XXE).
+- **Fix**: Use `defusedxml` and strictly enforce `.xlsx` extension.
 
 ---
 
 ## H. Safe Refactoring Plan
-1. **Step 1: Backup Database**: Perform a full MongoDB dump.
-2. **Step 2: Update Schema**: Modify `LiquorData` model to include a `total_purchases` field.
-3. **Step 3: Fix Backend Calculation**: Deploy the "Sum of Decreases" logic to `parse_tabular_format` and `upload_todays_data`.
-4. **Step 4: Recalculation Script**: Run a one-time script to fix `historical_sales_averages` using stored daily snapshots in backups.
-5. **Step 5: Frontend Update**: Add a "Purchases Detected" badge in the UI to explain sales derivation to the user.
+1. **Infrastructure**: Implement `calculate_movements_logic` as a shared utility.
+2. **Backend Update**: Inject the logic into `upload-todays-data` to detect purchases.
+3. **Database Guard**: Add a trigger to prevent duplicate daily uploads for the same date.
+4. **Historical Correction**: Execute the migration script provided in Section C.
+5. **Frontend Enhancement**: Update charts to handle sparse data gracefully using null-connection.

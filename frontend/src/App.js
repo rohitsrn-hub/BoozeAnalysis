@@ -37,9 +37,6 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showVerifyDialog, setShowVerifyDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
-  const [pendingTodaysFile, setPendingTodaysFile] = useState(null);
-  const [detectedPurchaseBrand, setDetectedPurchaseBrand] = useState("");
   const [duplicateError, setDuplicateError] = useState(null);
   const [databaseView, setDatabaseView] = useState(null);
   const [currentDateRange, setCurrentDateRange] = useState(null);
@@ -469,19 +466,16 @@ function App() {
   };
 
   // Handle today's data upload
-  const handleTodaysDataUpload = async (event, confirmPurchase = false) => {
-    const file = event?.target?.files?.[0] || pendingTodaysFile;
+  const handleTodaysDataUpload = async (event) => {
+    const file = event.target.files[0];
     if (!file) return;
 
     const formData = new FormData();
     formData.append("file", file);
-    if (confirmPurchase) {
-      formData.append("confirm_purchase", "true");
-    }
 
     try {
       setLoading(true);
-      if (!confirmPurchase) setUploadProgress(10);
+      setUploadProgress(10);
       
       const response = await axios.post(`${API}/upload-todays-data`, formData, {
         headers: {
@@ -494,9 +488,6 @@ function App() {
       });
 
       setUploadProgress(100);
-      setShowPurchaseConfirm(false);
-      setPendingTodaysFile(null);
-
       toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
       
       // Fetch analytics, trends, and upload history after successful upload
@@ -512,16 +503,6 @@ function App() {
       if (error.response?.data?.detail) {
         const detail = error.response.data.detail;
         
-        // Handle purchase confirmation requirement
-        if (error.response.status === 409 && detail.requires_confirmation) {
-          setPendingTodaysFile(file);
-          setDetectedPurchaseBrand(detail.detected_brand);
-          setShowPurchaseConfirm(true);
-          setUploadProgress(0);
-          setLoading(false);
-          return;
-        }
-
         // Handle duplicate date error specially
         if (error.response.status === 409 && typeof detail === 'object' && detail.error === "Duplicate dates detected") {
           setDuplicateError({
@@ -534,15 +515,21 @@ function App() {
           return; // Exit early for duplicate date error
         }
         
-        // Handle identical data error
-        if (error.response.status === 400 && detail.error === "Identical data detected") {
-          toast.error(detail.message, { duration: 6000 });
-          return;
-        }
-
         // Handle other errors
         if (typeof detail === 'object') {
           errorMessage = detail.message || errorMessage;
+
+          // Show available columns if provided
+          if (detail.available_columns && Array.isArray(detail.available_columns)) {
+            const columns = detail.available_columns.join(', ');
+            errorMessage += `\n\nColumns found in your file: ${columns}`;
+          }
+
+          // Show additional suggestions if available
+          if (detail.suggestions && Array.isArray(detail.suggestions)) {
+            const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
+            errorMessage += `\n\nSuggestions:\n${suggestions}`;
+          }
         } else {
           errorMessage = detail;
         }
@@ -552,7 +539,7 @@ function App() {
     } finally {
       setLoading(false);
       setUploadProgress(0);
-      if (event?.target) event.target.value = "";
+      event.target.value = "";
     }
   };
 
@@ -1578,7 +1565,6 @@ function App() {
                                 <th className="text-left p-3 font-semibold">Index</th>
                                 <th className="text-left p-3 font-semibold">Brand Name</th>
                                 <th className="text-left p-3 font-semibold">D1 Stock</th>
-                                <th className="text-left p-3 font-semibold">Purchases</th>
                                 <th className="text-left p-3 font-semibold">DL Stock</th>
                                 <th className="text-left p-3 font-semibold">Wholesale Rate</th>
                                 <th className="text-left p-3 font-semibold">Selling Rate</th>
@@ -1594,7 +1580,6 @@ function App() {
                                   <td className="p-3 font-medium">{row.index}</td>
                                   <td className="p-3 max-w-xs truncate" title={row.brand_name}>{row.brand_name}</td>
                                   <td className="p-3 font-medium text-indigo-600">{row.D1_stock}</td>
-                                  <td className="p-3 font-medium text-green-600">+{row.total_purchases_qty || 0}</td>
                                   <td className="p-3 font-medium text-orange-600">{row.DL_stock}</td>
                                   <td className="p-3">{formatCurrency(row.calculated_wholesale_rate)}</td>
                                   <td className="p-3">{formatCurrency(row.selling_rate)}</td>
@@ -2163,7 +2148,7 @@ function App() {
                                   stroke={CHART_COLORS[index % CHART_COLORS.length]}
                                   strokeWidth={3}
                                   dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
-                                  connectNulls={true}
+                                  connectNulls={false}
                                   type="monotone"
                                 />
                               ))}
@@ -3065,13 +3050,12 @@ function App() {
                         // Export calculation data as CSV for easy comparison
                         const csvContent = [
                           // Header row
-                              'Index,Brand Name,D1 Stock,Purchases,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
+                          'Index,Brand Name,D1 Stock,DL Stock,D1 Date,DL Date,Wholesale Rate,Selling Rate,Total Sales Qty,Avg Daily Sales,Monthly Sale Value,Current Stock Value,Multiplier Value,Days Analyzed,Stock Available Days',
                           // Data rows
                           ...calculationData.map(row => [
                             row.index,
                             `"${row.brand_name}"`,
                             row.D1_stock,
-                                row.total_purchases_qty || 0,
                             row.DL_stock,
                             row.D1_date,
                             row.DL_date,
@@ -3170,9 +3154,8 @@ function App() {
                           <div className="p-4 bg-blue-50 rounded-lg">
                             <h5 className="font-semibold text-blue-900 mb-2">Monthly Sales Calculation</h5>
                             <ol className="text-blue-800 space-y-1">
-                              <li>1. Total Sales = Σ(Stock Decreases between dates)</li>
-                              <li>2. Purchases = Σ(Stock Increases between dates)</li>
-                              <li>3. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
+                              <li>1. Total Sales = D1 Stock - DL Stock</li>
+                              <li>2. Average Daily Sales = Total Sales ÷ Days Between D1 & DL</li>
                               <li>3. Monthly Sales Qty = Average Daily Sales × 24</li>
                               <li>4. Monthly Sales Value = Monthly Sales Qty × Selling Rate</li>
                             </ol>
@@ -3208,10 +3191,7 @@ function App() {
                                 <p><strong>Index:</strong> {blackDogExample.index}</p>
                                 <p>• <strong>D1 Stock</strong> ({blackDogExample.D1_date}): <span className="text-indigo-600 font-medium">{blackDogExample.D1_stock} units</span></p>
                                 <p>• <strong>DL Stock</strong> ({blackDogExample.DL_date}): <span className="text-orange-600 font-medium">{blackDogExample.DL_stock} units</span></p>
-                                <p>• <strong>Total Sales:</strong> <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span> (derived from movements)</p>
-                                {blackDogExample.total_purchases_qty > 0 && (
-                                  <p>• <strong>Total Purchases:</strong> <span className="text-green-600 font-medium">+{blackDogExample.total_purchases_qty} units</span> detected</p>
-                                )}
+                                <p>• <strong>Total Sales:</strong> {blackDogExample.D1_stock} - {blackDogExample.DL_stock} = <span className="text-red-600 font-medium">{blackDogExample.total_sales_qty} units</span></p>
                                 <p>• <strong>Days Analyzed:</strong> {blackDogExample.days_analyzed} days</p>
                                 <p>• <strong>Average Daily Sales:</strong> {blackDogExample.total_sales_qty} ÷ {blackDogExample.days_analyzed} = <span className="text-blue-600 font-medium">{blackDogExample.avg_daily_sales_qty.toFixed(3)} units/day</span></p>
                                 <p>• <strong>Monthly Sales Value:</strong> {blackDogExample.avg_daily_sales_qty.toFixed(3)} × 24 × ₹{blackDogExample.selling_rate} = <span className="text-blue-600 font-medium">{formatCurrency(blackDogExample.calculated_avg_monthly_sale)}</span></p>
@@ -4542,53 +4522,6 @@ function App() {
                     Generate PDF Report
                   </div>
                 )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Purchase Confirmation Dialog */}
-      <Dialog open={showPurchaseConfirm} onOpenChange={setShowPurchaseConfirm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2 text-blue-600">
-              <Package className="w-5 h-5" />
-              <span>Purchase Detected</span>
-            </DialogTitle>
-            <DialogDescription>
-              A stock increase was detected for <strong>{detectedPurchaseBrand}</strong>
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-4 space-y-4">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">⚠️ Automatic Reset Trigger:</h4>
-              <p className="text-sm text-blue-800">
-                Detecting a purchase will trigger an <strong>automatic stock reset</strong> for the previous sales period.
-              </p>
-              <p className="text-sm text-blue-800 mt-2 font-bold">
-                Has an actual purchase taken place?
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowPurchaseConfirm(false);
-                  setPendingTodaysFile(null);
-                  toast.error("Upload cancelled. Please check your data for erroneous entries and re-upload corrected data.", { duration: 8000 });
-                }}
-              >
-                No, check data
-              </Button>
-              <Button
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => handleTodaysDataUpload(null, true)}
-                disabled={loading}
-              >
-                {loading ? "Processing..." : "Yes, confirm purchase"}
               </Button>
             </div>
           </div>
