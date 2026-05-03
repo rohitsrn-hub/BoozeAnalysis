@@ -2148,7 +2148,7 @@ function App() {
                                   stroke={CHART_COLORS[index % CHART_COLORS.length]}
                                   strokeWidth={3}
                                   dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
-                                  connectNulls={false}
+                                  connectNulls={true}
                                   type="monotone"
                                 />
                               ))}

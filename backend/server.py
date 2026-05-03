@@ -2432,51 +2432,60 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 logging.warning(f"Could not parse date '{date_str}': {e}")
                 return datetime.min
         
+        from collections import defaultdict
+
         # 1. Get CURRENT month data from liquor_data
         current_data = await collections.liquor_data.find().to_list(10000)
         
-        # 2. Get HISTORICAL data from stock_backups - ONLY pre_reset_backup types
-        # These represent complete sales periods that were committed to history
+        # 2. Get HISTORICAL data from stock_backups - Include both manual and auto-reset types
         backups = await collections.stock_backups.find({
-            "backup_reason": "pre_reset_backup"
+            "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
         }).sort("backup_timestamp", -1).to_list(100)
         
-        # Create a dict to store data by period - use most recent backup only
+        # Create a dict to store data by period
         period_to_data = {}
         period_info = {}
         
-        # First, process current data (highest priority)
+        # First, process current data
         if current_data:
+            # 1. Collect ALL possible dates from the current active records to define the period bounds
+            raw_dates = []
             for record in current_data:
-                d1_date = record.get('D1_date')
-                dl_date = record.get('DL_date')
+                for f in ['D1_date', 'DL_date']:
+                    val = record.get(f)
+                    if val and val != 'N/A':
+                        dt = parse_date_for_sorting(val)
+                        if dt != datetime.min: raw_dates.append(dt)
                 
-                # Skip records with None, 'N/A', or empty dates
-                if d1_date and dl_date and d1_date != 'N/A' and dl_date != 'N/A':
-                    d1_parsed = parse_date_for_sorting(d1_date)
-                    dl_parsed = parse_date_for_sorting(dl_date)
+                daily_sales = record.get('daily_sales', {}) or {}
+                for d_str in daily_sales.keys():
+                    dt = parse_date_for_sorting(d_str)
+                    if dt != datetime.min: raw_dates.append(dt)
 
-                    if d1_parsed != datetime.min and dl_parsed != datetime.min:
-                        d1_month = d1_parsed.strftime("%b")
-                        dl_month = dl_parsed.strftime("%b")
-                        year = dl_parsed.strftime("%Y")
+            if raw_dates:
+                min_d1 = min(raw_dates)
+                max_dl = max(raw_dates)
 
-                        if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
-                        else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
+                d1_month = min_d1.strftime("%b")
+                dl_month = max_dl.strftime("%b")
+                year = max_dl.strftime("%Y")
 
-                        if period_label not in period_to_data:
-                            period_to_data[period_label] = []
-                            period_info[period_label] = {
-                                'd1': d1_parsed,
-                                'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
-                                'source': 'current'
-                            }
+                if d1_month == dl_month:
+                    period_display = f"{d1_month} {year}"
+                else:
+                    period_display = f"{d1_month}-{dl_month} {year}"
 
-                        period_to_data[period_label].append(record)
+                # Group all current records into this single active period
+                period_label = "current_active_period"
+                period_to_data[period_label] = current_data
+                period_info[period_label] = {
+                    'display': f"{period_display} (Current)",
+                    'd1': min_d1,
+                    'dl': max_dl,
+                    'd1_str': min_d1.strftime("%d-%b-%y"),
+                    'dl_str': max_dl.strftime("%d-%b-%y"),
+                    'source': 'current'
+                }
         
         # Then, process historical backups (only if period not already in current data)
         periods_seen_in_backups = set()
@@ -2535,31 +2544,31 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         period_trends = {}
         
         for period_label, records in period_to_data.items():
-            # Calculate daily sales from stock positions
-            # Sales = Previous Day Stock - Current Day Stock
-            all_daily_sales = {}
+            # Calculate daily sales per brand first, then aggregate
+            # This handles cases where brands report on different dates
+            daily_sales_qty = defaultdict(float)
+            all_period_dates = set()
             
             for record in records:
-                daily_sales = record.get('daily_sales', {}) or {}
-                for date_str, stock_qty in daily_sales.items():
-                    if date_str not in all_daily_sales:
-                        all_daily_sales[date_str] = []
-                    all_daily_sales[date_str].append(stock_qty)
+                brand_daily_stock = record.get('daily_sales', {}) or {}
+                if not brand_daily_stock:
+                    continue
 
-            # Calculate daily sales quantities by subtracting consecutive days
-            daily_sales_qty = {}
-            sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
+                # Sort dates for this specific brand
+                brand_dates = sorted(brand_daily_stock.keys(), key=lambda d: parse_date_for_sorting(d))
+                for date_str in brand_dates:
+                    all_period_dates.add(date_str)
 
-            for i, date in enumerate(sorted_dates):
-                if i == 0:
-                    # First day has no previous day, so sales = 0
-                    daily_sales_qty[date] = 0
-                else:
-                    # Sales on current day = Previous day total stock - Current day total stock
-                    prev_date = sorted_dates[i-1]
-                    prev_total = sum(all_daily_sales[prev_date])
-                    current_total = sum(all_daily_sales[date])
-                    daily_sales_qty[date] = max(0, prev_total - current_total)
+                for i in range(1, len(brand_dates)):
+                    curr_date = brand_dates[i]
+                    prev_date = brand_dates[i-1]
+
+                    # Sale is decrease in stock. Ignore increases (purchases) for trend.
+                    sales = max(0, brand_daily_stock[prev_date] - brand_daily_stock[curr_date])
+                    daily_sales_qty[curr_date] += sales
+
+            # Get all unique dates in the period and sort them
+            sorted_dates = sorted(list(all_period_dates), key=lambda d: parse_date_for_sorting(d))
             
             # Create sequential day numbers for chart
             day_data = []
@@ -2588,7 +2597,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label].get('display', period_label),
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
@@ -2600,7 +2609,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label].get('display', period_label),
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
@@ -2610,7 +2619,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
             # Safely access period_info to avoid KeyError
             if sales_month in period_trends and sales_month in period_info:
                 series_data.append({
-                    "month": sales_month,
+                    "month": period_info[sales_month].get('display', sales_month),
                     "data": period_trends[sales_month],
                     "d1_date": period_info[sales_month]['d1_str'],
                     "dl_date": period_info[sales_month]['dl_str']
