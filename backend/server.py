@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 import io
@@ -40,6 +41,80 @@ db = client[os.environ['DB_NAME']]
 
 # Collection name prefixes for data separation
 LIQUOR_PREFIX = "liquor_"  # Prefix for all liquor app collections
+
+def parse_date_for_comparison_global(date_str):
+    """Universal date parser for filtering data points within D1-DL bounds"""
+    try:
+        import re
+        from datetime import datetime
+
+        if not date_str or date_str == 'N/A':
+            return datetime.min
+
+        # If it's already a datetime object
+        if isinstance(date_str, datetime):
+            return date_str.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        date_str = str(date_str).strip()
+
+        # Method 1: Handle ISO/Full datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
+        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
+            try:
+                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                return dt
+            except:
+                pass
+
+        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY or DD MMM YY formats
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})[-/\s]?(\d{0,4})', date_str, re.IGNORECASE)
+        if match:
+            day, month_name, year_suffix = match.groups()
+            # Default to current year if missing
+            if not year_suffix or len(year_suffix) < 2:
+                year = str(datetime.now().year)
+            elif len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+
+            try:
+                return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+            except:
+                pass
+
+        # Method 3: Handle numeric dates DD-MM-YY or DD/MM/YY
+        match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
+        if match:
+            day, month, year_suffix = match.groups()
+            if len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+            try:
+                return datetime(int(year), int(month), int(day))
+            except:
+                pass
+
+        # Method 4: Match DD-MMM (missing year)
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})$', date_str, re.IGNORECASE)
+        if match:
+            day, month_name = match.groups()
+            return datetime.strptime(f"{day}-{month_name}-{datetime.now().year}", "%d-%b-%Y")
+
+        return datetime.min
+    except:
+        return datetime.min
+
+def normalize_date_key_global(date_str):
+    """Normalize date to DD-MMM-YY format for consistent storage"""
+    try:
+        dt = parse_date_for_comparison_global(date_str)
+        if dt != datetime.min:
+            return dt.strftime("%d-%b-%y")
+    except Exception as e:
+        logging.warning(f"Could not normalize date '{date_str}': {e}")
+
+    return str(date_str)
 
 # Collection references with proper prefixing
 class Collections:
@@ -2381,59 +2456,9 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
     Returns: dict with 'series' (list of sales periods with daily data from current + history)
     """
     try:
-        from collections import defaultdict
-        import re
-
-        def parse_date_for_sorting(date_str):
-            """Parse various date formats for chronological sorting"""
-            try:
-                if not date_str:
-                    return datetime.min
-
-                date_str = str(date_str).strip()
-
-                # Handle full datetime strings (YYYY-MM-DD HH:MM:SS format)
-                if 'T' in date_str or len(date_str) > 15:
-                    try:
-                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
-                        # Validate year is reasonable (2020-2030)
-                        if dt.year < 2020 or dt.year > 2030:
-                            logging.warning(f"Invalid year {dt.year} in date '{date_str}', attempting correction")
-                            # Try to fix common issues (2052 -> 2025)
-                            if dt.year > 2030:
-                                dt = dt.replace(year=2025)
-                        return dt
-                    except Exception as e:
-                        logging.warning(f"Failed to parse datetime '{date_str}': {e}")
-
-                # Parse various date formats
-                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    full_date = f"{day}-{month_name}-{year}"
-                    dt = datetime.strptime(full_date, "%d-%b-%Y")
-                    # Validate year
-                    if dt.year < 2020 or dt.year > 2030:
-                        dt = dt.replace(year=2025)
-                    return dt
-
-                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name = match.groups()
-                    year = "2025"
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-
-                logging.warning(f"Could not parse date '{date_str}'")
-                return datetime.min
-
-            except Exception as e:
-                logging.warning(f"Could not parse date '{date_str}': {e}")
-                return datetime.min
+        # Use the robust global parser for consistent date comparison across history
+        parse_date_for_sorting = parse_date_for_comparison_global
         
-        from collections import defaultdict
-
         # 1. Get CURRENT month data from liquor_data
         current_data = await collections.liquor_data.find().to_list(10000)
         
@@ -2448,7 +2473,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         
         # First, process current data
         if current_data:
-            # 1. Collect ALL possible dates from the current active records to define the period bounds
+            # 1. Collect ALL possible dates from the current active records
             raw_dates = []
             for record in current_data:
                 for f in ['D1_date', 'DL_date']:
@@ -2463,29 +2488,34 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     if dt != datetime.min: raw_dates.append(dt)
 
             if raw_dates:
-                min_d1 = min(raw_dates)
-                max_dl = max(raw_dates)
+                # Determine the most recent date to prune ghost data
+                latest_date = max(raw_dates)
+                active_dates = [d for d in raw_dates if (latest_date - d).days <= 60]
 
-                d1_month = min_d1.strftime("%b")
-                dl_month = max_dl.strftime("%b")
-                year = max_dl.strftime("%Y")
+                if active_dates:
+                    min_d1 = min(active_dates)
+                    max_dl = max(active_dates)
 
-                if d1_month == dl_month:
-                    period_display = f"{d1_month} {year}"
-                else:
-                    period_display = f"{d1_month}-{dl_month} {year}"
+                    d1_month = min_d1.strftime("%b")
+                    dl_month = max_dl.strftime("%b")
+                    year = max_dl.strftime("%Y")
 
-                # Group all current records into this single active period
-                period_label = "current_active_period"
-                period_to_data[period_label] = current_data
-                period_info[period_label] = {
-                    'display': f"{period_display} (Current)",
-                    'd1': min_d1,
-                    'dl': max_dl,
-                    'd1_str': min_d1.strftime("%d-%b-%y"),
-                    'dl_str': max_dl.strftime("%d-%b-%y"),
-                    'source': 'current'
-                }
+                    if d1_month == dl_month:
+                        period_display = f"{d1_month} {year}"
+                    else:
+                        period_display = f"{d1_month}-{dl_month} {year}"
+
+                    # Group all current records into this single active period
+                    period_label = "current_active_period"
+                    period_to_data[period_label] = current_data
+                    period_info[period_label] = {
+                        'display': f"{period_display} (Current)",
+                        'd1': min_d1,
+                        'dl': max_dl,
+                        'd1_str': min_d1.strftime("%d-%b-%y"),
+                        'dl_str': max_dl.strftime("%d-%b-%y"),
+                        'source': 'current'
+                    }
         
         # Then, process historical backups (only if period not already in current data)
         periods_seen_in_backups = set()
@@ -2544,39 +2574,56 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         period_trends = {}
         
         for period_label, records in period_to_data.items():
+            p_info = period_info.get(period_label)
+            if not p_info: continue
+
+            p_min_d1 = p_info['d1']
+            p_max_dl = p_info['dl']
+
             # Calculate daily sales per brand first, then aggregate
-            # This handles cases where brands report on different dates
+            # Use day-of-period mapping (Day 1, Day 2...) for consistent X-axis
             daily_sales_qty = defaultdict(float)
-            all_period_dates = set()
+            period_dates_set = set()
             
             for record in records:
                 brand_daily_stock = record.get('daily_sales', {}) or {}
-                if not brand_daily_stock:
-                    continue
+                if not brand_daily_stock: continue
 
-                # Sort dates for this specific brand
-                brand_dates = sorted(brand_daily_stock.keys(), key=lambda d: parse_date_for_sorting(d))
-                for date_str in brand_dates:
-                    all_period_dates.add(date_str)
+                # Get brand dates within this period's bounds
+                brand_dates = []
+                for k, v in brand_daily_stock.items():
+                    dt = parse_date_for_sorting(k)
+                    if p_min_d1 <= dt <= p_max_dl:
+                        brand_dates.append((dt, k))
+
+                brand_dates.sort(key=lambda x: x[0])
 
                 for i in range(1, len(brand_dates)):
-                    curr_date = brand_dates[i]
-                    prev_date = brand_dates[i-1]
+                    curr_dt, curr_str = brand_dates[i]
+                    prev_dt, prev_str = brand_dates[i-1]
 
-                    # Sale is decrease in stock. Ignore increases (purchases) for trend.
-                    sales = max(0, brand_daily_stock[prev_date] - brand_daily_stock[curr_date])
-                    daily_sales_qty[curr_date] += sales
+                    # Calculate sales between these specific reporting dates
+                    sales = max(0, brand_daily_stock[prev_str] - brand_daily_stock[curr_str])
 
-            # Get all unique dates in the period and sort them
-            sorted_dates = sorted(list(all_period_dates), key=lambda d: parse_date_for_sorting(d))
+                    # Attribute the sales to the current date
+                    daily_sales_qty[curr_str] += sales
+                    period_dates_set.add(curr_str)
+                    period_dates_set.add(prev_str)
+
+            # Ensure start/end dates are represented
+            period_dates_set.add(p_info['d1_str'])
+            period_dates_set.add(p_info['dl_str'])
             
-            # Create sequential day numbers for chart
+            # Create normalized data points for the period
+            sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
             day_data = []
-            for day_num, date_str in enumerate(sorted_dates, start=1):
-                date_obj = parse_date_for_sorting(date_str)
+            for date_str in sorted_dates:
+                dt = parse_date_for_sorting(date_str)
+                # Day Number = days since period start + 1
+                day_num = (dt - p_min_d1).days + 1
                 day_data.append({
                     "day": day_num,
-                    "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
+                    "date": dt.strftime("%d-%b") if dt != datetime.min else date_str,
                     "sales": round(daily_sales_qty.get(date_str, 0), 2)
                 })
             
@@ -2625,19 +2672,12 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     "dl_date": period_info[sales_month]['dl_str']
                 })
         
-        # Calculate summary - use actual total_sales_qty from records for accuracy
-        # This ensures the total matches the actual D1 - DL calculation per brand
+        # Calculate summary using the accurately calculated daily movements
         series_with_totals = []
         for series in series_data:
-            period_label = series["month"]
-            # Get the actual total_sales_qty from the records for this period
-            if period_label in period_to_data:
-                records_for_period = period_to_data[period_label]
-                actual_total = sum(r.get('total_sales_qty', 0) for r in records_for_period)
-                series["total_sales"] = round(actual_total, 2)
-            else:
-                # Fallback to summing daily sales from trend line
-                series["total_sales"] = round(sum(day_data["sales"] for day_data in series["data"]), 2)
+            # We use the sum of daily sales calculated above to ensure the summary
+            # matches the trendline exactly (accounting for mid-period purchases)
+            series["total_sales"] = round(sum(day_item["sales"] for day_item in series["data"]), 2)
             series_with_totals.append(series)
         
         total_sales = sum(s.get("total_sales", 0) for s in series_with_totals)
