@@ -5,6 +5,7 @@ from app.routes.uploads import router as uploads_router
 from app.routes.analytics import router as analytics_router
 from app.routes.routes_extra import router as extra_router
 from app.routes.admin_routes import router as admin_router
+from app.routes.final_routes import router as final_router
 
 app = FastAPI(title='BoozeAnalysis API', version='2.0.0')
 
@@ -24,3 +25,4 @@ app.include_router(uploads_router)
 app.include_router(analytics_router)
 app.include_router(extra_router)
 app.include_router(admin_router)
+app.include_router(final_router)
