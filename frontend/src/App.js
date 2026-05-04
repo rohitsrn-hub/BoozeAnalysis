@@ -22,7 +22,50 @@ import PeriodSelectionModal from "./components/PeriodSelectionModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+const pickFirst = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return null;
+};
 
+const getD1Date = (row) => pickFirst(row?.D1_date, row?.d1_date);
+const getDLDate = (row) => pickFirst(row?.DL_date, row?.dl_date);
+const getD1Stock = (row) => pickFirst(row?.D1_stock, row?.d1_stock, 0);
+const getDLStock = (row) => pickFirst(row?.DL_stock, row?.dl_stock, 0);
+
+const getWholesaleRate = (row) =>
+  pickFirst(row?.calculated_wholesale_rate, row?.wholesale_rate, row?.avg_wholesale_rate, 0);
+
+const getSellingRate = (row) =>
+  pickFirst(row?.selling_rate, row?.avg_selling_rate, row?.rate, 0);
+
+const getMonthlySaleValue = (row) =>
+  pickFirst(row?.monthly_sale_value, row?.calculated_avg_monthly_sale, 0);
+
+const getCurrentStockValue = (row) =>
+  pickFirst(row?.calculated_current_stock_value, row?.current_stock_value, row?.stock_value_today, 0);
+
+const getAvgDailySalesQty = (row) =>
+  pickFirst(row?.avg_daily_sales_qty, row?.average_daily_sales_qty, row?.avg_daily_sales, 0);
+
+const getDaysAnalyzed = (row) =>
+  pickFirst(row?.days_analyzed, row?.total_sales_days, 0);
+
+const getStockAvailableDays = (row) =>
+  pickFirst(row?.stock_available_days, row?.days_of_stock, 0);
+
+const getPeriodName = (period) =>
+  pickFirst(period?.period_name, period?.name, period?.id, 'Unknown Period');
+
+const getPeriodLabels = (summary) =>
+  pickFirst(summary?.period_labels, summary?.selected_period_labels, []);
+
+const getTotalPeriods = (summary) =>
+  pickFirst(summary?.total_periods, summary?.periods_count, 0);
+
+const getHistoricalAvg = (item) =>
+  pickFirst(item?.historical_avg, item?.avg_sales_qty, item?.monthly_avg_sale, 0);
 function App() {
   // Removed user and onLogout props - no authentication needed
   const [analyticsData, setAnalyticsData] = useState(null);
