@@ -80,7 +80,7 @@ async def migrate():
             # ... update derived fields (monthly_sale_value etc.)
 
         await db.liquor_stock_backups.update_one(
-            {"_id": backup["_id"]}, {"": {"data_snapshot": data}}
+            {"_id": backup["_id"]}, {"$set": {"data_snapshot": data}}
         )
     print("Migration complete")
 ```

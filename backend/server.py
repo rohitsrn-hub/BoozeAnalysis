@@ -116,6 +116,46 @@ def normalize_date_key_global(date_str):
 
     return str(date_str)
 
+def calculate_movements_logic(daily_sales_dict, d1_dt, dl_dt):
+    """
+    Centralized helper to calculate total sales and purchases from daily stock movements.
+    Uses the 'Sum of Decreases' method.
+    """
+    relevant_dates = []
+    for k, v in daily_sales_dict.items():
+        dt = parse_date_for_comparison_global(k)
+        if dt != datetime.min and d1_dt <= dt <= dl_dt:
+            # IMPORTANT: Normalize the date key here to ensure consistency in attribution
+            norm_k = normalize_date_key_global(k)
+            relevant_dates.append((dt, v, norm_k))
+
+    relevant_dates.sort(key=lambda x: x[0])
+
+    total_sales = 0
+    total_purchases = 0
+    daily_attributed_sales = defaultdict(float)
+    reporting_dates = set()
+
+    if len(relevant_dates) >= 2:
+        for i in range(1, len(relevant_dates)):
+            prev_qty = relevant_dates[i-1][1]
+            curr_qty = relevant_dates[i][1]
+            curr_str = relevant_dates[i][2]
+
+            reporting_dates.add(relevant_dates[i-1][2])
+            reporting_dates.add(curr_str)
+
+            if curr_qty > prev_qty:
+                total_purchases += (curr_qty - prev_qty)
+            elif curr_qty < prev_qty:
+                sales_inc = (prev_qty - curr_qty)
+                total_sales += sales_inc
+                daily_attributed_sales[curr_str] += sales_inc
+    elif len(relevant_dates) == 1:
+        reporting_dates.add(relevant_dates[0][2])
+
+    return float(total_sales), float(total_purchases), daily_attributed_sales, reporting_dates
+
 # Collection references with proper prefixing
 class Collections:
     """Centralized collection references for the Liquor app"""
@@ -1022,8 +1062,10 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
             
             print(f"  {brand_name}: D1={D1_date}({D1_stock}), DL={DL_date}({DL_stock})")
             
-            # Calculate total sales between D1 and DL
-            total_sales_qty = max(0, D1_stock - DL_stock)
+            # Calculate total sales and purchases using centralized logic
+            d1_dt = parse_date_for_comparison_global(global_D1_date)
+            dl_dt = parse_date_for_comparison_global(global_DL_date)
+            total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(daily_stock_data, d1_dt, dl_dt)
             
             # Calculate number of days between D1 and DL using actual date arithmetic
             try:
@@ -1089,6 +1131,7 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 'DL_stock': float(DL_stock),
                 'current_stock_qty': int(max(0, DL_stock)),
                 'total_sales_qty': float(total_sales_qty),
+                'total_purchases_qty': float(total_purchases_qty),
                 'avg_daily_sales_qty': float(avg_daily_sales_qty),
                 'monthly_sales_qty': float(monthly_sales_qty),
                 'monthly_sale_value': float(monthly_sales_value),
@@ -1604,7 +1647,10 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     days_analyzed = existing_brand.get('days_analyzed', 1) + 1
                 
                 # Recalculate all dependent values
-                total_sales_qty = max(0, D1_stock - new_stock_qty)
+                d1_dt = parse_date_for_comparison_global(old_D1_date) if old_D1_date else datetime.min
+                dl_dt = parse_date_for_comparison_global(new_date_column)
+                total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(current_daily_sales, d1_dt, dl_dt)
+
                 avg_daily_sales_qty = total_sales_qty / days_analyzed if days_analyzed > 0 else 0
                 monthly_sales_qty = avg_daily_sales_qty * 24
                 monthly_sales_value = monthly_sales_qty * selling_rate
@@ -1620,6 +1666,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     "current_stock_qty": int(new_stock_qty),
                     "days_analyzed": int(days_analyzed),
                     "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
                     "avg_daily_sales_qty": float(avg_daily_sales_qty),
                     "monthly_sales_qty": float(monthly_sales_qty),
                     "monthly_sale_qty": int(monthly_sales_qty),
@@ -2580,53 +2627,59 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
             p_min_d1 = p_info['d1']
             p_max_dl = p_info['dl']
 
-            # Calculate daily sales per brand first, then aggregate
-            # Use day-of-period mapping (Day 1, Day 2...) for consistent X-axis
-            daily_sales_qty = defaultdict(float)
-            period_dates_set = set()
+            # Aggregate sales across all brands for each specific date in the period
+            aggregated_daily_sales = defaultdict(float)
+            all_involved_dates = set()
             
             for record in records:
-                brand_daily_stock = record.get('daily_sales', {}) or {}
-                if not brand_daily_stock: continue
+                # Use centralized movement logic for each brand
+                _, _, brand_attributed_sales, brand_reporting_dates = calculate_movements_logic(
+                    record.get('daily_sales', {}) or {},
+                    p_min_d1,
+                    p_max_dl
+                )
 
-                # Get brand dates within this period's bounds
-                brand_dates = []
-                for k, v in brand_daily_stock.items():
-                    dt = parse_date_for_sorting(k)
-                    if p_min_d1 <= dt <= p_max_dl:
-                        brand_dates.append((dt, k))
+                # Add all dates this brand reported on, even if no sales occurred
+                for d_str in brand_reporting_dates:
+                    all_involved_dates.add(d_str)
 
-                brand_dates.sort(key=lambda x: x[0])
+                for d_str, s_val in brand_attributed_sales.items():
+                    aggregated_daily_sales[d_str] += s_val
 
-                for i in range(1, len(brand_dates)):
-                    curr_dt, curr_str = brand_dates[i]
-                    prev_dt, prev_str = brand_dates[i-1]
-
-                    # Calculate sales between these specific reporting dates
-                    sales = max(0, brand_daily_stock[prev_str] - brand_daily_stock[curr_str])
-
-                    # Attribute the sales to the current date
-                    daily_sales_qty[curr_str] += sales
-                    period_dates_set.add(curr_str)
-                    period_dates_set.add(prev_str)
-
-            # Ensure start/end dates are represented
-            period_dates_set.add(p_info['d1_str'])
-            period_dates_set.add(p_info['dl_str'])
+            # Ensure start/end dates are represented in the trendline
+            all_involved_dates.add(normalize_date_key_global(p_info['d1_str']))
+            all_involved_dates.add(normalize_date_key_global(p_info['dl_str']))
             
             # Create normalized data points for the period
-            sorted_dates = sorted(list(period_dates_set), key=lambda d: parse_date_for_sorting(d))
-            day_data = []
+            # Sort unique dates chronologically
+            sorted_dates = sorted(list(all_involved_dates), key=lambda d: parse_date_for_comparison_global(d))
+
+            # Consolidation Step: Map dates to Day Numbers and group by normalized date
+            # This prevents duplicate dots if "25-Apr" and "25-Apr-25" both exist
+            consolidated_points = {}
             for date_str in sorted_dates:
-                dt = parse_date_for_sorting(date_str)
-                # Day Number = days since period start + 1
+                dt = parse_date_for_comparison_global(date_str)
+                if dt == datetime.min: continue
+
+                norm_date = dt.strftime("%d-%b-%y")
                 day_num = (dt - p_min_d1).days + 1
-                day_data.append({
-                    "day": day_num,
-                    "date": dt.strftime("%d-%b") if dt != datetime.min else date_str,
-                    "sales": round(daily_sales_qty.get(date_str, 0), 2)
-                })
+
+                if norm_date not in consolidated_points:
+                    consolidated_points[norm_date] = {
+                        "day": day_num,
+                        "date": dt.strftime("%d-%b"),
+                        "sales": 0
+                    }
+
+                consolidated_points[norm_date]["sales"] += aggregated_daily_sales.get(date_str, 0)
+
+            # Convert to final sorted list for the period
+            day_data = sorted(consolidated_points.values(), key=lambda x: x["day"])
             
+            # Ensure all sales values are rounded
+            for item in day_data:
+                item["sales"] = round(item["sales"], 2)
+
             period_trends[period_label] = day_data
         
         # Sort periods chronologically
@@ -2733,7 +2786,11 @@ async def refresh_analytics():
                 days_analyzed = record.get('days_analyzed', 1)
                 
                 # Recalculate derived values
-                total_sales_qty = max(0, D1_stock - DL_stock)
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+                daily_sales = record.get('daily_sales', {}) or {}
+                total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
                 avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
                 monthly_sales_qty = avg_daily_sales_qty * 24
                 monthly_sales_value = monthly_sales_qty * selling_rate
@@ -2744,6 +2801,7 @@ async def refresh_analytics():
                 # Update record with recalculated values
                 update_data = {
                     "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
                     "avg_daily_sales_qty": float(avg_daily_sales_qty),
                     "monthly_sales_qty": float(monthly_sales_qty),
                     "monthly_sale_qty": int(monthly_sales_qty),
