@@ -2535,13 +2535,28 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     if dt != datetime.min: raw_dates.append(dt)
 
             if raw_dates:
-                # Determine the most recent date to prune ghost data
-                latest_date = max(raw_dates)
-                active_dates = [d for d in raw_dates if (latest_date - d).days <= 60]
+                # CLUSTERING LOGIC: Prune ghost data by finding the most recent contiguous reporting block
+                # This prevents a single outlier date in the distant future from pruning legitimate current data
+                sorted_raw = sorted(list(set(raw_dates)))
+
+                # Default to everything if data is sparse
+                active_dates = sorted_raw
+
+                # Search backwards for a gap larger than 15 days
+                # This identifies the boundary of the 'Current' contiguous sales period
+                for i in range(len(sorted_raw) - 1, 0, -1):
+                    gap = (sorted_raw[i] - sorted_raw[i-1]).days
+                    if gap > 15:
+                        # We found the start of the current period cluster
+                        active_dates = sorted_raw[i:]
+                        break
 
                 if active_dates:
                     min_d1 = min(active_dates)
                     max_dl = max(active_dates)
+
+                    # Log the detected bounds for debugging
+                    logging.info(f"Current Period detected: {min_d1.strftime('%Y-%m-%d')} to {max_dl.strftime('%Y-%m-%d')}")
 
                     d1_month = min_d1.strftime("%b")
                     dl_month = max_dl.strftime("%b")
