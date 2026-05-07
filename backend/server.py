@@ -45,9 +45,6 @@ LIQUOR_PREFIX = "liquor_"  # Prefix for all liquor app collections
 def parse_date_for_comparison_global(date_str):
     """Universal date parser for filtering data points within D1-DL bounds"""
     try:
-        import re
-        from datetime import datetime
-
         if not date_str or date_str == 'N/A':
             return datetime.min
 
@@ -1468,11 +1465,11 @@ async def upload_todays_data(file: UploadFile = File(...)):
             
             return str(date_str)
         
-        # Normalize the new date for comparison
-        normalized_new_date = normalize_date_for_comparison(new_date_column)
+        # Normalize the new date for comparison using global utility
+        normalized_new_date = normalize_date_key_global(new_date_column)
         print(f"📅 New date to upload: '{new_date_column}' -> normalized: '{normalized_new_date}'")
         
-        # Get existing dates and normalize them (check ALL records, not just first 10)
+        # Get existing dates and normalize them
         existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(1000)
         existing_dates = set()
         existing_dates_raw = []
@@ -1481,7 +1478,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
             # Check DL_date
             if record.get('DL_date'):
                 raw_dl_date = record['DL_date']
-                normalized_dl_date = normalize_date_for_comparison(raw_dl_date)
+                normalized_dl_date = normalize_date_key_global(raw_dl_date)
                 existing_dates.add(normalized_dl_date)
                 existing_dates_raw.append(f"DL_date: {raw_dl_date}")
 
@@ -1489,7 +1486,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
             daily_sales = record.get('daily_sales', {}) or {}
             if daily_sales:
                 for date_key in daily_sales.keys():
-                    normalized_daily_date = normalize_date_for_comparison(date_key)
+                    normalized_daily_date = normalize_date_key_global(date_key)
                     existing_dates.add(normalized_daily_date)
                     existing_dates_raw.append(f"daily_sales: {date_key}")
 
@@ -1502,12 +1499,12 @@ async def upload_todays_data(file: UploadFile = File(...)):
             for record in existing_records[:3]:  # Show details for first 3 records
                 if record.get('DL_date'):
                     raw_date = record['DL_date']
-                    if normalize_date_for_comparison(raw_date) == normalized_new_date:
+                    if normalize_date_key_global(raw_date) == normalized_new_date:
                         matching_dates.append(f"DL_date: {raw_date}")
 
                 daily_sales = record.get('daily_sales', {}) or {}
                 for date_key in daily_sales.keys():
-                    if normalize_date_for_comparison(date_key) == normalized_new_date:
+                    if normalize_date_key_global(date_key) == normalized_new_date:
                         matching_dates.append(f"daily_sales: {date_key}")
 
             raise HTTPException(
@@ -1553,6 +1550,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                     "DL_stock": existing_brand.get('DL_stock'),
                     "current_stock_qty": existing_brand.get('current_stock_qty'),
                     "total_sales_qty": existing_brand.get('total_sales_qty'),
+                    "total_purchases_qty": existing_brand.get('total_purchases_qty'),
                     "avg_daily_sales_qty": existing_brand.get('avg_daily_sales_qty'),
                     "days_analyzed": existing_brand.get('days_analyzed'),
                     "monthly_sale_value": existing_brand.get('monthly_sale_value'),
@@ -1661,7 +1659,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                 # Update the brand in database (daily uploads always extend existing period)
                 update_data = {
                     "daily_sales": current_daily_sales,
-                    "DL_date": new_date_column,
+                    "DL_date": normalize_date_key_global(new_date_column),
                     "DL_stock": float(new_stock_qty),
                     "current_stock_qty": int(new_stock_qty),
                     "days_analyzed": int(days_analyzed),
@@ -1711,6 +1709,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                             print(f"⚠️ No rate in Excel or brands_master for '{brand_name}', using 0.0")
                     
                     # Create fresh brand record with this date as D1 and DL
+                    norm_date = normalize_date_key_global(new_date_column)
                     new_brand_data = {
                         'id': str(uuid.uuid4()),
                         'brand_name': brand_name,
@@ -1719,12 +1718,13 @@ async def upload_todays_data(file: UploadFile = File(...)):
                         'wholesale_rate': wholesale_rate,  # Loaded from brands_master
                         'selling_rate': selling_rate,      # Loaded from brands_master
                         'rate': selling_rate,
-                        'D1_date': new_date_column,
+                        'D1_date': norm_date,
                         'D1_stock': new_stock_qty,
-                        'DL_date': new_date_column,
+                        'DL_date': norm_date,
                         'DL_stock': new_stock_qty,
                         'current_stock_qty': int(new_stock_qty),
                         'total_sales_qty': 0.0,  # No sales yet (only one day)
+                        'total_purchases_qty': 0.0,
                         'avg_daily_sales_qty': 0.0,
                         'monthly_sales_qty': 0.0,
                         'monthly_sale_value': 0.0,
@@ -1735,7 +1735,7 @@ async def upload_todays_data(file: UploadFile = File(...)):
                         'avg_daily_sale': 0.0,
                         'stock_value_before': selling_rate * new_stock_qty,  # Same as today for D1
 
-                        'daily_sales': {new_date_column: new_stock_qty},
+                        'daily_sales': {norm_date: new_stock_qty},
                         'days_analyzed': 1,
                         'upload_timestamp': datetime.now(timezone.utc)
                     }
@@ -1870,6 +1870,9 @@ async def undo_upload(upload_id: str):
             brands_added = changes_snapshot.get("brands_added", [])
             date_added = changes_snapshot.get("date_added")
             
+            # Normalize the date for robust cleanup
+            normalized_date_to_remove = normalize_date_key_global(date_added) if date_added else None
+
             # Revert updated brands
             for brand_id, previous_state in brands_updated.items():
                 brand_record = await collections.liquor_data.find_one({"id": brand_id})
@@ -1877,8 +1880,8 @@ async def undo_upload(upload_id: str):
                 if brand_record:
                     # Remove the date that was added
                     current_daily_sales = brand_record.get('daily_sales', {})
-                    if date_added and date_added in current_daily_sales:
-                        del current_daily_sales[date_added]
+                    if normalized_date_to_remove and normalized_date_to_remove in current_daily_sales:
+                        del current_daily_sales[normalized_date_to_remove]
                     
                     # Restore previous values
                     update_data = {
@@ -1887,6 +1890,7 @@ async def undo_upload(upload_id: str):
                         "DL_stock": previous_state.get("DL_stock"),
                         "current_stock_qty": previous_state.get("current_stock_qty"),
                         "total_sales_qty": previous_state.get("total_sales_qty"),
+                        "total_purchases_qty": previous_state.get("total_purchases_qty"),
                         "avg_daily_sales_qty": previous_state.get("avg_daily_sales_qty"),
                         "days_analyzed": previous_state.get("days_analyzed"),
                         "monthly_sale_value": previous_state.get("monthly_sale_value"),
@@ -1902,6 +1906,47 @@ async def undo_upload(upload_id: str):
                     )
                     brands_reverted += 1
             
+            # FAILSAFE: Ensure the date is removed from ALL brands and DL_date is rolled back
+            if normalized_date_to_remove:
+                logging.info(f"Failsafe cleanup in undo for date '{normalized_date_to_remove}'...")
+
+                # 1. Remove from daily_sales
+                await collections.liquor_data.update_many(
+                    {},
+                    {"$unset": {f"daily_sales.{normalized_date_to_remove}": ""}}
+                )
+
+                # 2. Fix DL_date if it was set to the removed date
+                # We need to find all brands where DL_date matches the removed date
+                affected_brands = await collections.liquor_data.find({"DL_date": {"$in": [date_added, normalized_date_to_remove]}}).to_list(None)
+
+                for brand in affected_brands:
+                    daily_sales = brand.get("daily_sales", {})
+                    if not daily_sales: continue
+
+                    # Find the new latest date
+                    remaining_dates = sorted(daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
+                    if remaining_dates:
+                        new_dl_date = remaining_dates[-1]
+                        new_dl_stock = daily_sales[new_dl_date]
+
+                        # Recalculate movements for this brand
+                        d1_dt = parse_date_for_comparison_global(brand.get("D1_date"))
+                        dl_dt = parse_date_for_comparison_global(new_dl_date)
+                        t_sales, t_purchases, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
+                        # Update brand state
+                        await collections.liquor_data.update_one(
+                            {"_id": brand["_id"]},
+                            {"$set": {
+                                "DL_date": new_dl_date,
+                                "DL_stock": float(new_dl_stock),
+                                "current_stock_qty": int(new_dl_stock),
+                                "total_sales_qty": float(t_sales),
+                                "total_purchases_qty": float(t_purchases)
+                            }}
+                        )
+
             # Delete brands that were newly added
             if brands_added:
                 result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
@@ -1943,11 +1988,8 @@ async def undo_upload(upload_id: str):
             brands_reverted = len(restored_data)
             logging.info(f"Restored {brands_reverted} brands from backup {backup_id}")
         
-        # Mark upload as undone
-        await collections.upload_history.update_one(
-            {"id": upload_id},
-            {"$set": {"undone_at": datetime.now(timezone.utc)}}
-        )
+        # Delete the upload history record as requested
+        await collections.upload_history.delete_one({"id": upload_id})
         
         # Build appropriate message based on upload type
         if upload_type == "full_monthly":
@@ -2535,21 +2577,27 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                     if dt != datetime.min: raw_dates.append(dt)
 
             if raw_dates:
-                # CLUSTERING LOGIC: Prune ghost data by finding the most recent contiguous reporting block
-                # This prevents a single outlier date in the distant future from pruning legitimate current data
-                sorted_raw = sorted(list(set(raw_dates)))
+                # CLUSTERING LOGIC: Identify contiguous reporting blocks
+                # 1. Filter out obvious future outliers
+                now = datetime.now()
+                valid_raw = [d for d in raw_dates if d <= now + timedelta(days=30)]
+                if not valid_raw: valid_raw = raw_dates
 
-                # Default to everything if data is sparse
-                active_dates = sorted_raw
+                sorted_raw = sorted(list(set(valid_raw)))
 
-                # Search backwards for a gap larger than 15 days
-                # This identifies the boundary of the 'Current' contiguous sales period
-                for i in range(len(sorted_raw) - 1, 0, -1):
-                    gap = (sorted_raw[i] - sorted_raw[i-1]).days
-                    if gap > 15:
-                        # We found the start of the current period cluster
-                        active_dates = sorted_raw[i:]
-                        break
+                # 2. Partition into clusters based on 20-day gaps
+                clusters = []
+                if sorted_raw:
+                    current_cluster = [sorted_raw[0]]
+                    for i in range(1, len(sorted_raw)):
+                        if (sorted_raw[i] - sorted_raw[i-1]).days > 20:
+                            clusters.append(current_cluster)
+                            current_cluster = []
+                        current_cluster.append(sorted_raw[i])
+                    clusters.append(current_cluster)
+
+                # 3. Identify the "Current" cluster
+                active_dates = clusters[-1] if clusters else []
 
                 if active_dates:
                     min_d1 = min(active_dates)
@@ -3338,6 +3386,9 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                 brands_added = changes_snapshot.get("brands_added", [])
                 date_added = changes_snapshot.get("date_added")  # Get the date that was added
                 
+                # Normalize the date for robust cleanup
+                normalized_date = normalize_date_key_global(date_added) if date_added else None
+
                 # Get total count of brands in database for verification
                 total_brands_in_db = await collections.liquor_data.count_documents({})
                 logging.info(f"Reverting daily update: {len(brands_updated)} brands to restore (out of {total_brands_in_db} total), date_added: {date_added}")
@@ -3348,9 +3399,10 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                         # Build update operation
                         update_data = {}
                         for field in ["DL_date", "DL_stock", "current_stock_qty", 
-                                      "days_analyzed", "total_sales_qty", "avg_daily_sales_qty",
-                                      "monthly_sales_qty", "monthly_sale_qty", "monthly_sale_value",
-                                      "stock_value_today", "stock_available_days", "stock_ratio"]:
+                                      "days_analyzed", "total_sales_qty", "total_purchases_qty",
+                                      "avg_daily_sales_qty", "monthly_sales_qty", "monthly_sale_qty",
+                                      "monthly_sale_value", "stock_value_today", "stock_available_days",
+                                      "stock_ratio"]:
                             value = previous_state.get(field)
                             if value is not None:
                                 update_data[field] = value
@@ -3360,6 +3412,8 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                         daily_sales_value = previous_state.get("daily_sales")
                         if daily_sales_value is not None:
                             update_data["daily_sales"] = daily_sales_value if isinstance(daily_sales_value, dict) else {}
+                            if normalized_date and normalized_date in update_data["daily_sales"]:
+                                del update_data["daily_sales"][normalized_date]
                             logging.info(f"Restoring daily_sales with {len(update_data['daily_sales'])} dates (excluding '{date_added}')")
                         
                         # Apply the updates if any fields need to be restored
@@ -3375,41 +3429,41 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                     result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
                     brands_deleted = result.deleted_count
                 
-                # FAILSAFE: If snapshot is incomplete, remove the date from ALL brands
-                # This handles cases where the snapshot didn't capture all brands
-                if date_added and len(brands_updated) < total_brands_in_db:
-                    logging.warning(f"Snapshot incomplete ({len(brands_updated)} < {total_brands_in_db}). Running failsafe cleanup...")
+                # FAILSAFE: Ensure the date is removed from ALL brands and DL_date is rolled back
+                if normalized_date:
+                    logging.info(f"Running failsafe cleanup for date '{normalized_date}'...")
                     
-                    # Normalize the date to match daily_sales format
-                    def normalize_date_key_for_cleanup(date_str):
-                        import re
-                        try:
-                            date_str = str(date_str).strip()
-                            if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                                return dt.strftime("%d-%b-%y")
-                            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                            if match:
-                                day, month_name, year_suffix = match.groups()
-                                if not year_suffix or len(year_suffix) < 2:
-                                    year_suffix = '25'
-                                elif len(year_suffix) == 4:
-                                    year_suffix = year_suffix[2:]
-                                day = day.zfill(2)
-                                month_name = month_name.capitalize()
-                                return f"{day}-{month_name}-{year_suffix}"
-                        except Exception as e:
-                            logging.warning(f"Could not normalize date '{date_str}': {e}")
-                        return str(date_str)
-
-                    normalized_date = normalize_date_key_for_cleanup(date_added)
-                    
-                    # Remove the date key from ALL brands using $unset
-                    result = await collections.liquor_data.update_many(
-                        {},  # Update ALL documents
+                    # 1. Remove from daily_sales
+                    await collections.liquor_data.update_many(
+                        {},
                         {"$unset": {f"daily_sales.{normalized_date}": ""}}
                     )
-                    logging.info(f"Failsafe cleanup: Removed '{normalized_date}' from {result.modified_count} additional brands")
+
+                    # 2. Fix DL_date if it was set to the removed date
+                    affected_brands = await collections.liquor_data.find({"DL_date": {"$in": [date_added, normalized_date]}}).to_list(None)
+                    for brand in affected_brands:
+                        daily_sales = brand.get("daily_sales", {})
+                        if not daily_sales: continue
+
+                        remaining_dates = sorted(daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
+                        if remaining_dates:
+                            new_dl_date = remaining_dates[-1]
+                            new_dl_stock = daily_sales[new_dl_date]
+
+                            d1_dt = parse_date_for_comparison_global(brand.get("D1_date"))
+                            dl_dt = parse_date_for_comparison_global(new_dl_date)
+                            t_sales, t_purchases, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
+                            await collections.liquor_data.update_one(
+                                {"_id": brand["_id"]},
+                                {"$set": {
+                                    "DL_date": new_dl_date,
+                                    "DL_stock": float(new_dl_stock),
+                                    "current_stock_qty": int(new_dl_stock),
+                                    "total_sales_qty": float(t_sales),
+                                    "total_purchases_qty": float(t_purchases)
+                                }}
+                            )
                 
                 data_reverted = True
                 logging.info(f"Reverted daily_update: {brands_reverted} brands updated, {brands_deleted} brands deleted")

@@ -40,4 +40,4 @@
 ---
 
 ## D. Recommended Migration
-Run the provided `/api/admin/migrate-historical-data` endpoint to retroactively apply the accurate math to your production backups. This ensures your past trends and future restocking recommendations are based on consistent logic.
+Run the provided \`/api/refresh-analytics\` endpoint to retroactively apply the accurate math to your current production data. This ensures your dashboard totals and trendlines are synchronized using the new purchase-aware logic.
