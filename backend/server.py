@@ -15,6 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 import io
+import re
 
 # Import authentication routes factory
 # AUTH REMOVED - Backup in /BACKUP_AUTH_CODE/
@@ -552,12 +553,16 @@ def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
                         pass
                 
                 # Get stock quantity for the new date
-                stock_qty = 0
                 try:
                     if pd.notna(row[new_date_col]):
-                        stock_qty = float(row[new_date_col])
-                except:
-                    stock_qty = 0
+                        if isinstance(row[new_date_col], (int, float)):
+                            stock_qty = float(row[new_date_col])
+                        else:
+                            stock_qty = float(str(row[new_date_col]).replace(',', '').strip())
+                    else:
+                        continue # Skip missing values
+                except (ValueError, TypeError):
+                    continue # Skip invalid values
                 
                 # Get rate if available
                 rate = 0.0
@@ -808,9 +813,9 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 
                 # Handle year - be strict about valid years
                 if not year_suffix:
-                    year = '2025'
+                    year = str(datetime.now().year)
                 elif len(year_suffix) == 2 and year_suffix.isdigit():
-                    year = f"20{year_suffix}"  # 25 -> 2025
+                    year = f"20{year_suffix}"
                 elif len(year_suffix) == 4 and year_suffix.isdigit():
                     year = year_suffix
                 else:
@@ -1011,24 +1016,21 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                 try:
                     raw_value = row[date_col]
                     if pd.notna(raw_value) and str(raw_value).strip() != '':
-                        stock_qty = 0
                         try:
-                            stock_qty = float(raw_value)
-                        except (ValueError, TypeError):
-                            try:
-                                stock_qty = float(str(raw_value).replace(',', ''))
-                            except:
-                                stock_qty = 0
-                        
-                        daily_stock_data[date_col] = stock_qty
-                        
-                        if stock_qty >= 0:
+                            # Try to parse numeric value, skip if impossible
+                            if isinstance(raw_value, (int, float)):
+                                stock_qty = float(raw_value)
+                            else:
+                                stock_qty = float(str(raw_value).replace(',', '').strip())
+
+                            daily_stock_data[date_col] = stock_qty
                             valid_stock_values.append((date_col, stock_qty))
-                    else:
-                        daily_stock_data[date_col] = 0
-                        
-                except Exception:
-                    daily_stock_data[date_col] = 0
+                        except (ValueError, TypeError):
+                            # Skip this date for this brand instead of defaulting to 0
+                            logging.debug(f"Skipping invalid stock value '{raw_value}' for {brand_name} on {date_col}")
+                            continue
+                except Exception as e:
+                    logging.warning(f"Error processing stock for {brand_name} on {date_col}: {e}")
             
             if not valid_stock_values:
                 print(f"WARNING: No valid stock data found for {brand_name}")
@@ -1074,7 +1076,12 @@ def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") ->
                     match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
                     if match:
                         day, month_name, year_suffix = match.groups()
-                        year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                        if not year_suffix or len(year_suffix) < 2:
+                            year = str(datetime.now().year)
+                        elif len(year_suffix) == 2:
+                            year = f"20{year_suffix}"
+                        else:
+                            year = year_suffix[:4]
                         return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
                     return None
                 
@@ -1230,15 +1237,28 @@ def calculate_overstocking(data: List[Dict], multiplier: float = 3.0) -> List[Di
         # Calculate threshold (multiplier * monthly average)
         threshold = monthly_avg_sale * multiplier
         
-        if current_stock_value > threshold and monthly_avg_sale > 0:
-            overstock_value = current_stock_value - threshold
+        is_overstocked = False
+        overstock_value = 0
+        stock_ratio = item.get('stock_ratio', 0)
+
+        if monthly_avg_sale > 0:
+            if current_stock_value > threshold:
+                is_overstocked = True
+                overstock_value = current_stock_value - threshold
+        elif current_stock_value > 0:
+            # No sales but has stock = Infinite overstock
+            is_overstocked = True
+            overstock_value = current_stock_value
+            stock_ratio = 999.0
+
+        if is_overstocked:
             overstocked_items.append({
                 'brand_name': item['brand_name'],
                 'current_stock_value': current_stock_value,
                 'monthly_avg_sale': monthly_avg_sale,
                 'threshold': threshold,
                 'overstock_value': overstock_value,
-                'stock_ratio': item.get('stock_ratio', 0)
+                'stock_ratio': stock_ratio
             })
     
     return sorted(overstocked_items, key=lambda x: x['overstock_value'], reverse=True)
@@ -1584,9 +1604,9 @@ async def upload_todays_data(file: UploadFile = File(...)):
                             day, month_name, year_suffix = match.groups()
                             # Normalize to 2-digit year
                             if not year_suffix or len(year_suffix) < 2:
-                                year_suffix = '25'  # Default to 2025
+                                year_suffix = str(datetime.now().year)[2:]
                             elif len(year_suffix) == 4:
-                                year_suffix = year_suffix[2:]  # Convert 2025 to 25
+                                year_suffix = year_suffix[2:]
                             # Ensure 2-digit day with leading zero
                             day = day.zfill(2)
                             # Capitalize month name properly
@@ -1627,7 +1647,12 @@ async def upload_todays_data(file: UploadFile = File(...)):
                         match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
                         if match:
                             day, month_name, year_suffix = match.groups()
-                            year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                            if not year_suffix or len(year_suffix) < 2:
+                                year = str(datetime.now().year)
+                            elif len(year_suffix) == 2:
+                                year = f"20{year_suffix}"
+                            else:
+                                year = year_suffix[:4]
                             return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
                         return None
 
@@ -2097,11 +2122,11 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
-                # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                # Second try: dates without year (21-Sep, 22-Sep) - assume current year
                 match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                 if match:
                     day, month_name = match.groups()
-                    year = "2025"  # Default to 2025
+                    year = str(datetime.now().year)
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
@@ -2916,8 +2941,14 @@ async def get_calculation_details():
             # Calculate multiplier value (current stock value / monthly sales value)
             current_stock_value = record.get('stock_value_today', 0)
             monthly_sales_value = record.get('monthly_sale_value', 0)
-            multiplier_value = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
             
+            if monthly_sales_value > 0:
+                multiplier_value = current_stock_value / monthly_sales_value
+            elif current_stock_value > 0:
+                multiplier_value = 999.0
+            else:
+                multiplier_value = 0
+
             detail = {
                 'index': record.get('index_number', record.get('product_id', 'N/A')),
                 'brand_name': record['brand_name'],
@@ -5019,7 +5050,12 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(d1_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                if not year_suffix or len(year_suffix) < 2:
+                    year = str(datetime.now().year)
+                elif len(year_suffix) == 2:
+                    year = f"20{year_suffix}"
+                else:
+                    year = year_suffix[:4]
                 d1_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 d1_parsed = None
@@ -5028,7 +5064,12 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(dl_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                if not year_suffix or len(year_suffix) < 2:
+                    year = str(datetime.now().year)
+                elif len(year_suffix) == 2:
+                    year = f"20{year_suffix}"
+                else:
+                    year = year_suffix[:4]
                 dl_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 dl_parsed = None
@@ -5385,11 +5426,11 @@ async def generate_excel_report(request_data: dict = None):
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
-                    # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                    # Second try: dates without year (21-Sep, 22-Sep) - assume current year
                     match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                     if match:
                         day, month_name = match.groups()
-                        year = "2025"  # Default to 2025 for dates without year
+                        year = str(datetime.now().year)
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
