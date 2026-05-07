@@ -518,13 +518,13 @@ function App() {
         // Handle other errors
         if (typeof detail === 'object') {
           errorMessage = detail.message || errorMessage;
-          
+
           // Show available columns if provided
           if (detail.available_columns && Array.isArray(detail.available_columns)) {
             const columns = detail.available_columns.join(', ');
             errorMessage += `\n\nColumns found in your file: ${columns}`;
           }
-          
+
           // Show additional suggestions if available
           if (detail.suggestions && Array.isArray(detail.suggestions)) {
             const suggestions = detail.suggestions.map(s => `• ${s}`).join('\n');
@@ -2148,7 +2148,7 @@ function App() {
                                   stroke={CHART_COLORS[index % CHART_COLORS.length]}
                                   strokeWidth={3}
                                   dot={{ fill: CHART_COLORS[index % CHART_COLORS.length], strokeWidth: 2, r: 4 }}
-                                  connectNulls={false}
+                                  connectNulls={true}
                                   type="monotone"
                                 />
                               ))}
