@@ -27,7 +27,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
 # Import custom modules
-from models import LiquorData, UploadHistory, OverstockConfig, StockBackup, BrandMaster
+from models import *
 from utils.date_helper import parse_date, normalize_date_key
 from utils.stock_logic import calculate_movements, detect_monthly_restock
 
