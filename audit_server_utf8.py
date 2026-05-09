@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException
+﻿from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -7,22 +7,21 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import traceback
+from pathlib import Path
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
 import uuid
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
+import pandas as pd
 import io
+import re
+
+# Import authentication routes factory
+# AUTH REMOVED - Backup in /BACKUP_AUTH_CODE/
+# from auth.routes import create_auth_router
 import json
 import pytz
-import pandas as pd
-import re
-from pathlib import Path
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
-
-# Import custom modules
-from models import LiquorData, UploadHistory, OverstockConfig, StockBackup, BrandMaster
-from utils.date_helper import parse_date, normalize_date_key
-from utils.stock_logic import calculate_movements, detect_monthly_restock
-
-# ReportLab imports for PDF generation
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
@@ -42,24 +41,362 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Collection name prefixes for data separation
-LIQUOR_PREFIX = "liquor_"
+LIQUOR_PREFIX = "liquor_"  # Prefix for all liquor app collections
 
-# Collection references
+def parse_date_for_comparison_global(date_str):
+    """Universal date parser for filtering data points within D1-DL bounds"""
+    try:
+        if not date_str or date_str == 'N/A':
+            return datetime.min
+
+        # If it's already a datetime object
+        if isinstance(date_str, datetime):
+            return date_str.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        date_str = str(date_str).strip()
+
+        # Method 1: Handle ISO/Full datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
+        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
+            try:
+                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                return dt
+            except:
+                pass
+
+        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY or DD MMM YY formats
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})[-/\s]?(\d{0,4})', date_str, re.IGNORECASE)
+        if match:
+            day, month_name, year_suffix = match.groups()
+            # Default to current year if missing
+            if not year_suffix or len(year_suffix) < 2:
+                year = str(datetime.now().year)
+            elif len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+
+            try:
+                return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+            except:
+                pass
+
+        # Method 3: Handle numeric dates DD-MM-YY or DD/MM/YY
+        match = re.search(r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', date_str)
+        if match:
+            day, month, year_suffix = match.groups()
+            if len(year_suffix) == 2:
+                year = f"20{year_suffix}"
+            else:
+                year = year_suffix
+            try:
+                return datetime(int(year), int(month), int(day))
+            except:
+                pass
+
+        # Method 4: Match DD-MMM (missing year)
+        match = re.search(r'(\d{1,2})[-/\s]([A-Za-z]{3})$', date_str, re.IGNORECASE)
+        if match:
+            day, month_name = match.groups()
+            return datetime.strptime(f"{day}-{month_name}-{datetime.now().year}", "%d-%b-%Y")
+
+        return datetime.min
+    except:
+        return datetime.min
+
+def normalize_date_key_global(date_str):
+    """Normalize date to DD-MMM-YY format for consistent storage"""
+    try:
+        dt = parse_date_for_comparison_global(date_str)
+        if dt != datetime.min:
+            return dt.strftime("%d-%b-%y")
+    except Exception as e:
+        logging.warning(f"Could not normalize date '{date_str}': {e}")
+
+    return str(date_str)
+
+def calculate_movements_logic(daily_sales_dict, d1_dt, dl_dt):
+    """
+    Centralized helper to calculate total sales and purchases from daily stock movements.
+    Uses the 'Sum of Decreases' method.
+    """
+    relevant_dates = []
+    for k, v in daily_sales_dict.items():
+        dt = parse_date_for_comparison_global(k)
+        if dt != datetime.min and d1_dt <= dt <= dl_dt:
+            # IMPORTANT: Normalize the date key here to ensure consistency in attribution
+            norm_k = normalize_date_key_global(k)
+            relevant_dates.append((dt, v, norm_k))
+
+    relevant_dates.sort(key=lambda x: x[0])
+
+    total_sales = 0
+    total_purchases = 0
+    daily_attributed_sales = defaultdict(float)
+    reporting_dates = set()
+
+    if len(relevant_dates) >= 2:
+        for i in range(1, len(relevant_dates)):
+            prev_qty = relevant_dates[i-1][1]
+            curr_qty = relevant_dates[i][1]
+            curr_str = relevant_dates[i][2]
+
+            reporting_dates.add(relevant_dates[i-1][2])
+            reporting_dates.add(curr_str)
+
+            if curr_qty > prev_qty:
+                total_purchases += (curr_qty - prev_qty)
+            elif curr_qty < prev_qty:
+                sales_inc = (prev_qty - curr_qty)
+                total_sales += sales_inc
+                daily_attributed_sales[curr_str] += sales_inc
+    elif len(relevant_dates) == 1:
+        reporting_dates.add(relevant_dates[0][2])
+
+    return float(total_sales), float(total_purchases), daily_attributed_sales, reporting_dates
+
+# Collection references with proper prefixing
 class Collections:
+    """Centralized collection references for the Liquor app"""
     @property
-    def liquor_data(self): return db[f"{LIQUOR_PREFIX}data"]
+    def liquor_data(self):
+        return db[f"{LIQUOR_PREFIX}data"]
+    
     @property
-    def upload_history(self): return db[f"{LIQUOR_PREFIX}upload_history"]
+    def upload_history(self):
+        return db[f"{LIQUOR_PREFIX}upload_history"]
+    
     @property
-    def stock_backups(self): return db[f"{LIQUOR_PREFIX}stock_backups"]
+    def stock_backups(self):
+        return db[f"{LIQUOR_PREFIX}stock_backups"]
+    
     @property
-    def brands_master(self): return db[f"{LIQUOR_PREFIX}brands_master"]
+    def brands_master(self):
+        return db[f"{LIQUOR_PREFIX}brands_master"]
 
+# Initialize collections
 collections = Collections()
+
+# Create the main app without a prefix
 app = FastAPI()
+
+# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# --- Helper functions (refactored) ---
+# AUTH REMOVED - Backup in /BACKUP_AUTH_CODE/
+# auth_router = create_auth_router(db.users)
+# api_router.include_router(auth_router, tags=["authentication"])
+
+# Data Models
+class LiquorData(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    rate: float
+    daily_sales: Dict[str, int] = Field(default_factory=dict)
+    monthly_sale_qty: int
+    monthly_sale_value: float
+    avg_daily_sale: float
+    stock_available_days: float
+    stock_value_before: float
+    stock_value_today: float
+    stock_ratio: float
+    # New fields for enhanced analysis
+    index_number: int = Field(default=0)
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    D1_date: str = Field(default="N/A")
+    D1_stock: float = Field(default=0.0)
+    DL_date: str = Field(default="N/A")
+    DL_stock: float = Field(default=0.0)
+    total_sales_qty: float = Field(default=0.0)
+    avg_daily_sales_qty: float = Field(default=0.0)
+    days_analyzed: int = Field(default=0)
+    current_stock_qty: int = Field(default=0)
+    upload_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UploadHistory(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    upload_type: str  # "full_monthly", "daily_update", or "rate_update"
+    upload_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    records_count: int
+    file_size: int
+    uploaded_by: str = Field(default="dashboard_user")
+    can_undo: bool = Field(default=True)  # Whether this upload can be undone
+    undone_at: Optional[datetime] = None  # When was this upload undone
+    changes_snapshot: Optional[Dict[str, Any]] = None  # Detailed changes for granular undo
+
+class OverstockConfig(BaseModel):
+    multiplier: float = 3.0
+
+class AnalyticsResponse(BaseModel):
+    total_brands: int
+    total_stock_value: float
+    total_overstocked_value: float
+    overstocked_brands: int
+    top_selling_brands: List[Dict[str, Any]]
+    overstocked_items: List[Dict[str, Any]]
+    sales_trends: Dict[str, Any]
+
+class ChartsResponse(BaseModel):
+    volume_leaders: List[Dict[str, Any]]
+    velocity_leaders: List[Dict[str, Any]]
+    revenue_leaders: List[Dict[str, Any]]
+    revenue_proportion: List[Dict[str, Any]]
+
+class DemandRecommendation(BaseModel):
+    brand_name: str
+    selling_rate: float
+    wholesale_rate: float
+    current_stock_qty: int
+    recommended_qty: float
+    urgency_level: str
+
+# Module 1: Brand & Rate Management Models
+class AddBrandRequest(BaseModel):
+    """Request model for adding a new brand manually"""
+    index_number: int
+    brand_name: str
+    wholesale_rate: float
+    selling_rate: float
+    initial_stock_qty: int = Field(default=0)
+
+class BrandRateInfo(BaseModel):
+    """Response model for brand rate information"""
+    id: str
+    index_number: int
+    brand_name: str
+    wholesale_rate: float
+    selling_rate: float
+    current_stock_qty: int
+    stock_value_today: float
+    last_updated: datetime
+
+class UpdateRatesResponse(BaseModel):
+    """Response for bulk rate update operations"""
+    updated_count: int
+    not_found_count: int
+    updated_brands: List[str]
+    not_found_brands: List[str]
+
+# Module 3: Stock Reset & Backup Models
+class StockBackup(BaseModel):
+    """Model for stock backup records"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    backup_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    total_records: int
+    backup_reason: str = Field(default="manual_backup")
+    created_by: str = Field(default="dashboard_user")
+    data_snapshot: List[Dict[str, Any]]
+
+class BackupListResponse(BaseModel):
+    """Response for listing backups"""
+    id: str
+    backup_timestamp: datetime
+    total_records: int
+    backup_reason: str
+    created_by: str
+
+# Module 4: Monthly Report Generation Models
+class ReportParameters(BaseModel):
+    """Parameters for PDF report generation"""
+    include_executive_summary: bool = True
+    include_top_sellers: bool = True
+    include_slow_sellers: bool = True
+    include_capital_blockers: bool = True
+    include_revenue_analysis: bool = True
+    include_demand_forecast: bool = True
+    include_profit_analysis: bool = True
+    include_recommendations: bool = True
+    include_datewise_analysis: bool = False
+    report_title: str = "Monthly Sales Analytics Report"
+    report_period: str = ""
+    selected_periods: list = []  # List of period IDs for multi-period reports
+
+# Module 5: Historical Sales Averages Models
+class HistoricalSalesAverage(BaseModel):
+    """Model for storing historical sales averages before reset"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    month_year: str  # Format: "Sep-2025"
+    average_daily_sales_qty: float  # Average bottles sold per day
+    average_daily_sales_value: float  # Average revenue per day
+    total_sales_quantity: float  # Total bottles sold in the month
+    total_sales_value: float  # Total revenue in the month
+    total_sales_days: int  # Number of days with sales data
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    calculation_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BrandMaster(BaseModel):
+    """Master collection for brand rates that persist across stock resets"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    wholesale_rate: float = Field(default=0.0)
+    selling_rate: float = Field(default=0.0)
+    index_number: int = Field(default=0)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AnalyticsSourceInfo(BaseModel):
+    """Information about data source used for analytics"""
+    data_source: str  # "historical" or "current"
+    days_of_data: int
+    using_month: str
+    transition_threshold: int = 5
+    is_transitioning: bool
+    confidence_level: str  # "low", "medium", "high"
+
+class TopSeller(BaseModel):
+    brand_name: str
+    revenue: float
+    volume: float
+    profit: float
+    profit_margin: float
+
+class SlowSeller(BaseModel):
+    brand_name: str
+    revenue: float
+    volume: float
+    stock_days: float
+    stock_value: float
+
+class CapitalBlocker(BaseModel):
+    brand_name: str
+    stock_value: float
+    stock_quantity: float
+    stock_days: float
+    overstocked_ratio: float
+
+class DemandForecastItem(BaseModel):
+    brand_name: str
+    current_stock: float
+    recommended_qty: float
+    wholesale_rate: float
+    total_cost: float
+    urgency_level: str
+
+class ProfitAnalysis(BaseModel):
+    total_revenue: float
+    total_cost: float
+    total_profit: float
+    average_profit_margin: float
+    top_profit_brands: List[Dict[str, Any]]
+
+class MonthlyReportData(BaseModel):
+    """Complete monthly report data structure"""
+    report_period: str
+    total_brands: int
+    executive_summary: Dict[str, Any]
+    top_sellers_revenue: List[TopSeller]
+    top_sellers_volume: List[TopSeller]
+    slow_sellers: List[SlowSeller]
+    capital_blockers: List[CapitalBlocker]
+    demand_forecast: List[DemandForecastItem]
+    profit_analysis: ProfitAnalysis
+    recommendations: List[str]
+
+# Helper functions
 async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], filename: str):
     """Check if the uploaded data contains dates that already exist in the database"""
     try:
@@ -111,7 +448,7 @@ async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], fil
                 }
             )
         
-        print(f"✅ Date validation passed for {filename}. New dates: {sorted(list(new_dates))}")
+        print(f"Γ£à Date validation passed for {filename}. New dates: {sorted(list(new_dates))}")
         
     except HTTPException:
         raise
@@ -120,138 +457,709 @@ async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], fil
         # Don't block upload if date validation fails, just log the warning
 
 def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
-    """Parse today's stock data - extract new date column and stock values"""
+    """Parse today's stock data - extract new date column and stock values for appending"""
     try:
+        # Read the Excel file
         df = pd.read_excel(io.BytesIO(file_content))
-        if df.empty: raise HTTPException(status_code=400, detail="File is empty")
         
-        df.columns = [str(col).strip() for col in df.columns]
-        brand_col, new_date_col = None, None
+        if df.empty:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
+        
+        # Clean column names - handle non-string column names
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+        
+        # Find key columns
+        brand_col = None
+        index_col = None
+        new_date_col = None
+        rate_col = None
         
         for col in df.columns:
-            col_lower = col.lower()
-            if 'brand' in col_lower and 'name' in col_lower: brand_col = col
-            elif parse_date(col) != datetime.min: new_date_col = col
+            col_str = str(col)
+            col_lower = col_str.lower().strip()
             
-        if not brand_col or not new_date_col:
-            raise HTTPException(status_code=400, detail="Missing Brand or Date column")
-            
-        brands_data = {}
+            if 'brand' in col_lower and 'name' in col_lower:
+                brand_col = col
+            elif any(term in col_lower for term in ['index', 'sl', 'sr', 'no', 'id']) and len(col_str) <= 10:
+                index_col = col
+            elif 'rate' in col_lower and 'wholesale' not in col_lower:
+                # Found rate column (but not wholesale rate)
+                rate_col = col
+                print(f"Γ£à Detected rate column: '{col}'")
+            else:
+                # Check if this is the new date column (should be only one date column in today's data)
+                is_date_column = False
+                
+                # Method 1: Check for month names
+                if any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                    is_date_column = True
+                
+                # Method 2: Check for date patterns
+                import re
+                date_patterns = [
+                    r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',
+                    r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}',
+                    r'\w{3}[-/]\d{1,2}[-/]?\d{0,4}',
+                    r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',
+                ]
+                
+                for pattern in date_patterns:
+                    if re.search(pattern, col_str, re.IGNORECASE):
+                        is_date_column = True
+                        break
+                
+                if is_date_column and new_date_col is None:
+                    new_date_col = col
+                    print(f"Γ£à Detected today's date column: '{col}'")
+        
+        if not brand_col:
+            raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in today's data file")
+        
+        if not new_date_col:
+            raise HTTPException(status_code=400, detail="Could not find date column in today's data file")
+        
+        print("≡ƒôè Today's Data Column Detection:")
+        print(f"  - Brand column: {brand_col}")
+        print(f"  - Index column: {index_col}")
+        print(f"  - Rate column: {rate_col}")
+        print(f"  - New date column: {new_date_col}")
+        
+        # Extract data for each brand
+        todays_data = {
+            'new_date_column': str(new_date_col),
+            'brands_data': {}
+        }
+        
+        # Filter out header rows
         df = df[df[brand_col].notna()]
-        for _, row in df.iterrows():
-            brand_name = str(row[brand_col]).strip()
-            if not brand_name: continue
-            
+        df = df[~df[brand_col].astype(str).str.contains('total|sum|^brand name$|^name$|^brand$', na=False, case=False)]
+        
+        for idx, row in df.iterrows():
             try:
-                raw_val = row[new_date_col]
-                stock_qty = float(raw_val) if pd.notna(raw_val) and str(raw_val).strip() != '' else None
-                brands_data[brand_name] = {'stock_qty': stock_qty}
-            except: continue
-            
-        return {'new_date_column': str(new_date_col), 'brands_data': brands_data}
+                brand_name = str(row[brand_col]).strip()
+                if not brand_name or brand_name.lower() in ['nan', 'none', '']:
+                    continue
+                
+                # Get index number for matching
+                index_num = idx + 1
+                if index_col and pd.notna(row[index_col]):
+                    try:
+                        index_val = str(row[index_col]).strip()
+                        import re
+                        numeric_match = re.search(r'\d+', index_val)
+                        if numeric_match:
+                            index_num = int(numeric_match.group())
+                    except:
+                        pass
+                
+                # Get stock quantity for the new date
+                try:
+                    if pd.notna(row[new_date_col]):
+                        if isinstance(row[new_date_col], (int, float)):
+                            stock_qty = float(row[new_date_col])
+                        else:
+                            stock_qty = float(str(row[new_date_col]).replace(',', '').strip())
+                    else:
+                        continue # Skip missing values
+                except (ValueError, TypeError):
+                    continue # Skip invalid values
+                
+                # Get rate if available
+                rate = 0.0
+                if rate_col is not None:
+                    try:
+                        if pd.notna(row[rate_col]):
+                            rate = float(row[rate_col])
+                    except:
+                        rate = 0.0
+                
+                todays_data['brands_data'][brand_name] = {
+                    'index_number': index_num,
+                    'stock_qty': stock_qty,
+                    'rate': rate  # Include rate from Excel
+                }
+                
+                print(f"  {brand_name} (Index: {index_num}): {stock_qty} units on {new_date_col}")
+                
+            except Exception as e:
+                print(f"Warning: Error parsing row for {brand_name}: {e}")
+                continue
+        
+        if not todays_data['brands_data']:
+            raise HTTPException(status_code=400, detail="No valid brand data found in today's file")
+        
+        print(f"Γ£à Successfully parsed today's data for {len(todays_data['brands_data'])} brands")
+        return todays_data
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error parsing today's data: {str(e)}")
 
 def parse_excel_data(file_content: bytes, upload_type: str = "full_monthly") -> List[Dict[str, Any]]:
-    """Generic Excel parser that delegates to specific format parsers"""
+    """Parse Excel file and return structured data - supports both tabular and list formats"""
     try:
-        df = pd.read_excel(io.BytesIO(file_content))
-        # Simple heuristic to detect tabular vs list format
-        if len(df.columns) >= 3 and any('brand' in str(col).lower() for col in df.columns):
-            return parse_tabular_format(df, upload_type)
-        return parse_list_format(df)
+        # Try to read as Excel with headers first (tabular format)
+        try:
+            df = pd.read_excel(io.BytesIO(file_content))
+            
+            # Check if it looks like a tabular format (has typical column names)
+            if len(df.columns) >= 3 and any(str(col).lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+                return parse_tabular_format(df, upload_type)
+            else:
+                # Try headerless format
+                df_headerless = pd.read_excel(io.BytesIO(file_content), header=None)
+                return parse_list_format(df_headerless)
+                
+        except Exception as excel_error:
+            # If Excel fails, try CSV only if it's likely a CSV file (not binary Excel)
+            try:
+                # Try to decode as text first to check if it's a CSV
+                file_content_str = file_content.decode('utf-8')
+                
+                # If decoding succeeds, it might be a CSV file
+                df = pd.read_csv(io.StringIO(file_content_str))
+                if len(df.columns) >= 3 and any(str(col).lower().strip() in ['brand name', 'brand_name', 'product', 'name'] for col in df.columns):
+                    return parse_tabular_format(df, upload_type)
+                else:
+                    df_headerless = pd.read_csv(io.StringIO(file_content_str), header=None)
+                    return parse_list_format(df_headerless)
+                    
+            except UnicodeDecodeError:
+                # If it can't be decoded as UTF-8, it's likely a binary Excel file with encoding issues
+                # Try different Excel reading approaches
+                try:
+                    # Try reading Excel without specifying engine
+                    df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
+                    return parse_tabular_format(df, upload_type)
+                except:
+                    try:
+                        # Try with xlrd engine for older Excel files
+                        df = pd.read_excel(io.BytesIO(file_content), engine='xlrd')
+                        return parse_tabular_format(df, upload_type)
+                    except:
+                        pass
+                        
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Unable to parse Excel file. The file may be corrupted or in an unsupported format. Original error: {str(excel_error)}"
+                )
+            except Exception as csv_error:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Unable to parse file. Please ensure it's a valid Excel or CSV file. Error: {str(csv_error)}"
+                )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Excel parse error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
 
 def parse_tabular_format(df: pd.DataFrame, upload_type: str = "full_monthly") -> List[Dict[str, Any]]:
-    """Refactored tabular parser with movement-based logic and blank cell handling"""
-    df.columns = [str(col).strip() for col in df.columns]
-    brand_col, wholesale_rate_col, selling_rate_col, index_col = None, None, None, None
-    date_columns = []
-
-    for col in df.columns:
-        col_lower = col.lower()
-        if 'brand' in col_lower and 'name' in col_lower: brand_col = col
-        elif 'wholesale' in col_lower and 'rate' in col_lower: wholesale_rate_col = col
-        elif 'selling' in col_lower and 'rate' in col_lower: selling_rate_col = col
-        elif 'rate' in col_lower and not wholesale_rate_col: selling_rate_col = col
-        elif col_lower in ['index', 'sl', 'sr', 'no']: index_col = col
-        elif parse_date(col) != datetime.min: date_columns.append(col)
-
-    if not brand_col or not date_columns:
-        raise HTTPException(status_code=400, detail="Could not identify Brand or Date columns")
-
-    # Sort date columns chronologically using our helper
-    date_columns.sort(key=lambda x: parse_date(x))
+    """Parse liquor stock data with FIXED D1 and DL calculation"""
+    if df.empty:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty or contains no data")
     
-    liquor_data = []
+    try:
+        # Clean column names - handle non-string column names
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+    except Exception as e:
+        print(f"Warning: Error cleaning column names: {e}")
+        # Fallback: create simple column names
+        df.columns = [f"Column_{i}" for i in range(len(df.columns))]
+    
+    # Find key columns
+    brand_col = None
+    wholesale_rate_col = None
+    selling_rate_col = None
+    index_col = None
+    date_columns = []
+    
+    for col in df.columns:
+        # Convert column name to string and handle potential NaN/float values
+        col_str = str(col) if col is not None else ""
+        col_lower = col_str.lower().strip()
+        
+        if 'brand' in col_lower and 'name' in col_lower:
+            brand_col = col
+        elif ('wholesale' in col_lower or 'w/' in col_lower or col_lower == 'w/rate') and 'rate' in col_lower:
+            wholesale_rate_col = col
+        elif ('selling' in col_lower or 'retail' in col_lower or col_lower == 'rate' or col_lower == 's/rate') and 'rate' in col_lower:
+            selling_rate_col = col
+        elif 'rate' in col_lower and '/' not in col_lower and not wholesale_rate_col and not selling_rate_col:
+            selling_rate_col = col  # Default to selling rate if only one rate column (but not W/RATE or S/RATE)
+        elif len(col_str) <= 10 and (
+            'index' in col_lower or 
+            col_lower in ['sl', 'sr', 'no', 'no.', 's.no', 's.no.', 'id', 'sno'] or
+            col_lower.startswith('no.') or
+            col_lower.startswith('s.no')
+        ):
+            # More specific check for index columns to avoid matching "nov" in November dates
+            index_col = col
+        else:
+            # Check if column represents a date (more flexible detection)
+            is_date_column = False
+            
+            # IMPORTANT: Skip columns that are clearly rate-related (even if not captured above)
+            if ('rate' in col_lower or 'price' in col_lower or 'cost' in col_lower or 'value' in col_lower) and '/' in col_str:
+                # This is likely W/RATE, S/RATE, or similar - NOT a date column
+                is_date_column = False
+                print(f"Γ¢ö Skipping rate column: '{col}' (contains rate/price with slash)")
+            # Method 1: Check for month names (original logic)
+            elif any(date_part in col_lower for date_part in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                is_date_column = True
+            
+            # Method 2: Check for date patterns using regex
+            import re
+            date_patterns = [
+                r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',     # 20/09/25, 03-10-25
+                r'\d{1,2}[-/]\w{3}[-/]?\d{0,4}',      # 20-Sep-25, 03-Oct-25  
+                r'\w{3}[-/]\d{1,2}[-/]?\d{0,4}',      # Sep-20-25, Oct-03-25
+                r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',       # 2025-09-20, 2025-10-03
+                r'\d{1,2}\s+\w+\s+\d{2,4}',          # 20 Sep 25, 03 Oct 25
+            ]
+            
+            for pattern in date_patterns:
+                if re.search(pattern, col_str, re.IGNORECASE):
+                    is_date_column = True
+                    break
+            
+            # Method 3: Check for date-like keywords
+            date_keywords = ['date', 'day', 'month', 'year', 'time', 'period']
+            if any(keyword in col_lower for keyword in date_keywords):
+                is_date_column = True
+            
+            # Method 4: If column contains only numbers, it might be dates
+            # Try to parse the first non-empty cell to see if it's a date-like number
+            if not is_date_column and col in df.columns:
+                try:
+                    first_values = df[col].dropna().head(3)
+                    for val in first_values:
+                        val_str = str(val).strip()
+                        # Check if it looks like a date number (e.g., 44520 for Excel date serial)
+                        if val_str.replace('.', '').isdigit() and len(val_str) >= 4:
+                            # Might be Excel date serial number or similar
+                            is_date_column = True
+                            break
+                except:
+                    pass
+            
+            if is_date_column:
+                date_columns.append(col)
+                print(f"Γ£à Detected date column: '{col}'")
+    
+    # Filter and sort date columns properly 
+    print(f"≡ƒôà Date columns BEFORE filtering: {date_columns}")
+    print(f"≡ƒôï All columns: {list(df.columns)}")
+    
+    # Smart two-pass parsing system to handle ambiguous DD/MM vs MM/DD formats
+    def detect_date_format(date_columns_list):
+        """
+        Intelligently detect whether numeric dates are DD/MM or MM/DD format.
+        Returns: 'DD/MM' or 'MM/DD' or 'AMBIGUOUS'
+        """
+        import re
+        
+        numeric_dates = []
+        for col in date_columns_list:
+            col_str = str(col).strip()
+            # Only check numeric dates (not month-name dates like "20-Sep-25")
+            match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', col_str)
+            if match:
+                first_num = int(match.group(1))
+                second_num = int(match.group(2))
+                numeric_dates.append((first_num, second_num, col_str))
+        
+        if not numeric_dates:
+            return 'DD/MM'  # Default if no numeric dates found
+        
+        # Smart detection logic:
+        # 1. If any first number > 12, it MUST be DD/MM format (days can be 13-31)
+        # 2. If any second number > 12, it MUST be DD/MM format (month can't be > 12)
+        # 3. If both are always <= 12, it's ambiguous - default to DD/MM (Indian standard)
+        
+        has_first_gt_12 = any(first > 12 for first, second, _ in numeric_dates)
+        has_second_gt_12 = any(second > 12 for first, second, _ in numeric_dates)
+        
+        if has_first_gt_12:
+            print("≡ƒôì Date format detected: DD/MM (found day > 12 in first position)")
+            return 'DD/MM'
+        
+        if has_second_gt_12:
+            print("≡ƒôì Date format detected: MM/DD (found value > 12 in second position)")
+            return 'MM/DD'
+        
+        # All values <= 12 in both positions - ambiguous
+        print("≡ƒôì Date format ambiguous (all values Γëñ 12), defaulting to DD/MM (Indian standard)")
+        return 'DD/MM'
+    
+    # Detect the date format before parsing
+    detected_format = detect_date_format(date_columns)
+    print(f"≡ƒÄ» Using date format: {detected_format}")
+    
+    def parse_date_column(col_name, date_format='DD/MM'):
+        """Parse date from column name using specified format - return None if invalid"""
+        try:
+            import re
+            from datetime import datetime
+            
+            col_clean = str(col_name).strip()
+            
+            # Pattern 1: day-month-year with month name (20-Sep-25, 01-Oct-25, etc.)
+            # Use [A-Za-z] instead of \w to ensure we match letters only (not digits)
+            match = re.search(r'(\d{1,2})[-/]([A-Za-z]{3})[-/]?(\d{0,4})', col_clean, re.IGNORECASE)
+            if match:
+                day, month_name, year_suffix = match.groups()
+                
+                # Handle year - be strict about valid years
+                if not year_suffix:
+                    year = str(datetime.now().year)
+                elif len(year_suffix) == 2 and year_suffix.isdigit():
+                    year = f"20{year_suffix}"
+                elif len(year_suffix) == 4 and year_suffix.isdigit():
+                    year = year_suffix
+                else:
+                    # Invalid year format, skip this column
+                    print(f"Skipping invalid date column: '{col_name}' (bad year: '{year_suffix}')")
+                    return None
+                
+                try:
+                    parsed_date = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                    print(f"Γ£ô Parsed date (month-name format): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError as e:
+                    print(f"Skipping unparseable date: '{col_name}' (error: {e})")
+                    return None
+            
+            # Pattern 2: Numeric date formats with intelligent format detection
+            # Check YYYY-MM-DD first (unambiguous ISO format)
+            match = re.search(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', col_clean)
+            if match:
+                year, month, day = match.groups()
+                date_str = f"{year}/{month}/{day}"
+                try:
+                    parsed_date = datetime.strptime(date_str, '%Y/%m/%d')
+                    print(f"Γ£ô Parsed date (YYYY/MM/DD): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError:
+                    pass
+            
+            # Check numeric dates DD/MM or MM/DD based on detected format
+            match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', col_clean)
+            if match:
+                first_num, second_num, year_part = match.groups()
+                
+                # Apply detected format
+                if date_format == 'DD/MM':
+                    day, month = first_num, second_num
+                    format_name = 'DD/MM'
+                else:  # MM/DD
+                    month, day = first_num, second_num
+                    format_name = 'MM/DD'
+                
+                # Handle year
+                if len(year_part) == 2:
+                    year = f"20{year_part}"
+                    date_str = f"{day}/{month}/{year}"
+                    date_format_str = '%d/%m/%Y'
+                else:
+                    year = year_part
+                    date_str = f"{day}/{month}/{year}"
+                    date_format_str = '%d/%m/%Y'
+                
+                try:
+                    parsed_date = datetime.strptime(date_str, date_format_str)
+                    print(f"Γ£ô Parsed date ({format_name}): '{col_name}' -> {parsed_date.strftime('%Y-%m-%d')}")
+                    return parsed_date
+                except ValueError as e:
+                    print(f"ΓÜá Failed to parse '{col_name}' as {format_name}: {e}")
+                    return None
+            
+            # If no pattern matched
+            print(f"ΓÜá Skipping column (no recognizable date format): '{col_name}'")
+            return None
+                
+        except Exception as e:
+            print(f"Γ¥î Exception parsing '{col_name}': {e}")
+            return None
+    
+    # Filter out invalid date columns and sort the valid ones
+    valid_date_columns = []
+    for col in date_columns:
+        parsed_date = parse_date_column(col, date_format=detected_format)
+        if parsed_date is not None:
+            valid_date_columns.append((col, parsed_date))
+    
+    # Sort by parsed date
+    valid_date_columns.sort(key=lambda x: x[1])
+    
+    # Extract just the column names in correct order
+    date_columns = [col for col, date in valid_date_columns]
+    
+    print(f"Valid date columns AFTER filtering and sorting: {date_columns}")
+    
+    print("≡ƒôè Column Detection Summary:")
+    print(f"  - Brand column: {brand_col}")
+    print(f"  - Index column: {index_col}")
+    print(f"  - Wholesale rate: {wholesale_rate_col}")
+    print(f"  - Selling rate: {selling_rate_col}")
+    print(f"  - Date columns found: {date_columns}")
+    print(f"  - All available columns: {list(df.columns)}")
+    
+    if not brand_col:
+        raise HTTPException(status_code=400, detail="Could not find 'Brand Name' column in the file")
+    
+    if not date_columns:
+        # Try one more fallback - use any remaining columns that aren't brand/rate columns
+        potential_date_cols = []
+        for col in df.columns:
+            col_str = str(col)
+            if (col != brand_col and col != wholesale_rate_col and col != selling_rate_col and 
+                col != index_col and col_str.lower().strip() not in ['brand name', 'brand_name', 'rate', 'index', 'sl', 'sr']):
+                potential_date_cols.append(col)
+        
+        if potential_date_cols:
+            print(f"≡ƒöä Fallback: Using potential date columns: {potential_date_cols}")
+            date_columns = potential_date_cols[:10]  # Limit to first 10 columns
+        else:
+            # Show detailed error with column information
+            available_columns = [str(col) for col in df.columns]
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "No date columns detected",
+                    "message": "Could not identify date columns in your Excel file. Please ensure your file has columns with dates (like '20-Sep-25', '03-Oct-25', etc.)",
+                    "available_columns": available_columns,
+                    "suggestions": [
+                        "Ensure date columns contain recognizable date formats (20-Sep-25, 03/10/25, etc.)",
+                        "Check that date columns have month names or date patterns",
+                        "Verify your Excel file structure matches the expected format"
+                    ]
+                }
+            )
+    
+    # Filter out only obvious header rows, be more lenient
     df = df[df[brand_col].notna()]
-    df = df[~df[brand_col].astype(str).str.contains('total|sum', na=False, case=False)]
+    df = df[~df[brand_col].astype(str).str.contains('total|sum|^brand name$|^name$|^brand$', na=False, case=False)]
+    
+    print(f"After filtering, found {len(df)} potential brand rows")
+    
+    if df.empty:
+        raise HTTPException(status_code=400, detail="No valid brand data found after filtering")
+    
+    # CORRECTED D1 and DL CALCULATION - SIMPLE AND ACCURATE
+    # D1: ALWAYS First date column in Excel sheet
+    # DL: ALWAYS Last date column in Excel sheet
+    
+    if not date_columns:
+        raise HTTPException(status_code=400, detail="No valid date columns found in the Excel file")
+    
+    # D1 = First valid date column (e.g., 20-Sep)
+    global_D1_date = date_columns[0]
+    print(f"*** D1 (First Valid Date Column): {global_D1_date} ***")
+    
+    # DL = Last valid date column (e.g., 03-Oct) 
+    global_DL_date = date_columns[-1]
+    print(f"*** DL (Last Valid Date Column): {global_DL_date} ***")
+    
+    # STEP 2: Process each brand with the SIMPLE D1 and DL logic
+    liquor_data = []
     
     for idx, row in df.iterrows():
-        brand_name = str(row[brand_col]).strip()
-        if not brand_name: continue
-
-        # 1. Handle Rates
-        s_rate = float(row[selling_rate_col]) if selling_rate_col and pd.notna(row[selling_rate_col]) else 0.0
-        w_rate = float(row[wholesale_rate_col]) if wholesale_rate_col and pd.notna(row[wholesale_rate_col]) else s_rate * 0.9
-
-        # 2. Extract Daily Stock with "Hold Last Known" logic
-        daily_stock = {}
-        last_known_val = 0.0
-        
-        for i, col in enumerate(date_columns):
-            val = row[col]
-            if pd.notna(val) and str(val).strip() != '':
+        try:
+            brand_name = str(row[brand_col]).strip()
+            if not brand_name or brand_name.lower() in ['nan', 'none', '']:
+                continue
+            
+            # Get index - preserve original index from Excel file
+            index_num = idx + 1
+            if index_col and pd.notna(row[index_col]):
                 try:
-                    curr_val = float(val)
-                    daily_stock[col] = curr_val
-                    last_known_val = curr_val
+                    # Try to extract integer from the index value
+                    index_val = str(row[index_col]).strip()
+                    # Handle cases where index might have extra characters
+                    import re
+                    numeric_match = re.search(r'\d+', index_val)
+                    if numeric_match:
+                        index_num = int(numeric_match.group())
+                    else:
+                        index_num = int(float(row[index_col]))
                 except:
-                    daily_stock[col] = last_known_val
-            else:
-                # BLANK CELL detected - Use last known numeric value (Hold)
-                daily_stock[col] = last_known_val
+                    index_num = idx + 1
+            
+            # Get rates from Excel file
+            wholesale_rate = 0.0
+            selling_rate = 0.0
+            
+            if wholesale_rate_col and pd.notna(row[wholesale_rate_col]):
+                try:
+                    wholesale_rate = float(row[wholesale_rate_col])
+                except:
+                    pass
+            
+            if selling_rate_col and pd.notna(row[selling_rate_col]):
+                try:
+                    selling_rate = float(row[selling_rate_col])
+                except:
+                    pass
+            
+            # Note: If rates not in Excel, they will be filled from database in the upload endpoint
+            # Store flags to indicate if rates need to be fetched from DB
+            needs_wholesale_from_db = (wholesale_rate == 0)
+            needs_selling_from_db = (selling_rate == 0)
+            
+            # Get daily stock data
+            daily_stock_data = {}
+            valid_stock_values = []
+            
+            for date_col in date_columns:
+                try:
+                    raw_value = row[date_col]
+                    if pd.notna(raw_value) and str(raw_value).strip() != '':
+                        try:
+                            # Try to parse numeric value, skip if impossible
+                            if isinstance(raw_value, (int, float)):
+                                stock_qty = float(raw_value)
+                            else:
+                                stock_qty = float(str(raw_value).replace(',', '').strip())
 
-        # 3. Movement Calculations
-        D1_date = date_columns[0]
-        DL_date = date_columns[-1]
-        D1_stock = daily_stock.get(D1_date, 0.0)
-        DL_stock = daily_stock.get(DL_date, 0.0)
-
-        sales_qty, restocks_qty, _ = calculate_movements(daily_stock, D1_date, DL_date)
-        
-        days_analyzed = max(1, len(date_columns))
-        avg_daily_qty = sales_qty / days_analyzed if days_analyzed > 0 else 0.0
-        monthly_qty = avg_daily_qty * 24 # Standardized to 24-day billing month
-
-        brand_data = {
-            'brand_name': brand_name,
-            'index_number': int(row[index_col]) if index_col and pd.notna(row[index_col]) else idx + 1,
-            'wholesale_rate': w_rate,
-            'selling_rate': s_rate,
-            'rate': s_rate,
-            'D1_date': D1_date,
-            'D1_stock': D1_stock,
-            'DL_date': DL_date,
-            'DL_stock': DL_stock,
-            'current_stock_qty': int(DL_stock),
-            'total_sales_qty': sales_qty,
-            'avg_daily_sales_qty': avg_daily_qty,
-            'monthly_sales_qty': monthly_qty,
-            'monthly_sale_qty': int(monthly_qty),
-            'monthly_sale_value': monthly_qty * s_rate,
-            'stock_value_today': DL_stock * s_rate,
-            'stock_value_before': D1_stock * s_rate,
-            'stock_ratio': (DL_stock * s_rate) / (monthly_qty * s_rate) if monthly_qty > 0 else 0.0,
-            'stock_available_days': (DL_stock / avg_daily_qty) if avg_daily_qty > 0 else 999.0,
-            'daily_sales': daily_stock,
-            'days_analyzed': days_analyzed,
-            'avg_daily_sale': (monthly_qty * s_rate) / 30
-        }
-        liquor_data.append(brand_data)
-
-    print(f"✅ Parsed {len(liquor_data)} brands using movement-based logic.")
+                            daily_stock_data[date_col] = stock_qty
+                            valid_stock_values.append((date_col, stock_qty))
+                        except (ValueError, TypeError):
+                            # Skip this date for this brand instead of defaulting to 0
+                            logging.debug(f"Skipping invalid stock value '{raw_value}' for {brand_name} on {date_col}")
+                            continue
+                except Exception as e:
+                    logging.warning(f"Error processing stock for {brand_name} on {date_col}: {e}")
+            
+            if not valid_stock_values:
+                print(f"WARNING: No valid stock data found for {brand_name}")
+                continue
+            
+            # Use corrected D1 and DL dates
+            D1_date = global_D1_date
+            D1_stock = daily_stock_data.get(global_D1_date, 0)
+            
+            DL_date = global_DL_date
+            DL_stock = daily_stock_data.get(global_DL_date, 0)
+            
+            # If brand has no data on D1/DL dates, find closest dates
+            sorted_stock_values = sorted(valid_stock_values, key=lambda x: x[0])
+            
+            if D1_stock == 0:
+                for date_col, stock_val in sorted_stock_values:
+                    if date_col <= global_D1_date:
+                        D1_stock = stock_val
+                    else:
+                        break
+            
+            if DL_stock == 0:
+                for date_col, stock_val in reversed(sorted_stock_values):
+                    if date_col <= global_DL_date:
+                        DL_stock = stock_val
+                        break
+            
+            print(f"  {brand_name}: D1={D1_date}({D1_stock}), DL={DL_date}({DL_stock})")
+            
+            # Calculate total sales and purchases using centralized logic
+            d1_dt = parse_date_for_comparison_global(global_D1_date)
+            dl_dt = parse_date_for_comparison_global(global_DL_date)
+            total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(daily_stock_data, d1_dt, dl_dt)
+            
+            # Calculate number of days between D1 and DL using actual date arithmetic
+            try:
+                from datetime import datetime
+                
+                def parse_date_string(date_str):
+                    """Parse date string like '20-Sep-25' to datetime object"""
+                    import re
+                    match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                    if match:
+                        day, month_name, year_suffix = match.groups()
+                        if not year_suffix or len(year_suffix) < 2:
+                            year = str(datetime.now().year)
+                        elif len(year_suffix) == 2:
+                            year = f"20{year_suffix}"
+                        else:
+                            year = year_suffix[:4]
+                        return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                    return None
+                
+                d1_datetime = parse_date_string(D1_date)
+                dl_datetime = parse_date_string(DL_date)
+                
+                if d1_datetime and dl_datetime:
+                    # Calculate actual days difference (inclusive of both start and end dates)
+                    days_between = (dl_datetime - d1_datetime).days + 1
+                    print(f"  {brand_name}: Date arithmetic: {D1_date} to {DL_date} = {days_between} days")
+                else:
+                    # Fallback to index-based calculation if date parsing fails
+                    d1_idx = date_columns.index(D1_date) if D1_date in date_columns else 0
+                    dl_idx = date_columns.index(DL_date) if DL_date in date_columns else len(date_columns) - 1
+                    days_between = max(1, dl_idx - d1_idx + 1)
+                    print(f"  {brand_name}: Fallback calculation: {days_between} days (index-based)")
+                
+                # Ensure minimum of 1 day
+                days_between = max(1, days_between)
+                
+            except Exception as e:
+                print(f"  {brand_name}: Error calculating days - using default: {e}")
+                days_between = max(1, len(sorted_stock_values) - 1)
+            
+            # Calculate average daily sales
+            avg_daily_sales_qty = total_sales_qty / days_between if days_between > 0 else 0
+            
+            # Calculate monthly sales (24 days as requested)
+            monthly_sales_qty = avg_daily_sales_qty * 24
+            monthly_sales_value = monthly_sales_qty * selling_rate
+            
+            # Current stock value (on DL date)
+            current_stock_value = DL_stock * selling_rate
+            
+            # Calculate stock ratio (stock value / monthly sales value)
+            stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+            
+            # Stock availability in days
+            stock_available_days = (DL_stock / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+            
+            brand_data = {
+                'brand_name': brand_name,
+                'product_id': f"ID_{index_num}",
+                'index_number': int(index_num),
+                'wholesale_rate': float(wholesale_rate),
+                'selling_rate': float(selling_rate),
+                'rate': float(selling_rate),
+                'D1_date': str(D1_date),
+                'D1_stock': float(D1_stock),
+                'DL_date': str(DL_date),
+                'DL_stock': float(DL_stock),
+                'current_stock_qty': int(max(0, DL_stock)),
+                'total_sales_qty': float(total_sales_qty),
+                'total_purchases_qty': float(total_purchases_qty),
+                'avg_daily_sales_qty': float(avg_daily_sales_qty),
+                'monthly_sales_qty': float(monthly_sales_qty),
+                'monthly_sale_value': float(monthly_sales_value),
+                'monthly_sale_qty': int(max(0, monthly_sales_qty)),
+                'stock_value_today': float(current_stock_value),
+                'stock_ratio': float(stock_ratio),
+                'stock_available_days': float(min(999, max(0, stock_available_days))),
+                'avg_daily_sale': float(monthly_sales_value / 30),
+                'stock_value_before': float(D1_stock * selling_rate),
+                'daily_sales': daily_stock_data,
+                'days_analyzed': int(max(1, days_between)),
+            }
+            
+            liquor_data.append(brand_data)
+            
+        except Exception as e:
+            logging.error(f"Error parsing row {idx} ({brand_name}): {e}")
+            continue
+    
+    if not liquor_data:
+        raise HTTPException(status_code=400, detail="No valid liquor data could be extracted from the file")
+    
+    print(f"Successfully parsed {len(liquor_data)} out of {len(df)} potential brands")
+    logging.info(f"Successfully parsed {len(liquor_data)} liquor brands with corrected D1/DL analysis")
     return liquor_data
 
 def parse_list_format(df: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -329,15 +1237,28 @@ def calculate_overstocking(data: List[Dict], multiplier: float = 3.0) -> List[Di
         # Calculate threshold (multiplier * monthly average)
         threshold = monthly_avg_sale * multiplier
         
-        if current_stock_value > threshold and monthly_avg_sale > 0:
-            overstock_value = current_stock_value - threshold
+        is_overstocked = False
+        overstock_value = 0
+        stock_ratio = item.get('stock_ratio', 0)
+
+        if monthly_avg_sale > 0:
+            if current_stock_value > threshold:
+                is_overstocked = True
+                overstock_value = current_stock_value - threshold
+        elif current_stock_value > 0:
+            # No sales but has stock = Infinite overstock
+            is_overstocked = True
+            overstock_value = current_stock_value
+            stock_ratio = 999.0
+
+        if is_overstocked:
             overstocked_items.append({
                 'brand_name': item['brand_name'],
                 'current_stock_value': current_stock_value,
                 'monthly_avg_sale': monthly_avg_sale,
                 'threshold': threshold,
                 'overstock_value': overstock_value,
-                'stock_ratio': item.get('stock_ratio', 0)
+                'stock_ratio': stock_ratio
             })
     
     return sorted(overstocked_items, key=lambda x: x['overstock_value'], reverse=True)
@@ -349,207 +1270,550 @@ async def root():
 
 @api_router.post("/upload-full-monthly-data")
 async def upload_full_monthly_data(file: UploadFile = File(...)):
-    """Upload processing for full monthly data with persistent rates and automated backup"""
+    """Upload and process Excel/CSV file with complete monthly liquor data - replaces existing data"""
     try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "Invalid file type",
+                    "message": "Only Excel (.xlsx, .xls) and CSV files are supported",
+                    "supported_formats": [".xlsx", ".xls", ".csv"]
+                }
+            )
+        
+        # Read file content
         content = await file.read()
+        
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        
+        # Parse the data
         parsed_data = parse_excel_data(content, "full_monthly")
         
-        # 1. Build persistent rates map (Master > Current)
-        rates_map = {}
-        async for bm in collections.brands_master.find():
-            rates_map[bm['brand_name']] = {
-                'w': bm.get('wholesale_rate', 0.0),
-                's': bm.get('selling_rate', 0.0)
+        if not parsed_data:
+            raise HTTPException(status_code=400, detail="No valid data found in the file")
+        
+        # For full monthly data, we don't need to check duplicates since it replaces everything
+        # But we can log the dates being processed for reference
+        new_dates = set()
+        for item in parsed_data[:3]:  # Just check first few items for logging
+            dl_date = item.get('DL_date')
+            if dl_date:
+                new_dates.add(dl_date)
+        if new_dates:
+            print(f"≡ƒôà Full monthly upload processing dates: {sorted(list(new_dates))}")
+        
+        # Before clearing, get existing brands to preserve their rates if not in new file
+        existing_brands_dict = {}
+        existing_brands = await collections.liquor_data.find({}, {"brand_name": 1, "wholesale_rate": 1, "selling_rate": 1}).to_list(1000)
+        for brand in existing_brands:
+            existing_brands_dict[brand['brand_name']] = {
+                'wholesale_rate': brand.get('wholesale_rate', 0.0),
+                'selling_rate': brand.get('selling_rate', brand.get('rate', 0.0))
             }
-        async for ld in collections.liquor_data.find():
-            rates_map[ld['brand_name']] = {
-                'w': ld.get('wholesale_rate', 0.0),
-                's': ld.get('selling_rate', ld.get('rate', 0.0))
-            }
-
-        # 2. Apply rates and update Master
-        final_objects = []
-        for item in parsed_data:
-            name = item['brand_name']
-            # Fallback to persistent rates if Excel is 0
-            if item.get('selling_rate', 0) == 0 and name in rates_map:
-                item['selling_rate'] = rates_map[name]['s']
-                item['wholesale_rate'] = rates_map[name]['w']
-                item['rate'] = rates_map[name]['s']
-
-            # Update Brands Master if we have valid rates now
-            if item.get('selling_rate', 0) > 0:
-                await collections.brands_master.update_one(
-                    {"brand_name": name},
-                    {"$set": {
-                        "brand_name": name,
-                        "selling_rate": item['selling_rate'],
-                        "wholesale_rate": item['wholesale_rate'],
-                        "last_updated": datetime.now(timezone.utc)
-                    }},
-                    upsert=True
-                )
-
-            # Recalculate values
-            s_rate = item.get('selling_rate', 0.0)
-            item['stock_value_today'] = item['current_stock_qty'] * s_rate
-            item['monthly_sale_value'] = item.get('monthly_sales_qty', 0) * s_rate
-            
-            final_objects.append(LiquorData(**item).dict())
-
-        # 3. Backup and Replace
+        
+        # Fill in missing rates from existing database records
+        for item_data in parsed_data:
+            brand_name = item_data['brand_name']
+            if brand_name in existing_brands_dict:
+                # If wholesale_rate is 0 in new data, use existing
+                if item_data.get('wholesale_rate', 0) == 0:
+                    item_data['wholesale_rate'] = existing_brands_dict[brand_name]['wholesale_rate']
+                # If selling_rate is 0 in new data, use existing
+                if item_data.get('selling_rate', 0) == 0:
+                    item_data['selling_rate'] = existing_brands_dict[brand_name]['selling_rate']
+                    item_data['rate'] = existing_brands_dict[brand_name]['selling_rate']
+                # Recalculate stock value with correct rates
+                item_data['stock_value_today'] = item_data['current_stock_qty'] * item_data['selling_rate']
+                item_data['monthly_sale_value'] = item_data.get('total_sales_qty', 0) * item_data['selling_rate']
+        
+        # CRITICAL: Create backup before deleting data (for undo functionality)
         backup_id = None
-        existing = await collections.liquor_data.find({}, {"_id": 0}).to_list(10000)
-        if existing:
-            backup = StockBackup(data_snapshot=existing, total_records=len(existing), backup_reason="pre_full_monthly")
-            await collections.stock_backups.insert_one(backup.dict())
+        all_existing_records = await collections.liquor_data.find({}, {"_id": 0}).to_list(1000)
+        if all_existing_records:
+            backup = StockBackup(
+                data_snapshot=all_existing_records,
+                total_records=len(all_existing_records),
+                backup_reason="pre_full_monthly_upload"
+            )
+            backup_result = await collections.stock_backups.insert_one(backup.dict())
             backup_id = backup.id
-
+            logging.info(f"Created backup {backup_id} with {len(all_existing_records)} records before full monthly upload")
+        
+        # Clear existing data and insert new data (full replacement)
         await collections.liquor_data.delete_many({})
-        if final_objects:
-            await collections.liquor_data.insert_many(final_objects)
-
-        # 4. History
-        history = UploadHistory(
+        
+        # Convert to LiquorData models and insert
+        liquor_objects = []
+        brands_added_ids = []
+        for item_data in parsed_data:
+            liquor_obj = LiquorData(**item_data)
+            liquor_obj_dict = liquor_obj.dict()
+            liquor_objects.append(liquor_obj_dict)
+            brands_added_ids.append(liquor_obj_dict['id'])
+        
+        if liquor_objects:
+            await collections.liquor_data.insert_many(liquor_objects)
+        
+        # Save upload history with changes snapshot
+        upload_history = UploadHistory(
             filename=file.filename,
             upload_type="full_monthly",
-            records_count=len(final_objects),
+            records_count=len(liquor_objects),
             file_size=len(content),
-            can_undo=True,
-            changes_snapshot={"backup_id": backup_id, "replaced_all": True}
+            can_undo=True,  # Enable undo for this upload
+            changes_snapshot={
+                "brands_added": brands_added_ids,
+                "replaced_all": True,
+                "backup_id": backup_id  # Store backup ID for restoration
+            }
         )
-        await collections.upload_history.insert_one(history.dict())
-
-        return {"message": f"Successfully uploaded {len(final_objects)} brands.", "backup_id": backup_id}
-
+        await collections.upload_history.insert_one(upload_history.dict())
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Successfully uploaded full monthly data with {len(liquor_objects)} liquor records",
+                "total_records": len(liquor_objects),
+                "upload_type": "full_monthly"
+            }
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Error in upload_full_monthly_data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error uploading full monthly data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @api_router.post("/upload-todays-data")
-async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool = False):
-    """Upload today's stock data - with automated Monthly Restock Detection & Verification"""
+async def upload_todays_data(file: UploadFile = File(...)):
+    """Upload today's stock data - appends to existing data by updating stock positions"""
     try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "Invalid file type",
+                    "message": "Only Excel (.xlsx, .xls) and CSV files are supported",
+                    "supported_formats": [".xlsx", ".xls", ".csv"]
+                }
+            )
+        
+        # Read file content
         content = await file.read()
-        todays_data = parse_todays_data(content)
+        
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        
+        # Parse today's data (different from full monthly data parsing)
+        try:
+            todays_data = parse_todays_data(content)
+        except HTTPException as parse_error:
+            # Add specific guidance for Today's Data upload errors
+            if "utf-8" in str(parse_error.detail).lower() or "codec" in str(parse_error.detail).lower():
+                raise HTTPException(
+                    status_code=400, 
+                    detail={
+                        "error": "File encoding issue",
+                        "message": "Unable to read the Excel file. This may be due to file corruption or an unsupported Excel format.",
+                        "suggestions": [
+                            "Try saving the file as a new Excel file (.xlsx format)",
+                            "Ensure the file is not corrupted",
+                            "Check that the file contains proper date columns for today's data"
+                        ]
+                    }
+                )
+            else:
+                raise parse_error
+        
+        if not todays_data or not todays_data.get('brands_data'):
+            raise HTTPException(status_code=400, detail="No valid brand data found in today's file")
+        
         new_date_column = todays_data['new_date_column']
         brands_data = todays_data['brands_data']
         
-        # 1. Fetch current stock to detect restocks
-        existing_stock = {}
-        async for brand in collections.liquor_data.find({}, {"brand_name": 1, "DL_stock": 1}):
-            existing_stock[brand['brand_name']] = brand.get('DL_stock', 0.0)
+        # Check for duplicate dates with proper date format comparison
+        def normalize_date_for_comparison(date_str):
+            """Convert various date formats to a standard format for comparison"""
+            try:
+                from datetime import datetime
+                import re
+                
+                if not date_str:
+                    return None
+                
+                date_str = str(date_str).strip()
+                
+                # If it's already a datetime string, parse it
+                if 'T' in date_str or len(date_str) > 15:
+                    try:
+                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+                        return dt.strftime("%Y-%m-%d")
+                    except:
+                        pass
+                
+                # Parse various date formats
+                patterns = [
+                    (r'(\d{1,2})[-/](\w{3})[-/]?(\d{2,4})', "%d-%b-%Y"),  # 04-Oct-25, 04-Oct-2025
+                    (r'(\d{4})-(\d{1,2})-(\d{1,2})', "%Y-%m-%d"),         # 2025-10-04
+                    (r'(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})', "%d-%m-%Y"), # 04-10-25, 04/10/2025
+                ]
+                
+                for pattern, fmt in patterns:
+                    match = re.search(pattern, date_str, re.IGNORECASE)
+                    if match:
+                        if fmt == "%d-%b-%Y":
+                            day, month_name, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            full_date = f"{day}-{month_name}-{year}"
+                            dt = datetime.strptime(full_date, fmt)
+                        elif fmt == "%Y-%m-%d":
+                            dt = datetime.strptime(match.group(0), fmt)
+                        elif fmt == "%d-%m-%Y":
+                            day, month, year = match.groups()
+                            year = f"20{year}" if len(year) == 2 else year
+                            dt = datetime(int(year), int(month), int(day))
+                        
+                        return dt.strftime("%Y-%m-%d")
+                        
+            except Exception as e:
+                print(f"Warning: Could not normalize date '{date_str}': {e}")
+                return str(date_str)
             
-        # Convert to list for detection helper
-        parsed_list = [{'brand_name': n, 'DL_stock': i['stock_qty']} for n, i in brands_data.items()]
-        is_restock, inc_count, inc_brands = detect_monthly_restock(parsed_list, existing_stock)
+            return str(date_str)
         
-        # 2. Monthly Restock Logic (threshold met)
-        if is_restock:
-            if not confirm_restock:
-                # PAUSE: Ask for user verification
-                return JSONResponse(
-                    status_code=202, # Accepted but not processed
-                    content={
-                        "status": "requires_verification",
-                        "message": f"🚀 Monthly Restock detected ({inc_count} brands)! Stock increased for brands like {', '.join(inc_brands[:3])}...",
-                        "inc_count": inc_count,
-                        "inc_brands": inc_brands
-                    }
-                )
-            
-            # User confirmed! Trigger Monthly Restock Workflow
-            print(f"🚀 User confirmed Monthly Restock. Triggering backup and reset.")
-            await internal_reset_stock()
-            # After reset, current upload becomes fresh D1 data
-            
-        elif inc_count > 0:
-            # 3. Small increase detected - treat as error per user instructions
+        # Normalize the new date for comparison using global utility
+        normalized_new_date = normalize_date_key_global(new_date_column)
+        print(f"≡ƒôà New date to upload: '{new_date_column}' -> normalized: '{normalized_new_date}'")
+        
+        # Get existing dates and normalize them
+        existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(1000)
+        existing_dates = set()
+        existing_dates_raw = []
+        
+        for record in existing_records:
+            # Check DL_date
+            if record.get('DL_date'):
+                raw_dl_date = record['DL_date']
+                normalized_dl_date = normalize_date_key_global(raw_dl_date)
+                existing_dates.add(normalized_dl_date)
+                existing_dates_raw.append(f"DL_date: {raw_dl_date}")
+
+            # Check daily_sales dates
+            daily_sales = record.get('daily_sales', {}) or {}
+            if daily_sales:
+                for date_key in daily_sales.keys():
+                    normalized_daily_date = normalize_date_key_global(date_key)
+                    existing_dates.add(normalized_daily_date)
+                    existing_dates_raw.append(f"daily_sales: {date_key}")
+
+        print(f"≡ƒôà Existing dates in database: {sorted(list(existing_dates))}")
+        print(f"≡ƒôà Raw existing dates: {existing_dates_raw[:5]}")  # Show first 5
+        
+        if normalized_new_date in existing_dates:
+            # Show detailed information about the conflict
+            matching_dates = []
+            for record in existing_records[:3]:  # Show details for first 3 records
+                if record.get('DL_date'):
+                    raw_date = record['DL_date']
+                    if normalize_date_key_global(raw_date) == normalized_new_date:
+                        matching_dates.append(f"DL_date: {raw_date}")
+
+                daily_sales = record.get('daily_sales', {}) or {}
+                for date_key in daily_sales.keys():
+                    if normalize_date_key_global(date_key) == normalized_new_date:
+                        matching_dates.append(f"daily_sales: {date_key}")
+
             raise HTTPException(
-                status_code=400,
-                detail=f"⚠️ Potential Error Detected: Stock increased for only {inc_count} brands ({', '.join(inc_brands[:3])}...). Monthly restocks should affect at least 5 brands. Please check your file for typos."
+                status_code=409,
+                detail={
+                    "error": "Duplicate dates detected",
+                    "message": f"The date '{new_date_column}' (normalized: {normalized_new_date}) already exists in the database",
+                    "duplicate_dates": [new_date_column],
+                    "existing_dates_found": matching_dates[:3],
+                    "filename": file.filename,
+                    "suggestion": "This date already exists in your data. Please upload data for a newer date or use 'Upload Full Monthly Data' to replace all existing data"
+                }
             )
-            
-        # 3. Process Upload
-        db_count = await collections.liquor_data.count_documents({})
-        is_fresh = (db_count == 0)
         
-        updated, added = 0, 0
-        history_snapshot = {"updated": {}, "added": []}
+        # Check if database is empty (after stock reset scenario)
+        db_record_count = await collections.liquor_data.count_documents({})
+        is_fresh_start = (db_record_count == 0)
+        
+        if is_fresh_start:
+            print("≡ƒåò Database is empty - treating Today's Data as initial D1 upload")
+        
+        # Track changes for undo functionality
+        brands_updated = {}  # {brand_id: previous_state}
+        brands_added = []    # [brand_id, brand_id, ...]
+        
+        # Append today's data to existing monthly data OR create fresh D1 data
+        updated_count = 0
+        new_brands_count = 0
+        
+        for brand_name, brand_info in brands_data.items():
+            new_stock_qty = brand_info['stock_qty']
+            index_number = brand_info['index_number']
+            
+            # Try to find existing brand by name first, then by index
+            existing_brand = await collections.liquor_data.find_one({"brand_name": brand_name})
+            if not existing_brand and index_number:
+                existing_brand = await collections.liquor_data.find_one({"index_number": index_number})
+            
+            if existing_brand:
+                # Store previous state for undo (including daily_sales BEFORE the new date is added)
+                brands_updated[existing_brand['id']] = {
+                    "DL_date": existing_brand.get('DL_date'),
+                    "DL_stock": existing_brand.get('DL_stock'),
+                    "current_stock_qty": existing_brand.get('current_stock_qty'),
+                    "total_sales_qty": existing_brand.get('total_sales_qty'),
+                    "total_purchases_qty": existing_brand.get('total_purchases_qty'),
+                    "avg_daily_sales_qty": existing_brand.get('avg_daily_sales_qty'),
+                    "days_analyzed": existing_brand.get('days_analyzed'),
+                    "monthly_sale_value": existing_brand.get('monthly_sale_value'),
+                    "avg_daily_sale": existing_brand.get('avg_daily_sale'),
+                    "stock_value_today": existing_brand.get('stock_value_today'),
+                    "stock_available_days": existing_brand.get('stock_available_days'),
+                    "stock_ratio": existing_brand.get('stock_ratio'),
+                    "daily_sales": existing_brand.get('daily_sales', {})  # CRITICAL: Store daily_sales before update
+                }
+                
+                # Normalize the date format before storing
+                def normalize_date_key(date_str):
+                    """Normalize date to DD-MMM-YY format for consistent storage"""
+                    import re
+                    from datetime import datetime
 
-        for name, info in brands_data.items():
-            qty = info['stock_qty']
-            if qty is None: continue # User requested to ignore blank cells
-            
-            existing = await collections.liquor_data.find_one({"brand_name": name})
-            
-            if existing and not is_fresh:
-                # Normal Daily Update
-                old_daily = existing.get('daily_sales', {})
-                old_daily[normalize_date_key(new_date_column)] = qty
+                    try:
+                        date_str = str(date_str).strip()
+
+                        # Method 1: Handle datetime strings (YYYY-MM-DD HH:MM:SS or YYYY-MM-DD)
+                        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
+                            try:
+                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                                return dt.strftime("%d-%b-%y")  # Format: 16-Nov-25
+                            except:
+                                pass
+
+                        # Method 2: Handle DD-MMM-YY or DD-MMM-YYYY format
+                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                        if match:
+                            day, month_name, year_suffix = match.groups()
+                            # Normalize to 2-digit year
+                            if not year_suffix or len(year_suffix) < 2:
+                                year_suffix = str(datetime.now().year)[2:]
+                            elif len(year_suffix) == 4:
+                                year_suffix = year_suffix[2:]
+                            # Ensure 2-digit day with leading zero
+                            day = day.zfill(2)
+                            # Capitalize month name properly
+                            month_name = month_name.capitalize()
+                            return f"{day}-{month_name}-{year_suffix}"
+
+                    except Exception as e:
+                        logging.warning(f"Could not normalize date '{date_str}': {e}")
+
+                    return str(date_str)
+
+                # Normalize existing daily_sales keys to consistent format
+                current_daily_sales = existing_brand.get('daily_sales', {}) or {}
+                normalized_daily_sales = {}
+                for old_date_key, value in current_daily_sales.items():
+                    normalized_key = normalize_date_key(old_date_key)
+                    normalized_daily_sales[normalized_key] = value
                 
-                # Use modular logic for movements (this will be improved in next steps)
-                d1_stock = existing.get('D1_stock', qty)
-                s_rate = existing.get('selling_rate', 0.0)
+                # Normalize the new date column and add it
+                normalized_new_date = normalize_date_key(new_date_column)
+                normalized_daily_sales[normalized_new_date] = new_stock_qty
                 
-                # Simplified update for now
-                update_fields = {
-                    "daily_sales": old_daily,
-                    "DL_date": new_date_column,
-                    "DL_stock": float(qty),
-                    "current_stock_qty": int(qty),
-                    "stock_value_today": float(qty * s_rate),
+                # Use the normalized dictionary
+                current_daily_sales = normalized_daily_sales
+                
+                # Update DL to the new date
+                old_DL_date = existing_brand.get('DL_date')
+                old_D1_date = existing_brand.get('D1_date')
+                
+                # Recalculate analytics with the new data point
+                D1_stock = existing_brand.get('D1_stock', 0)
+                selling_rate = existing_brand.get('selling_rate', existing_brand.get('rate', 0))
+                
+                # Calculate new number of days with updated date range
+                try:
+                    def parse_date_string(date_str):
+                        import re
+                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                        if match:
+                            day, month_name, year_suffix = match.groups()
+                            if not year_suffix or len(year_suffix) < 2:
+                                year = str(datetime.now().year)
+                            elif len(year_suffix) == 2:
+                                year = f"20{year_suffix}"
+                            else:
+                                year = year_suffix[:4]
+                            return datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
+                        return None
+
+                    d1_datetime = parse_date_string(old_D1_date) if old_D1_date else None
+                    new_dl_datetime = parse_date_string(new_date_column)
+                    
+                    if d1_datetime and new_dl_datetime:
+                        days_analyzed = (new_dl_datetime - d1_datetime).days + 1
+                    else:
+                        days_analyzed = existing_brand.get('days_analyzed', 1) + 1
+                        
+                    days_analyzed = max(1, days_analyzed)
+                    
+                except:
+                    days_analyzed = existing_brand.get('days_analyzed', 1) + 1
+                
+                # Recalculate all dependent values
+                d1_dt = parse_date_for_comparison_global(old_D1_date) if old_D1_date else datetime.min
+                dl_dt = parse_date_for_comparison_global(new_date_column)
+                total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(current_daily_sales, d1_dt, dl_dt)
+
+                avg_daily_sales_qty = total_sales_qty / days_analyzed if days_analyzed > 0 else 0
+                monthly_sales_qty = avg_daily_sales_qty * 24
+                monthly_sales_value = monthly_sales_qty * selling_rate
+                current_stock_value = new_stock_qty * selling_rate
+                stock_ratio = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
+                stock_available_days = (new_stock_qty / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+                
+                # Update the brand in database (daily uploads always extend existing period)
+                update_data = {
+                    "daily_sales": current_daily_sales,
+                    "DL_date": normalize_date_key_global(new_date_column),
+                    "DL_stock": float(new_stock_qty),
+                    "current_stock_qty": int(new_stock_qty),
+                    "days_analyzed": int(days_analyzed),
+                    "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
+                    "avg_daily_sales_qty": float(avg_daily_sales_qty),
+                    "monthly_sales_qty": float(monthly_sales_qty),
+                    "monthly_sale_qty": int(monthly_sales_qty),
+                    "monthly_sale_value": float(monthly_sales_value),
+                    "stock_value_today": float(current_stock_value),
+                    "stock_ratio": float(stock_ratio),
+                    "stock_available_days": float(min(999, max(0, stock_available_days))),
                     "upload_timestamp": datetime.now(timezone.utc)
                 }
-                await collections.liquor_data.update_one({"_id": existing["_id"]}, {"$set": update_fields})
-                updated += 1
+                
+                await collections.liquor_data.update_one(
+                    {"_id": existing_brand["_id"]}, 
+                    {"$set": update_data}
+                )
+                updated_count += 1
+                
+                print(f"Γ£à Updated {brand_name}: {old_DL_date}({existing_brand.get('DL_stock', 0)}) -> {new_date_column}({new_stock_qty})")
+                
             else:
-                # Fresh Record (New month or new brand)
-                # Fetch rate from brands_master if not in Excel
-                master = await collections.brands_master.find_one({"brand_name": name})
-                s_rate = master.get('selling_rate', 0.0) if master else 0.0
-                w_rate = master.get('wholesale_rate', 0.0) if master else 0.0
-                
-                new_doc = {
-                    "id": str(uuid.uuid4()),
-                    "brand_name": name,
-                    "selling_rate": s_rate,
-                    "wholesale_rate": w_rate,
-                    "rate": s_rate,
-                    "D1_date": new_date_column,
-                    "D1_stock": float(qty),
-                    "DL_date": new_date_column,
-                    "DL_stock": float(qty),
-                    "current_stock_qty": int(qty),
-                    "daily_sales": {normalize_date_key(new_date_column): qty},
-                    "days_analyzed": 1,
-                    "upload_timestamp": datetime.now(timezone.utc)
-                }
-                await collections.liquor_data.insert_one(new_doc)
-                added += 1
-                history_snapshot["added"].append(new_doc["id"])
+                # If database is empty (fresh start after reset), create brand as D1
+                if is_fresh_start:
+                    print(f"≡ƒåò Creating fresh D1 record for brand '{brand_name}'")
+                    
+                    # First, try to get rate from uploaded Excel file
+                    excel_rate = brand_info.get('rate', 0.0)
+                    
+                    if excel_rate > 0:
+                        selling_rate = excel_rate
+                        wholesale_rate = excel_rate * 0.7  # Estimate wholesale as 70% of selling
+                        print(f"Γ£à Using rate from Excel for '{brand_name}': S={selling_rate}, W={wholesale_rate}")
+                    else:
+                        # Fallback: Fetch rates from brands_master if available
+                        master_brand = await collections.brands_master.find_one({"brand_name": brand_name})
+                        
+                        if master_brand:
+                            wholesale_rate = master_brand.get('wholesale_rate', 0.0)
+                            selling_rate = master_brand.get('selling_rate', 0.0)
+                            print(f"Γ£à Found persisted rates for '{brand_name}': W={wholesale_rate}, S={selling_rate}")
+                        else:
+                            wholesale_rate = 0.0
+                            selling_rate = 0.0
+                            print(f"ΓÜá∩╕Å No rate in Excel or brands_master for '{brand_name}', using 0.0")
+                    
+                    # Create fresh brand record with this date as D1 and DL
+                    norm_date = normalize_date_key_global(new_date_column)
+                    new_brand_data = {
+                        'id': str(uuid.uuid4()),
+                        'brand_name': brand_name,
+                        'index_number': index_number,
+                        'product_id': f"ID_{index_number}",
+                        'wholesale_rate': wholesale_rate,  # Loaded from brands_master
+                        'selling_rate': selling_rate,      # Loaded from brands_master
+                        'rate': selling_rate,
+                        'D1_date': norm_date,
+                        'D1_stock': new_stock_qty,
+                        'DL_date': norm_date,
+                        'DL_stock': new_stock_qty,
+                        'current_stock_qty': int(new_stock_qty),
+                        'total_sales_qty': 0.0,  # No sales yet (only one day)
+                        'total_purchases_qty': 0.0,
+                        'avg_daily_sales_qty': 0.0,
+                        'monthly_sales_qty': 0.0,
+                        'monthly_sale_value': 0.0,
+                        'monthly_sale_qty': 0,
+                        'stock_value_today': selling_rate * new_stock_qty,  # Calculated with loaded rate
+                        'stock_ratio': 0.0,
+                        'stock_available_days': 999,
+                        'avg_daily_sale': 0.0,
+                        'stock_value_before': selling_rate * new_stock_qty,  # Same as today for D1
 
-        # Save History
-        upload_hist = UploadHistory(
+                        'daily_sales': {norm_date: new_stock_qty},
+                        'days_analyzed': 1,
+                        'upload_timestamp': datetime.now(timezone.utc)
+                    }
+                    
+                    await collections.liquor_data.insert_one(new_brand_data)
+                    brands_added.append(new_brand_data['id'])  # Track for undo
+                    new_brands_count += 1
+                    print(f"Γ£à Created fresh brand '{brand_name}' with D1={new_date_column}, stock={new_stock_qty}")
+                else:
+                    print(f"ΓÜá∩╕Å Brand '{brand_name}' (Index: {index_number}) not found in existing data - skipping")
+                    # Note: We don't add new brands for today's data uploads when data exists
+        
+        # Save upload history with changes snapshot for granular undo
+        upload_history = UploadHistory(
             filename=file.filename,
-            upload_type="restock" if is_restock else "daily",
+            upload_type="daily_update",
             records_count=len(brands_data),
             file_size=len(content),
-            changes_snapshot=history_snapshot
+            can_undo=True,  # Enable undo for this upload
+            changes_snapshot={
+                "brands_updated": brands_updated,
+                "brands_added": brands_added,
+                "date_added": new_date_column
+            }
         )
-        await collections.upload_history.insert_one(upload_hist.dict())
+        await collections.upload_history.insert_one(upload_history.dict())
         
-        return {
-            "message": f"Successfully processed upload. {'Restock triggered!' if is_restock else ''}",
-            "updated": updated,
-            "added": added,
-            "is_restock": is_restock
-        }
+        # Determine appropriate success message
+        if is_fresh_start:
+            message = f"Γ£à Fresh start: Created {new_brands_count} brands with D1 date '{new_date_column}'. Upload more daily data or update rates next."
+        elif new_brands_count > 0:
+            message = f"Γ£à Successfully updated {updated_count} brands and added {new_brands_count} new brands for date '{new_date_column}'"
+        else:
+            message = f"Γ£à Successfully updated {updated_count} brands for date '{new_date_column}'"
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": message,
+                "updated_brands": updated_count,
+                "new_brands": new_brands_count,
+                "total_records": len(brands_data),
+                "upload_type": "fresh_start" if is_fresh_start else "daily_update",
+                "new_date": new_date_column,
+                "is_fresh_start": is_fresh_start
+            }
+        )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Error in upload_todays_data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error uploading today's data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @api_router.get("/upload-history")
 async def get_upload_history():
@@ -631,6 +1895,9 @@ async def undo_upload(upload_id: str):
             brands_added = changes_snapshot.get("brands_added", [])
             date_added = changes_snapshot.get("date_added")
             
+            # Normalize the date for robust cleanup
+            normalized_date_to_remove = normalize_date_key_global(date_added) if date_added else None
+
             # Revert updated brands
             for brand_id, previous_state in brands_updated.items():
                 brand_record = await collections.liquor_data.find_one({"id": brand_id})
@@ -638,8 +1905,8 @@ async def undo_upload(upload_id: str):
                 if brand_record:
                     # Remove the date that was added
                     current_daily_sales = brand_record.get('daily_sales', {})
-                    if date_added and date_added in current_daily_sales:
-                        del current_daily_sales[date_added]
+                    if normalized_date_to_remove and normalized_date_to_remove in current_daily_sales:
+                        del current_daily_sales[normalized_date_to_remove]
                     
                     # Restore previous values
                     update_data = {
@@ -648,6 +1915,7 @@ async def undo_upload(upload_id: str):
                         "DL_stock": previous_state.get("DL_stock"),
                         "current_stock_qty": previous_state.get("current_stock_qty"),
                         "total_sales_qty": previous_state.get("total_sales_qty"),
+                        "total_purchases_qty": previous_state.get("total_purchases_qty"),
                         "avg_daily_sales_qty": previous_state.get("avg_daily_sales_qty"),
                         "days_analyzed": previous_state.get("days_analyzed"),
                         "monthly_sale_value": previous_state.get("monthly_sale_value"),
@@ -663,6 +1931,47 @@ async def undo_upload(upload_id: str):
                     )
                     brands_reverted += 1
             
+            # FAILSAFE: Ensure the date is removed from ALL brands and DL_date is rolled back
+            if normalized_date_to_remove:
+                logging.info(f"Failsafe cleanup in undo for date '{normalized_date_to_remove}'...")
+
+                # 1. Remove from daily_sales
+                await collections.liquor_data.update_many(
+                    {},
+                    {"$unset": {f"daily_sales.{normalized_date_to_remove}": ""}}
+                )
+
+                # 2. Fix DL_date if it was set to the removed date
+                # We need to find all brands where DL_date matches the removed date
+                affected_brands = await collections.liquor_data.find({"DL_date": {"$in": [date_added, normalized_date_to_remove]}}).to_list(None)
+
+                for brand in affected_brands:
+                    daily_sales = brand.get("daily_sales", {})
+                    if not daily_sales: continue
+
+                    # Find the new latest date
+                    remaining_dates = sorted(daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
+                    if remaining_dates:
+                        new_dl_date = remaining_dates[-1]
+                        new_dl_stock = daily_sales[new_dl_date]
+
+                        # Recalculate movements for this brand
+                        d1_dt = parse_date_for_comparison_global(brand.get("D1_date"))
+                        dl_dt = parse_date_for_comparison_global(new_dl_date)
+                        t_sales, t_purchases, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
+                        # Update brand state
+                        await collections.liquor_data.update_one(
+                            {"_id": brand["_id"]},
+                            {"$set": {
+                                "DL_date": new_dl_date,
+                                "DL_stock": float(new_dl_stock),
+                                "current_stock_qty": int(new_dl_stock),
+                                "total_sales_qty": float(t_sales),
+                                "total_purchases_qty": float(t_purchases)
+                            }}
+                        )
+
             # Delete brands that were newly added
             if brands_added:
                 result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
@@ -704,11 +2013,8 @@ async def undo_upload(upload_id: str):
             brands_reverted = len(restored_data)
             logging.info(f"Restored {brands_reverted} brands from backup {backup_id}")
         
-        # Mark upload as undone
-        await collections.upload_history.update_one(
-            {"id": upload_id},
-            {"$set": {"undone_at": datetime.now(timezone.utc)}}
-        )
+        # Delete the upload history record as requested
+        await collections.upload_history.delete_one({"id": upload_id})
         
         # Build appropriate message based on upload type
         if upload_type == "full_monthly":
@@ -816,11 +2122,11 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
-                # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                # Second try: dates without year (21-Sep, 22-Sep) - assume current year
                 match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                 if match:
                     day, month_name = match.groups()
-                    year = "2025"  # Default to 2025
+                    year = str(datetime.now().year)
                     full_date = f"{day}-{month_name}-{year}"
                     return datetime.strptime(full_date, "%d-%b-%Y")
                 
@@ -874,7 +2180,7 @@ async def get_analytics(overstock_multiplier: float = 3.0):
                         logging.error(f"Error calculating sales for date {date}: {e}")
                         continue
             
-            logging.info(f"📊 Calculated sales trends for {len(sales_trends)} dates from {brands_processed} brands")
+            logging.info(f"≡ƒôè Calculated sales trends for {len(sales_trends)} dates from {brands_processed} brands")
             
         except Exception as e:
             logging.error(f"Error in sales trends calculation: {e}", exc_info=True)
@@ -1060,7 +2366,7 @@ async def get_demand_recommendations():
                     else:
                         urgency = "LOW"
                     # Only add remark if there's actual sales/recommendation
-                    remarks.append(f"ℹ️ Stock added mid-period (not on D1), current stock: {current_stock_qty} units")
+                    remarks.append(f"Γä╣∩╕Å Stock added mid-period (not on D1), current stock: {current_stock_qty} units")
                 # If no sales, don't include in recommendations (no recommended_qty, no remarks)
                 
             elif has_zero_d1_stock:
@@ -1079,32 +2385,32 @@ async def get_demand_recommendations():
                         avg_daily = avg_daily or 0
                         if avg_daily >= 2.0:
                             urgency = "HIGH"
-                            remarks.append("⚠️ Brand NOT stocked on D1 (stock was 0)")
-                            remarks.append("📊 Using historical data for recommendation")
-                            remarks.append(f"🔄 Previous period sales: {hist['total_sales_qty']} units")
-                            remarks.append(f"📈 High demand: {round(avg_daily, 1)} units/day avg")
-                            remarks.append("🎯 HIGH PRIORITY: Significant historical demand")
+                            remarks.append("ΓÜá∩╕Å Brand NOT stocked on D1 (stock was 0)")
+                            remarks.append("≡ƒôè Using historical data for recommendation")
+                            remarks.append(f"≡ƒöä Previous period sales: {hist['total_sales_qty']} units")
+                            remarks.append(f"≡ƒôê High demand: {round(avg_daily, 1)} units/day avg")
+                            remarks.append("≡ƒÄ» HIGH PRIORITY: Significant historical demand")
                         else:
                             urgency = "MEDIUM"
-                            remarks.append("⚠️ Brand NOT stocked on D1 (stock was 0)")
-                            remarks.append("📊 Using historical data for recommendation")
-                            remarks.append(f"🔄 Previous period sales: {hist['total_sales_qty']} units")
-                            remarks.append(f"📉 Moderate demand: {round(avg_daily, 1)} units/day avg")
-                            remarks.append("⚖️ MODERATE PRIORITY: Low historical demand")
+                            remarks.append("ΓÜá∩╕Å Brand NOT stocked on D1 (stock was 0)")
+                            remarks.append("≡ƒôè Using historical data for recommendation")
+                            remarks.append(f"≡ƒöä Previous period sales: {hist['total_sales_qty']} units")
+                            remarks.append(f"≡ƒôë Moderate demand: {round(avg_daily, 1)} units/day avg")
+                            remarks.append("ΓÜû∩╕Å MODERATE PRIORITY: Low historical demand")
                     else:
                         # Historical data exists but no sales
                         urgency = "LOW"
-                        remarks.append("⚠️ Brand NOT stocked on D1 (stock was 0)")
-                        remarks.append("📊 Historical data shows no demand")
-                        remarks.append("⬇️ LOW PRIORITY: No historical sales")
-                        remarks.append("❓ Consider only for specific requirements")
+                        remarks.append("ΓÜá∩╕Å Brand NOT stocked on D1 (stock was 0)")
+                        remarks.append("≡ƒôè Historical data shows no demand")
+                        remarks.append("Γ¼ç∩╕Å LOW PRIORITY: No historical sales")
+                        remarks.append("Γ¥ô Consider only for specific requirements")
                 else:
                     # No historical data available
                     urgency = "LOW"
-                    remarks.append("⚠️ Brand NOT stocked on D1 (stock was 0)")
-                    remarks.append("❌ No historical data available")
-                    remarks.append("📊 Brand not stocked in previous period")
-                    remarks.append("⬇️ LOW PRIORITY: Stock only if specifically required")
+                    remarks.append("ΓÜá∩╕Å Brand NOT stocked on D1 (stock was 0)")
+                    remarks.append("Γ¥î No historical data available")
+                    remarks.append("≡ƒôè Brand not stocked in previous period")
+                    remarks.append("Γ¼ç∩╕Å LOW PRIORITY: Stock only if specifically required")
                 
             elif has_low_d1_stock:
                 # Brand had very low starting stock
@@ -1112,9 +2418,9 @@ async def get_demand_recommendations():
                     hist = historical_data[brand_name]
                     hist_monthly = hist.get('monthly_sales_qty', 0) or 0
                     if hist_monthly > (monthly_sales_qty * 1.5):
-                        remarks.append(f"⚠️ Low D1 stock ({d1_stock} units)")
-                        remarks.append(f"📊 Historical demand: {hist['total_sales_qty']} units/period")
-                        remarks.append("📈 Current period may underestimate demand")
+                        remarks.append(f"ΓÜá∩╕Å Low D1 stock ({d1_stock} units)")
+                        remarks.append(f"≡ƒôè Historical demand: {hist['total_sales_qty']} units/period")
+                        remarks.append("≡ƒôê Current period may underestimate demand")
                 
                 # Normal calculation for low D1 items
                 if monthly_sales_qty > 0:
@@ -1264,102 +2570,87 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
     Returns: dict with 'series' (list of sales periods with daily data from current + history)
     """
     try:
-        from collections import defaultdict
-        import re
-        
-        def parse_date_for_sorting(date_str):
-            """Parse various date formats for chronological sorting"""
-            try:
-                if not date_str:
-                    return datetime.min
-                
-                date_str = str(date_str).strip()
-                
-                # Handle full datetime strings (YYYY-MM-DD HH:MM:SS format)
-                if 'T' in date_str or len(date_str) > 15:
-                    try:
-                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
-                        # Validate year is reasonable (2020-2030)
-                        if dt.year < 2020 or dt.year > 2030:
-                            logging.warning(f"Invalid year {dt.year} in date '{date_str}', attempting correction")
-                            # Try to fix common issues (2052 -> 2025)
-                            if dt.year > 2030:
-                                dt = dt.replace(year=2025)
-                        return dt
-                    except Exception as e:
-                        logging.warning(f"Failed to parse datetime '{date_str}': {e}")
-                
-                # Parse various date formats
-                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    full_date = f"{day}-{month_name}-{year}"
-                    dt = datetime.strptime(full_date, "%d-%b-%Y")
-                    # Validate year
-                    if dt.year < 2020 or dt.year > 2030:
-                        dt = dt.replace(year=2025)
-                    return dt
-                
-                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name = match.groups()
-                    year = "2025"
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-                
-                logging.warning(f"Could not parse date '{date_str}'")
-                return datetime.min
-                
-            except Exception as e:
-                logging.warning(f"Could not parse date '{date_str}': {e}")
-                return datetime.min
+        # Use the robust global parser for consistent date comparison across history
+        parse_date_for_sorting = parse_date_for_comparison_global
         
         # 1. Get CURRENT month data from liquor_data
         current_data = await collections.liquor_data.find().to_list(10000)
         
-        # 2. Get HISTORICAL data from stock_backups - ONLY pre_reset_backup types
-        # These represent complete sales periods that were committed to history
+        # 2. Get HISTORICAL data from stock_backups - Include both manual and auto-reset types
         backups = await collections.stock_backups.find({
-            "backup_reason": "pre_reset_backup"
+            "backup_reason": {"$in": ["pre_reset_backup", "auto_reset_on_purchase"]}
         }).sort("backup_timestamp", -1).to_list(100)
         
-        # Create a dict to store data by period - use most recent backup only
+        # Create a dict to store data by period
         period_to_data = {}
         period_info = {}
         
-        # First, process current data (highest priority)
+        # First, process current data
         if current_data:
+            # 1. Collect ALL possible dates from the current active records
+            raw_dates = []
             for record in current_data:
-                d1_date = record.get('D1_date')
-                dl_date = record.get('DL_date')
+                for f in ['D1_date', 'DL_date']:
+                    val = record.get(f)
+                    if val and val != 'N/A':
+                        dt = parse_date_for_sorting(val)
+                        if dt != datetime.min: raw_dates.append(dt)
                 
-                # Skip records with None, 'N/A', or empty dates
-                if d1_date and dl_date and d1_date != 'N/A' and dl_date != 'N/A':
-                    d1_parsed = parse_date_for_sorting(d1_date)
-                    dl_parsed = parse_date_for_sorting(dl_date)
-                    
-                    if d1_parsed != datetime.min and dl_parsed != datetime.min:
-                        d1_month = d1_parsed.strftime("%b")
-                        dl_month = dl_parsed.strftime("%b")
-                        year = dl_parsed.strftime("%Y")
-                        
-                        if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
-                        else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
-                        
-                        if period_label not in period_to_data:
-                            period_to_data[period_label] = []
-                            period_info[period_label] = {
-                                'd1': d1_parsed,
-                                'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
-                                'source': 'current'
-                            }
-                        
-                        period_to_data[period_label].append(record)
+                daily_sales = record.get('daily_sales', {}) or {}
+                for d_str in daily_sales.keys():
+                    dt = parse_date_for_sorting(d_str)
+                    if dt != datetime.min: raw_dates.append(dt)
+
+            if raw_dates:
+                # CLUSTERING LOGIC: Identify contiguous reporting blocks
+                # 1. Filter out obvious future outliers
+                now = datetime.now()
+                valid_raw = [d for d in raw_dates if d <= now + timedelta(days=30)]
+                if not valid_raw: valid_raw = raw_dates
+
+                sorted_raw = sorted(list(set(valid_raw)))
+
+                # 2. Partition into clusters based on 20-day gaps
+                clusters = []
+                if sorted_raw:
+                    current_cluster = [sorted_raw[0]]
+                    for i in range(1, len(sorted_raw)):
+                        if (sorted_raw[i] - sorted_raw[i-1]).days > 20:
+                            clusters.append(current_cluster)
+                            current_cluster = []
+                        current_cluster.append(sorted_raw[i])
+                    clusters.append(current_cluster)
+
+                # 3. Identify the "Current" cluster
+                active_dates = clusters[-1] if clusters else []
+
+                if active_dates:
+                    min_d1 = min(active_dates)
+                    max_dl = max(active_dates)
+
+                    # Log the detected bounds for debugging
+                    logging.info(f"Current Period detected: {min_d1.strftime('%Y-%m-%d')} to {max_dl.strftime('%Y-%m-%d')}")
+
+                    d1_month = min_d1.strftime("%b")
+                    dl_month = max_dl.strftime("%b")
+                    year = max_dl.strftime("%Y")
+
+                    if d1_month == dl_month:
+                        period_display = f"{d1_month} {year}"
+                    else:
+                        period_display = f"{d1_month}-{dl_month} {year}"
+
+                    # Group all current records into this single active period
+                    period_label = "current_active_period"
+                    period_to_data[period_label] = current_data
+                    period_info[period_label] = {
+                        'display': f"{period_display} (Current)",
+                        'd1': min_d1,
+                        'dl': max_dl,
+                        'd1_str': min_d1.strftime("%d-%b-%y"),
+                        'dl_str': max_dl.strftime("%d-%b-%y"),
+                        'source': 'current'
+                    }
         
         # Then, process historical backups (only if period not already in current data)
         periods_seen_in_backups = set()
@@ -1418,42 +2709,65 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
         period_trends = {}
         
         for period_label, records in period_to_data.items():
-            # Calculate daily sales from stock positions
-            # Sales = Previous Day Stock - Current Day Stock
-            all_daily_sales = {}
+            p_info = period_info.get(period_label)
+            if not p_info: continue
+
+            p_min_d1 = p_info['d1']
+            p_max_dl = p_info['dl']
+
+            # Aggregate sales across all brands for each specific date in the period
+            aggregated_daily_sales = defaultdict(float)
+            all_involved_dates = set()
             
             for record in records:
-                daily_sales = record.get('daily_sales', {}) or {}
-                for date_str, stock_qty in daily_sales.items():
-                    if date_str not in all_daily_sales:
-                        all_daily_sales[date_str] = []
-                    all_daily_sales[date_str].append(stock_qty)
+                # Use centralized movement logic for each brand
+                _, _, brand_attributed_sales, brand_reporting_dates = calculate_movements_logic(
+                    record.get('daily_sales', {}) or {},
+                    p_min_d1,
+                    p_max_dl
+                )
+
+                # Add all dates this brand reported on, even if no sales occurred
+                for d_str in brand_reporting_dates:
+                    all_involved_dates.add(d_str)
+
+                for d_str, s_val in brand_attributed_sales.items():
+                    aggregated_daily_sales[d_str] += s_val
+
+            # Ensure start/end dates are represented in the trendline
+            all_involved_dates.add(normalize_date_key_global(p_info['d1_str']))
+            all_involved_dates.add(normalize_date_key_global(p_info['dl_str']))
             
-            # Calculate daily sales quantities by subtracting consecutive days
-            daily_sales_qty = {}
-            sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
+            # Create normalized data points for the period
+            # Sort unique dates chronologically
+            sorted_dates = sorted(list(all_involved_dates), key=lambda d: parse_date_for_comparison_global(d))
+
+            # Consolidation Step: Map dates to Day Numbers and group by normalized date
+            # This prevents duplicate dots if "25-Apr" and "25-Apr-25" both exist
+            consolidated_points = {}
+            for date_str in sorted_dates:
+                dt = parse_date_for_comparison_global(date_str)
+                if dt == datetime.min: continue
+
+                norm_date = dt.strftime("%d-%b-%y")
+                day_num = (dt - p_min_d1).days + 1
+
+                if norm_date not in consolidated_points:
+                    consolidated_points[norm_date] = {
+                        "day": day_num,
+                        "date": dt.strftime("%d-%b"),
+                        "sales": 0
+                    }
+
+                consolidated_points[norm_date]["sales"] += aggregated_daily_sales.get(date_str, 0)
+
+            # Convert to final sorted list for the period
+            day_data = sorted(consolidated_points.values(), key=lambda x: x["day"])
             
-            for i, date in enumerate(sorted_dates):
-                if i == 0:
-                    # First day has no previous day, so sales = 0
-                    daily_sales_qty[date] = 0
-                else:
-                    # Sales on current day = Previous day total stock - Current day total stock
-                    prev_date = sorted_dates[i-1]
-                    prev_total = sum(all_daily_sales[prev_date])
-                    current_total = sum(all_daily_sales[date])
-                    daily_sales_qty[date] = max(0, prev_total - current_total)
-            
-            # Create sequential day numbers for chart
-            day_data = []
-            for day_num, date_str in enumerate(sorted_dates, start=1):
-                date_obj = parse_date_for_sorting(date_str)
-                day_data.append({
-                    "day": day_num,
-                    "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
-                    "sales": round(daily_sales_qty.get(date_str, 0), 2)
-                })
-            
+            # Ensure all sales values are rounded
+            for item in day_data:
+                item["sales"] = round(item["sales"], 2)
+
             period_trends[period_label] = day_data
         
         # Sort periods chronologically
@@ -1471,7 +2785,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label].get('display', period_label),
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
@@ -1483,7 +2797,7 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 # Safely access period_info to avoid KeyError
                 if period_label in period_info and period_label in period_trends:
                     series_data.append({
-                        "month": period_label,
+                        "month": period_info[period_label].get('display', period_label),
                         "data": period_trends[period_label],
                         "d1_date": period_info[period_label]['d1_str'],
                         "dl_date": period_info[period_label]['dl_str']
@@ -1493,25 +2807,18 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
             # Safely access period_info to avoid KeyError
             if sales_month in period_trends and sales_month in period_info:
                 series_data.append({
-                    "month": sales_month,
+                    "month": period_info[sales_month].get('display', sales_month),
                     "data": period_trends[sales_month],
                     "d1_date": period_info[sales_month]['d1_str'],
                     "dl_date": period_info[sales_month]['dl_str']
                 })
         
-        # Calculate summary - use actual total_sales_qty from records for accuracy
-        # This ensures the total matches the actual D1 - DL calculation per brand
+        # Calculate summary using the accurately calculated daily movements
         series_with_totals = []
         for series in series_data:
-            period_label = series["month"]
-            # Get the actual total_sales_qty from the records for this period
-            if period_label in period_to_data:
-                records_for_period = period_to_data[period_label]
-                actual_total = sum(r.get('total_sales_qty', 0) for r in records_for_period)
-                series["total_sales"] = round(actual_total, 2)
-            else:
-                # Fallback to summing daily sales from trend line
-                series["total_sales"] = round(sum(day_data["sales"] for day_data in series["data"]), 2)
+            # We use the sum of daily sales calculated above to ensure the summary
+            # matches the trendline exactly (accounting for mid-period purchases)
+            series["total_sales"] = round(sum(day_item["sales"] for day_item in series["data"]), 2)
             series_with_totals.append(series)
         
         total_sales = sum(s.get("total_sales", 0) for s in series_with_totals)
@@ -1553,7 +2860,7 @@ async def refresh_analytics():
             if record.get('DL_date'):
                 dl_dates.add(record['DL_date'])
         
-        print(f"📊 Refreshing analytics for {len(all_records)} records")
+        print(f"≡ƒôè Refreshing analytics for {len(all_records)} records")
         print(f"   D1 dates found: {sorted(d1_dates)}")
         print(f"   DL dates found: {sorted(dl_dates)}")
         
@@ -1567,7 +2874,11 @@ async def refresh_analytics():
                 days_analyzed = record.get('days_analyzed', 1)
                 
                 # Recalculate derived values
-                total_sales_qty = max(0, D1_stock - DL_stock)
+                d1_dt = parse_date_for_comparison_global(record.get('D1_date'))
+                dl_dt = parse_date_for_comparison_global(record.get('DL_date'))
+                daily_sales = record.get('daily_sales', {}) or {}
+                total_sales_qty, total_purchases_qty, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
                 avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
                 monthly_sales_qty = avg_daily_sales_qty * 24
                 monthly_sales_value = monthly_sales_qty * selling_rate
@@ -1578,6 +2889,7 @@ async def refresh_analytics():
                 # Update record with recalculated values
                 update_data = {
                     "total_sales_qty": float(total_sales_qty),
+                    "total_purchases_qty": float(total_purchases_qty),
                     "avg_daily_sales_qty": float(avg_daily_sales_qty),
                     "monthly_sales_qty": float(monthly_sales_qty),
                     "monthly_sale_qty": int(monthly_sales_qty),
@@ -1599,7 +2911,7 @@ async def refresh_analytics():
                 print(f"Warning: Error updating {record.get('brand_name', 'Unknown')}: {e}")
                 continue
         
-        print(f"✅ Successfully refreshed {updated_count} records")
+        print(f"Γ£à Successfully refreshed {updated_count} records")
         
         return {
             "message": f"Successfully refreshed analytics for {updated_count} records",
@@ -1629,8 +2941,14 @@ async def get_calculation_details():
             # Calculate multiplier value (current stock value / monthly sales value)
             current_stock_value = record.get('stock_value_today', 0)
             monthly_sales_value = record.get('monthly_sale_value', 0)
-            multiplier_value = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
             
+            if monthly_sales_value > 0:
+                multiplier_value = current_stock_value / monthly_sales_value
+            elif current_stock_value > 0:
+                multiplier_value = 999.0
+            else:
+                multiplier_value = 0
+
             detail = {
                 'index': record.get('index_number', record.get('product_id', 'N/A')),
                 'brand_name': record['brand_name'],
@@ -1940,7 +3258,7 @@ async def update_rates_from_excel(file: UploadFile = File(...)):
                 df = pd.read_csv(io.BytesIO(content))
             except Exception as e:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail=f"Unable to parse file. Error: {str(e)}"
                 )
         
@@ -2099,6 +3417,9 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                 brands_added = changes_snapshot.get("brands_added", [])
                 date_added = changes_snapshot.get("date_added")  # Get the date that was added
                 
+                # Normalize the date for robust cleanup
+                normalized_date = normalize_date_key_global(date_added) if date_added else None
+
                 # Get total count of brands in database for verification
                 total_brands_in_db = await collections.liquor_data.count_documents({})
                 logging.info(f"Reverting daily update: {len(brands_updated)} brands to restore (out of {total_brands_in_db} total), date_added: {date_added}")
@@ -2109,9 +3430,10 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                         # Build update operation
                         update_data = {}
                         for field in ["DL_date", "DL_stock", "current_stock_qty", 
-                                      "days_analyzed", "total_sales_qty", "avg_daily_sales_qty",
-                                      "monthly_sales_qty", "monthly_sale_qty", "monthly_sale_value",
-                                      "stock_value_today", "stock_available_days", "stock_ratio"]:
+                                      "days_analyzed", "total_sales_qty", "total_purchases_qty",
+                                      "avg_daily_sales_qty", "monthly_sales_qty", "monthly_sale_qty",
+                                      "monthly_sale_value", "stock_value_today", "stock_available_days",
+                                      "stock_ratio"]:
                             value = previous_state.get(field)
                             if value is not None:
                                 update_data[field] = value
@@ -2121,6 +3443,8 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                         daily_sales_value = previous_state.get("daily_sales")
                         if daily_sales_value is not None:
                             update_data["daily_sales"] = daily_sales_value if isinstance(daily_sales_value, dict) else {}
+                            if normalized_date and normalized_date in update_data["daily_sales"]:
+                                del update_data["daily_sales"][normalized_date]
                             logging.info(f"Restoring daily_sales with {len(update_data['daily_sales'])} dates (excluding '{date_added}')")
                         
                         # Apply the updates if any fields need to be restored
@@ -2136,41 +3460,41 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                     result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
                     brands_deleted = result.deleted_count
                 
-                # FAILSAFE: If snapshot is incomplete, remove the date from ALL brands
-                # This handles cases where the snapshot didn't capture all brands
-                if date_added and len(brands_updated) < total_brands_in_db:
-                    logging.warning(f"Snapshot incomplete ({len(brands_updated)} < {total_brands_in_db}). Running failsafe cleanup...")
+                # FAILSAFE: Ensure the date is removed from ALL brands and DL_date is rolled back
+                if normalized_date:
+                    logging.info(f"Running failsafe cleanup for date '{normalized_date}'...")
                     
-                    # Normalize the date to match daily_sales format
-                    def normalize_date_key_for_cleanup(date_str):
-                        import re
-                        try:
-                            date_str = str(date_str).strip()
-                            if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                                return dt.strftime("%d-%b-%y")
-                            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                            if match:
-                                day, month_name, year_suffix = match.groups()
-                                if not year_suffix or len(year_suffix) < 2:
-                                    year_suffix = '25'
-                                elif len(year_suffix) == 4:
-                                    year_suffix = year_suffix[2:]
-                                day = day.zfill(2)
-                                month_name = month_name.capitalize()
-                                return f"{day}-{month_name}-{year_suffix}"
-                        except Exception as e:
-                            logging.warning(f"Could not normalize date '{date_str}': {e}")
-                        return str(date_str)
-                    
-                    normalized_date = normalize_date_key_for_cleanup(date_added)
-                    
-                    # Remove the date key from ALL brands using $unset
-                    result = await collections.liquor_data.update_many(
-                        {},  # Update ALL documents
+                    # 1. Remove from daily_sales
+                    await collections.liquor_data.update_many(
+                        {},
                         {"$unset": {f"daily_sales.{normalized_date}": ""}}
                     )
-                    logging.info(f"Failsafe cleanup: Removed '{normalized_date}' from {result.modified_count} additional brands")
+
+                    # 2. Fix DL_date if it was set to the removed date
+                    affected_brands = await collections.liquor_data.find({"DL_date": {"$in": [date_added, normalized_date]}}).to_list(None)
+                    for brand in affected_brands:
+                        daily_sales = brand.get("daily_sales", {})
+                        if not daily_sales: continue
+
+                        remaining_dates = sorted(daily_sales.keys(), key=lambda d: parse_date_for_comparison_global(d))
+                        if remaining_dates:
+                            new_dl_date = remaining_dates[-1]
+                            new_dl_stock = daily_sales[new_dl_date]
+
+                            d1_dt = parse_date_for_comparison_global(brand.get("D1_date"))
+                            dl_dt = parse_date_for_comparison_global(new_dl_date)
+                            t_sales, t_purchases, _, _ = calculate_movements_logic(daily_sales, d1_dt, dl_dt)
+
+                            await collections.liquor_data.update_one(
+                                {"_id": brand["_id"]},
+                                {"$set": {
+                                    "DL_date": new_dl_date,
+                                    "DL_stock": float(new_dl_stock),
+                                    "current_stock_qty": int(new_dl_stock),
+                                    "total_sales_qty": float(t_sales),
+                                    "total_purchases_qty": float(t_purchases)
+                                }}
+                            )
                 
                 data_reverted = True
                 logging.info(f"Reverted daily_update: {brands_reverted} brands updated, {brands_deleted} brands deleted")
@@ -2708,7 +4032,7 @@ async def get_historical_data_view(period_ids: List[str]):
             # Use existing calculated revenue from records
             revenue = data['total_revenue']
             
-            # Profit = (Avg Selling Rate - Avg Wholesale Rate) × Total Qty Sold
+            # Profit = (Avg Selling Rate - Avg Wholesale Rate) ├ù Total Qty Sold
             per_unit_profit = avg_selling_rate - avg_wholesale_rate
             profit = per_unit_profit * data['total_qty_sold']
             
@@ -2856,14 +4180,14 @@ async def analyze_historical_periods(period_ids: List[str]):
                     growth_rate = 0
                 
                 if growth_rate > 10:
-                    trend = "📈 Growing"
+                    trend = "≡ƒôê Growing"
                 elif growth_rate < -10:
-                    trend = "📉 Declining"
+                    trend = "≡ƒôë Declining"
                 else:
-                    trend = "➡️ Stable"
+                    trend = "Γ₧í∩╕Å Stable"
             else:
                 growth_rate = 0
-                trend = "➡️ Stable"
+                trend = "Γ₧í∩╕Å Stable"
             
             trends.append({
                 'brand_name': brand_name,
@@ -3049,7 +4373,7 @@ async def delete_backup(backup_id: str):
 async def restore_from_backup(backup_id: str, recalculate_historical: bool = True):
     """Restore data from a specific backup and optionally recalculate historical averages"""
     try:
-        logging.info(f"🔄 Starting restore from backup: {backup_id}")
+        logging.info(f"≡ƒöä Starting restore from backup: {backup_id}")
         
         # Find the backup
         backup = await collections.stock_backups.find_one({
@@ -3072,25 +4396,25 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
         if not backup_data:
             raise HTTPException(status_code=400, detail="Backup contains no data")
         
-        logging.info(f"📦 Found backup with {len(backup_data)} records from {backup.get('backup_timestamp')}")
+        logging.info(f"≡ƒôª Found backup with {len(backup_data)} records from {backup.get('backup_timestamp')}")
         
         # STEP 1: Calculate historical averages FROM BACKUP DATA (before clearing current data)
         historical_records_created = 0
         historical_month = "N/A"
         if recalculate_historical:
-            logging.info("📊 Calculating historical averages from backup data...")
+            logging.info("≡ƒôè Calculating historical averages from backup data...")
             historical_result = await calculate_and_store_historical_averages(source_records=backup_data)
             historical_records_created = historical_result.get('historical_records_created', 0)
             historical_month = historical_result.get('month_year', 'N/A')
             if historical_records_created > 0:
-                logging.info(f"✅ Created {historical_records_created} historical records for {historical_month}")
+                logging.info(f"Γ£à Created {historical_records_created} historical records for {historical_month}")
             else:
-                logging.warning(f"⚠️ No historical records created: {historical_result.get('message', 'Unknown reason')}")
+                logging.warning(f"ΓÜá∩╕Å No historical records created: {historical_result.get('message', 'Unknown reason')}")
         
         # STEP 2: Clear current data
         current_count = await collections.liquor_data.count_documents({})
         await collections.liquor_data.delete_many({})
-        logging.info(f"🗑️ Cleared {current_count} existing records before restore")
+        logging.info(f"≡ƒùæ∩╕Å Cleared {current_count} existing records before restore")
         
         # STEP 3: Restore data from backup
         # Convert backup data to proper format
@@ -3106,7 +4430,7 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
         # Insert restored data
         if restored_records:
             await collections.liquor_data.insert_many(restored_records)
-            logging.info(f"✅ Restored {len(restored_records)} records from backup")
+            logging.info(f"Γ£à Restored {len(restored_records)} records from backup")
         
         return {
             "success": True,
@@ -3123,7 +4447,7 @@ async def restore_from_backup(backup_id: str, recalculate_historical: bool = Tru
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"❌ Error restoring from backup: {e}", exc_info=True)
+        logging.error(f"Γ¥î Error restoring from backup: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error restoring backup: {str(e)}")
 
 # MODULE 5: Historical Sales Averages - Helper Functions
@@ -3147,7 +4471,7 @@ async def calculate_and_store_historical_averages(source_records=None):
             logging.warning("No records available for historical calculation")
             return {"historical_records_created": 0, "message": "No data available"}
         
-        logging.info(f"📊 Calculating historical averages from {len(liquor_records)} records")
+        logging.info(f"≡ƒôè Calculating historical averages from {len(liquor_records)} records")
         
         # Get month_year from first record's date fields
         sample_record = liquor_records[0]
@@ -3185,7 +4509,7 @@ async def calculate_and_store_historical_averages(source_records=None):
             logging.warning(f"Error parsing month_year from D1_date '{d1_date}': {e}")
             month_year = datetime.now().strftime("%b-%Y")
         
-        logging.info(f"📅 Historical data will be stored for period: {month_year}")
+        logging.info(f"≡ƒôà Historical data will be stored for period: {month_year}")
         
         historical_records = []
         brands_with_sales = 0
@@ -3224,7 +4548,7 @@ async def calculate_and_store_historical_averages(source_records=None):
                 brands_without_sales += 1
                 logging.debug(f"Skipping brand '{brand_name}': days_analyzed={days_analyzed}, total_sales_qty={total_sales_qty}")
         
-        logging.info(f"✅ Brands with sales data: {brands_with_sales}, without: {brands_without_sales}")
+        logging.info(f"Γ£à Brands with sales data: {brands_with_sales}, without: {brands_without_sales}")
         
         # Store in database (delete existing records for this month first to avoid duplicates)
         if historical_records:
@@ -3235,7 +4559,7 @@ async def calculate_and_store_historical_averages(source_records=None):
             
             # Insert new historical records
             await db.historical_sales_averages.insert_many(historical_records)
-            logging.info(f"✅ Successfully stored {len(historical_records)} historical sales averages for {month_year}")
+            logging.info(f"Γ£à Successfully stored {len(historical_records)} historical sales averages for {month_year}")
             
             return {
                 "historical_records_created": len(historical_records),
@@ -3245,7 +4569,7 @@ async def calculate_and_store_historical_averages(source_records=None):
                 "message": f"Historical data saved for {month_year}"
             }
         else:
-            logging.warning(f"⚠️ No historical records created - all brands had insufficient data")
+            logging.warning(f"ΓÜá∩╕Å No historical records created - all brands had insufficient data")
             return {
                 "historical_records_created": 0,
                 "month_year": month_year,
@@ -3255,7 +4579,7 @@ async def calculate_and_store_historical_averages(source_records=None):
             }
         
     except Exception as e:
-        logging.error(f"❌ Error calculating historical averages: {e}", exc_info=True)
+        logging.error(f"Γ¥î Error calculating historical averages: {e}", exc_info=True)
         return {"historical_records_created": 0, "error": str(e), "message": f"Error: {str(e)}"}
 
 async def get_days_of_current_data() -> int:
@@ -3400,56 +4724,60 @@ async def get_projected_data_from_historical():
         logging.error(f"Error getting projected data from historical: {e}")
         return []
 
-async def internal_reset_stock():
-    """Internal helper to reset stock data, calculate averages, and create backup"""
-    # 1. Calculate historical averages
-    historical_result = await calculate_and_store_historical_averages()
-    
-    # 2. Create backup
-    liquor_records = await collections.liquor_data.find().to_list(10000)
-    if not liquor_records:
-        return {"error": "No data to reset", "status": "failed"}
-        
-    backup_data = []
-    for record in liquor_records:
-        record_copy = record.copy()
-        if '_id' in record_copy: del record_copy['_id']
-        backup_data.append(record_copy)
-        
-    backup = StockBackup(
-        total_records=len(backup_data),
-        backup_reason="pre_reset_backup",
-        data_snapshot=backup_data
-    )
-    await collections.stock_backups.insert_one(backup.dict())
-    
-    # 3. Clear current data
-    await collections.liquor_data.delete_many({})
-    
-    return {
-        "backup_id": backup.id,
-        "records_backed_up": len(backup_data),
-        "historical_records": historical_result.get('historical_records_created', 0),
-        "status": "success"
-    }
-
 @api_router.post("/stock/reset")
 async def reset_stock_data():
     """Reset all date-wise stock data after calculating historical averages and creating backup"""
     try:
-        result = await internal_reset_stock()
-        if result.get("status") == "failed":
-            raise HTTPException(status_code=404, detail=result.get("error"))
-            
+        # STEP 1: Calculate and store historical sales averages
+        historical_result = await calculate_and_store_historical_averages()
+
+        # STEP 2: Create automatic backup
+        liquor_records = await collections.liquor_data.find().to_list(10000)
+
+        if not liquor_records:
+            raise HTTPException(status_code=404, detail="No data to reset")
+
+        # Remove MongoDB _id for backup
+        backup_data = []
+        for record in liquor_records:
+            record_copy = record.copy()
+            if '_id' in record_copy:
+                del record_copy['_id']
+            backup_data.append(record_copy)
+
+        # Create backup
+        backup = StockBackup(
+            total_records=len(backup_data),
+            backup_reason="pre_reset_backup",
+            data_snapshot=backup_data
+        )
+
+        await collections.stock_backups.insert_one(backup.dict())
+
+        # STEP 3: Delete all liquor data (brands_master is preserved for rate persistence)
+        delete_result = await collections.liquor_data.delete_many({})
+
+        historical_count = historical_result.get('historical_records_created', 0)
+        historical_month = historical_result.get('month_year', 'N/A')
+
+        logging.info(f"Reset completed: Stored {historical_count} historical averages for {historical_month}, backed up and deleted {delete_result.deleted_count} records")
+
+        # Create detailed message based on historical data creation
+        if historical_count > 0:
+            hist_message = f"Γ£à Saved {historical_count} brands' sales history for {historical_month}"
+        else:
+            hist_message = f"ΓÜá∩╕Å No historical data saved - brands need at least 1 day of sales data"
+
         return {
-            **result,
-            "message": "Stock data reset successfully. Backup created.",
+            "backup_id": backup.id,
+            "records_backed_up": len(backup_data),
+            "records_deleted": delete_result.deleted_count,
+            "historical_records_created": historical_count,
+            "historical_month": historical_month,
+            "historical_message": hist_message,
+            "message": f"Stock data reset successfully. {hist_message}. Backup created.",
             "next_upload_becomes_d1": True
         }
-    except HTTPException: raise
-    except Exception as e:
-        logging.error(f"Error resetting stock data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error resetting stock data: {str(e)}")
         
     except HTTPException:
         raise
@@ -3599,7 +4927,7 @@ async def get_aggregated_period_data(period_ids: list) -> list:
     Similar to the sales history tab aggregation logic
     """
     try:
-        logging.info(f"🔍 Aggregating data for period IDs: {period_ids}")
+        logging.info(f"≡ƒöì Aggregating data for period IDs: {period_ids}")
         aggregated_data = {}
         
         for period_id in period_ids:
@@ -3607,10 +4935,10 @@ async def get_aggregated_period_data(period_ids: list) -> list:
             # Find the backup for this period
             backup = await collections.stock_backups.find_one({"id": period_id})
             if not backup:
-                logging.warning(f"  ⚠️ No backup found for period_id: {period_id}")
+                logging.warning(f"  ΓÜá∩╕Å No backup found for period_id: {period_id}")
                 continue
             
-            logging.info(f"  ✅ Found backup for period: {backup.get('period_name', 'Unknown')}")
+            logging.info(f"  Γ£à Found backup for period: {backup.get('period_name', 'Unknown')}")
             data_snapshot = backup.get('data_snapshot', [])
             logging.info(f"  Found {len(data_snapshot)} records in snapshot")
             
@@ -3722,7 +5050,12 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(d1_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                if not year_suffix or len(year_suffix) < 2:
+                    year = str(datetime.now().year)
+                elif len(year_suffix) == 2:
+                    year = f"20{year_suffix}"
+                else:
+                    year = year_suffix[:4]
                 d1_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 d1_parsed = None
@@ -3731,7 +5064,12 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', str(dl_date), re.IGNORECASE)
             if match:
                 day, month_name, year_suffix = match.groups()
-                year = '2025' if not year_suffix or len(year_suffix) < 2 else (f"20{year_suffix}" if len(year_suffix) == 2 else year_suffix[:4])
+                if not year_suffix or len(year_suffix) < 2:
+                    year = str(datetime.now().year)
+                elif len(year_suffix) == 2:
+                    year = f"20{year_suffix}"
+                else:
+                    year = year_suffix[:4]
                 dl_parsed = datetime.strptime(f"{day}-{month_name}-{year}", "%d-%b-%Y")
             else:
                 dl_parsed = None
@@ -3913,7 +5251,7 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
             "high_demand_brands": high_demand_count,
             "total_demand_investment": total_demand_cost,
             "key_insights": [
-                f"Generated ₹{total_profit:,.0f} profit from ₹{total_revenue:,.0f} revenue",
+                f"Generated Γé╣{total_profit:,.0f} profit from Γé╣{total_revenue:,.0f} revenue",
                 f"{overstocked_count} brands are overstocked, blocking capital",
                 f"{slow_moving_count} brands are slow-moving and need attention",
                 f"{high_demand_count} brands need urgent restocking"
@@ -3923,9 +5261,9 @@ async def generate_monthly_report_data(selected_periods: list = None) -> Monthly
         # 7. RECOMMENDATIONS
         recommendations = [
             f"Focus on top revenue generators: {', '.join([b.brand_name for b in top_sellers_revenue[:3]])}",
-            f"Address {overstocked_count} overstocked brands to free up ₹{sum(cb.stock_value for cb in capital_blockers):,.0f}",
+            f"Address {overstocked_count} overstocked brands to free up Γé╣{sum(cb.stock_value for cb in capital_blockers):,.0f}",
             f"Implement promotion strategy for {slow_moving_count} slow-moving brands",
-            f"Prioritize restocking of {high_demand_count} high-demand brands requiring ₹{total_demand_cost:,.0f} investment",
+            f"Prioritize restocking of {high_demand_count} high-demand brands requiring Γé╣{total_demand_cost:,.0f} investment",
             f"Improve profit margin from current {avg_profit_margin:.1f}% through better wholesale negotiations"
         ]
         
@@ -3974,8 +5312,8 @@ async def generate_excel_report(request_data: dict = None):
                 'Value': [
                     report_data.report_period,
                     report_data.total_brands,
-                    f"₹{report_data.profit_analysis.total_revenue:,.0f}",
-                    f"₹{report_data.profit_analysis.total_profit:,.0f}",
+                    f"Γé╣{report_data.profit_analysis.total_revenue:,.0f}",
+                    f"Γé╣{report_data.profit_analysis.total_profit:,.0f}",
                     f"{report_data.profit_analysis.average_profit_margin:.1f}%",
                     len(report_data.capital_blockers),
                     len(report_data.slow_sellers),
@@ -3990,9 +5328,9 @@ async def generate_excel_report(request_data: dict = None):
                 for seller in report_data.top_sellers_revenue:
                     revenue_data.append({
                         'Brand Name': seller.brand_name,
-                        'Revenue (₹)': seller.revenue,
+                        'Revenue (Γé╣)': seller.revenue,
                         'Volume Sold': seller.volume,
-                        'Profit (₹)': seller.profit,
+                        'Profit (Γé╣)': seller.profit,
                         'Profit Margin (%)': seller.profit_margin
                     })
                 pd.DataFrame(revenue_data).to_excel(writer, sheet_name='Top Revenue Generators', index=False)
@@ -4004,8 +5342,8 @@ async def generate_excel_report(request_data: dict = None):
                     volume_data.append({
                         'Brand Name': seller.brand_name,
                         'Volume Sold': seller.volume,
-                        'Revenue (₹)': seller.revenue,
-                        'Profit (₹)': seller.profit,
+                        'Revenue (Γé╣)': seller.revenue,
+                        'Profit (Γé╣)': seller.profit,
                         'Profit Margin (%)': seller.profit_margin
                     })
                 pd.DataFrame(volume_data).to_excel(writer, sheet_name='Top Volume Movers', index=False)
@@ -4016,10 +5354,10 @@ async def generate_excel_report(request_data: dict = None):
                 for seller in report_data.slow_sellers:
                     slow_data.append({
                         'Brand Name': seller.brand_name,
-                        'Revenue (₹)': seller.revenue,
+                        'Revenue (Γé╣)': seller.revenue,
                         'Volume Sold': seller.volume,
                         'Stock Days': seller.stock_days,
-                        'Stock Value (₹)': seller.stock_value
+                        'Stock Value (Γé╣)': seller.stock_value
                     })
                 pd.DataFrame(slow_data).to_excel(writer, sheet_name='Slow Sellers', index=False)
             
@@ -4029,7 +5367,7 @@ async def generate_excel_report(request_data: dict = None):
                 for blocker in report_data.capital_blockers:
                     capital_data.append({
                         'Brand Name': blocker.brand_name,
-                        'Stock Value (₹)': blocker.stock_value,
+                        'Stock Value (Γé╣)': blocker.stock_value,
                         'Stock Quantity': blocker.stock_quantity,
                         'Stock Days': blocker.stock_days,
                         'Overstock Ratio': blocker.overstocked_ratio
@@ -4044,8 +5382,8 @@ async def generate_excel_report(request_data: dict = None):
                         'Brand Name': item.brand_name,
                         'Current Stock': item.current_stock,
                         'Recommended Qty': item.recommended_qty,
-                        'Wholesale Rate (₹)': item.wholesale_rate,
-                        'Total Cost (₹)': item.total_cost,
+                        'Wholesale Rate (Γé╣)': item.wholesale_rate,
+                        'Total Cost (Γé╣)': item.total_cost,
                         'Urgency': item.urgency_level
                     })
                 pd.DataFrame(demand_data).to_excel(writer, sheet_name='Demand Forecast', index=False)
@@ -4055,9 +5393,9 @@ async def generate_excel_report(request_data: dict = None):
             for brand in report_data.profit_analysis.top_profit_brands:
                 profit_data.append({
                     'Brand Name': brand['brand_name'],
-                    'Profit (₹)': brand['profit'],
+                    'Profit (Γé╣)': brand['profit'],
                     'Profit Margin (%)': brand['profit_margin'],
-                    'Sales Value (₹)': brand['sales_value']
+                    'Sales Value (Γé╣)': brand['sales_value']
                 })
             pd.DataFrame(profit_data).to_excel(writer, sheet_name='Profit Analysis', index=False)
             
@@ -4088,11 +5426,11 @@ async def generate_excel_report(request_data: dict = None):
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
-                    # Second try: dates without year (21-Sep, 22-Sep) - assume 2025
+                    # Second try: dates without year (21-Sep, 22-Sep) - assume current year
                     match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
                     if match:
                         day, month_name = match.groups()
-                        year = "2025"  # Default to 2025 for dates without year
+                        year = str(datetime.now().year)
                         full_date = f"{day}-{month_name}-{year}"
                         return datetime.strptime(full_date, "%d-%b-%Y")
                     
@@ -4136,8 +5474,8 @@ async def generate_excel_report(request_data: dict = None):
                 row_data = {
                     'Index': record.get('index_number', ''),
                     'Brand Name': record['brand_name'],
-                    'Wholesale Rate (₹)': record.get('wholesale_rate', 0),
-                    'Retail Rate (₹)': record.get('selling_rate', record.get('rate', 0))
+                    'Wholesale Rate (Γé╣)': record.get('wholesale_rate', 0),
+                    'Retail Rate (Γé╣)': record.get('selling_rate', record.get('rate', 0))
                 }
                 
                 # Add date-wise sales data with actual dates as column headers
@@ -4222,31 +5560,31 @@ async def generate_pdf_report(params: ReportParameters):
         
         # Executive Summary
         if params.include_executive_summary:
-            story.append(Paragraph("📊 Executive Summary", heading_style))
+            story.append(Paragraph("≡ƒôè Executive Summary", heading_style))
             
             summary = report_data.executive_summary
             story.append(Paragraph(f"<b>Total Brands Analyzed:</b> {summary['total_brands_analyzed']}", normal_style))
-            story.append(Paragraph(f"<b>Total Revenue:</b> ₹{summary['total_revenue']:,.0f}", normal_style))
-            story.append(Paragraph(f"<b>Total Profit:</b> ₹{summary['total_profit']:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Revenue:</b> Γé╣{summary['total_revenue']:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Profit:</b> Γé╣{summary['total_profit']:,.0f}", normal_style))
             story.append(Paragraph(f"<b>Average Profit Margin:</b> {summary['profit_margin']:.1f}%", normal_style))
             
             story.append(Paragraph("<b>Key Insights:</b>", normal_style))
             for insight in summary['key_insights']:
-                story.append(Paragraph(f"• {insight}", normal_style))
+                story.append(Paragraph(f"ΓÇó {insight}", normal_style))
             
             story.append(Spacer(1, 15))
         
         # Top Revenue Sellers
         if params.include_top_sellers and report_data.top_sellers_revenue:
-            story.append(Paragraph("🏆 Top Revenue Generators", heading_style))
+            story.append(Paragraph("≡ƒÅå Top Revenue Generators", heading_style))
             
-            revenue_data = [['Brand Name', 'Revenue (₹)', 'Volume', 'Profit (₹)', 'Margin %']]
+            revenue_data = [['Brand Name', 'Revenue (Γé╣)', 'Volume', 'Profit (Γé╣)', 'Margin %']]
             for seller in report_data.top_sellers_revenue[:5]:
                 revenue_data.append([
                     seller.brand_name,
-                    f"₹{seller.revenue:,.0f}",
+                    f"Γé╣{seller.revenue:,.0f}",
                     f"{seller.volume:.0f}",
-                    f"₹{seller.profit:,.0f}",
+                    f"Γé╣{seller.profit:,.0f}",
                     f"{seller.profit_margin:.1f}%"
                 ])
             
@@ -4266,15 +5604,15 @@ async def generate_pdf_report(params: ReportParameters):
         
         # Slow Sellers
         if params.include_slow_sellers and report_data.slow_sellers:
-            story.append(Paragraph("🐌 Slow Moving Brands", heading_style))
+            story.append(Paragraph("≡ƒÉî Slow Moving Brands", heading_style))
             
-            slow_data = [['Brand Name', 'Revenue (₹)', 'Stock Days', 'Stock Value (₹)']]
+            slow_data = [['Brand Name', 'Revenue (Γé╣)', 'Stock Days', 'Stock Value (Γé╣)']]
             for seller in report_data.slow_sellers[:5]:
                 slow_data.append([
                     seller.brand_name,
-                    f"₹{seller.revenue:,.0f}",
+                    f"Γé╣{seller.revenue:,.0f}",
                     f"{seller.stock_days:.0f}",
-                    f"₹{seller.stock_value:,.0f}"
+                    f"Γé╣{seller.stock_value:,.0f}"
                 ])
             
             table = Table(slow_data)
@@ -4293,13 +5631,13 @@ async def generate_pdf_report(params: ReportParameters):
         
         # Capital Blockers
         if params.include_capital_blockers and report_data.capital_blockers:
-            story.append(Paragraph("💰 Capital Blocking Brands", heading_style))
+            story.append(Paragraph("≡ƒÆ░ Capital Blocking Brands", heading_style))
             
-            capital_data = [['Brand Name', 'Stock Value (₹)', 'Stock Days', 'Overstock Ratio']]
+            capital_data = [['Brand Name', 'Stock Value (Γé╣)', 'Stock Days', 'Overstock Ratio']]
             for blocker in report_data.capital_blockers[:5]:
                 capital_data.append([
                     blocker.brand_name,
-                    f"₹{blocker.stock_value:,.0f}",
+                    f"Γé╣{blocker.stock_value:,.0f}",
                     f"{blocker.stock_days:.0f}",
                     f"{blocker.overstocked_ratio:.1f}x"
                 ])
@@ -4320,31 +5658,31 @@ async def generate_pdf_report(params: ReportParameters):
         
         # Profit Analysis
         if params.include_profit_analysis:
-            story.append(Paragraph("💹 Profit Analysis", heading_style))
+            story.append(Paragraph("≡ƒÆ╣ Profit Analysis", heading_style))
             
             profit = report_data.profit_analysis
-            story.append(Paragraph(f"<b>Total Revenue:</b> ₹{profit.total_revenue:,.0f}", normal_style))
-            story.append(Paragraph(f"<b>Total Profit:</b> ₹{profit.total_profit:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Revenue:</b> Γé╣{profit.total_revenue:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Profit:</b> Γé╣{profit.total_profit:,.0f}", normal_style))
             story.append(Paragraph(f"<b>Average Profit Margin:</b> {profit.average_profit_margin:.1f}%", normal_style))
             story.append(Spacer(1, 15))
         
         # Demand Forecast
         if params.include_demand_forecast and report_data.demand_forecast:
             story.append(PageBreak())  # New page for demand forecast
-            story.append(Paragraph("📈 Demand Forecast & Investment Requirements", heading_style))
+            story.append(Paragraph("≡ƒôê Demand Forecast & Investment Requirements", heading_style))
             
             total_investment = sum(item.total_cost for item in report_data.demand_forecast)
-            story.append(Paragraph(f"<b>Total Investment Required:</b> ₹{total_investment:,.0f}", normal_style))
+            story.append(Paragraph(f"<b>Total Investment Required:</b> Γé╣{total_investment:,.0f}", normal_style))
             story.append(Spacer(1, 10))
             
-            demand_data = [['Brand Name', 'Current Stock', 'Recommended Qty', 'Cost (₹)', 'Urgency']]
+            demand_data = [['Brand Name', 'Current Stock', 'Recommended Qty', 'Cost (Γé╣)', 'Urgency']]
             for item in report_data.demand_forecast[:10]:
-                urgency_color = "🔴" if item.urgency_level == "HIGH" else "🟡" if item.urgency_level == "MEDIUM" else "🟢"
+                urgency_color = "≡ƒö┤" if item.urgency_level == "HIGH" else "≡ƒƒí" if item.urgency_level == "MEDIUM" else "≡ƒƒó"
                 demand_data.append([
                     item.brand_name,
                     f"{item.current_stock:.0f}",
                     f"{item.recommended_qty:.0f}",
-                    f"₹{item.total_cost:,.0f}",
+                    f"Γé╣{item.total_cost:,.0f}",
                     f"{urgency_color} {item.urgency_level}"
                 ])
             
@@ -4364,7 +5702,7 @@ async def generate_pdf_report(params: ReportParameters):
         
         # Recommendations
         if params.include_recommendations:
-            story.append(Paragraph("💡 Strategic Recommendations", heading_style))
+            story.append(Paragraph("≡ƒÆí Strategic Recommendations", heading_style))
             
             for i, rec in enumerate(report_data.recommendations, 1):
                 story.append(Paragraph(f"{i}. {rec}", normal_style))
@@ -4374,7 +5712,7 @@ async def generate_pdf_report(params: ReportParameters):
         # Brand-wise Sale Analysis (if requested)
         if params.include_datewise_analysis:
             story.append(PageBreak())  # New page for brand-wise analysis
-            story.append(Paragraph("📊 Brand-Wise Sale Analysis (All Brands - Landscape View)", heading_style))
+            story.append(Paragraph("≡ƒôè Brand-Wise Sale Analysis (All Brands - Landscape View)", heading_style))
             
             # Get ALL brands for complete analysis
             liquor_records = await collections.liquor_data.find().to_list(1000)  # Get all records
@@ -4382,9 +5720,9 @@ async def generate_pdf_report(params: ReportParameters):
             if liquor_records:
                 # Define table header
                 brandwise_header = [
-                    'Index', 'Brand Name', 'D1 Stock', 'DL Stock', 'Wholesale Rate (₹)', 
-                    'Selling Rate (₹)', 'Monthly Sale Value (₹)', 'Monthly Profit (₹)',
-                    'Retail Stock Value (₹)', 'Multiplier', 'Status'
+                    'Index', 'Brand Name', 'D1 Stock', 'DL Stock', 'Wholesale Rate (Γé╣)', 
+                    'Selling Rate (Γé╣)', 'Monthly Sale Value (Γé╣)', 'Monthly Profit (Γé╣)',
+                    'Retail Stock Value (Γé╣)', 'Multiplier', 'Status'
                 ]
                 
                 # Calculate compact landscape-optimized column widths for 3-page fit
@@ -4442,11 +5780,11 @@ async def generate_pdf_report(params: ReportParameters):
                         record['brand_name'][:16],  # Slightly shorter to fit better
                         f"{d1_stock:.0f}",
                         f"{dl_stock:.0f}",
-                        f"₹{wholesale_rate:.0f}",
-                        f"₹{selling_rate:.0f}",
-                        f"₹{monthly_sale_value:.0f}",
-                        f"₹{monthly_profit:.0f}",
-                        f"₹{current_stock_value:.0f}",
+                        f"Γé╣{wholesale_rate:.0f}",
+                        f"Γé╣{selling_rate:.0f}",
+                        f"Γé╣{monthly_sale_value:.0f}",
+                        f"Γé╣{monthly_profit:.0f}",
+                        f"Γé╣{current_stock_value:.0f}",
                         f"{multiplier_value:.1f}x",
                         status
                     ]
@@ -4502,9 +5840,9 @@ async def generate_pdf_report(params: ReportParameters):
                 # Create summary table
                 summary_data = [
                     ['Metric', 'Total Amount'],
-                    ['Total Sale Value', f"₹{total_sale_value:,.0f}"],
-                    ['Total Profit', f"₹{total_profit:,.0f}"],
-                    ['Total Retail Stock Value', f"₹{total_stock_value:,.0f}"],
+                    ['Total Sale Value', f"Γé╣{total_sale_value:,.0f}"],
+                    ['Total Profit', f"Γé╣{total_profit:,.0f}"],
+                    ['Total Retail Stock Value', f"Γé╣{total_stock_value:,.0f}"],
                     ['Total Brands Analyzed', f"{len(all_brand_data)}"]
                 ]
                 

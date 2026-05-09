@@ -41,6 +41,9 @@ function App() {
   const [databaseView, setDatabaseView] = useState(null);
   const [currentDateRange, setCurrentDateRange] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(0);
+  const [restockInfo, setRestockInfo] = useState(null);
+  const [pendingRestockFile, setPendingRestockFile] = useState(null);
+  const [showRestockVerifyDialog, setShowRestockVerifyDialog] = useState(false);
 
   // Module 1: Brand Management state
   const [showBrandModal, setShowBrandModal] = useState(false);
@@ -466,8 +469,8 @@ function App() {
   };
 
   // Handle today's data upload
-  const handleTodaysDataUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleTodaysDataUpload = async (event, forceConfirm = false) => {
+    const file = event.target?.files ? event.target.files[0] : event;
     if (!file) return;
 
     const formData = new FormData();
@@ -475,25 +478,47 @@ function App() {
 
     try {
       setLoading(true);
-      setUploadProgress(10);
+      if (!forceConfirm) setUploadProgress(10);
       
-      const response = await axios.post(`${API}/upload-todays-data`, formData, {
+      const url = forceConfirm ? `${API}/upload-todays-data?confirm_restock=true` : `${API}/upload-todays-data`;
+      
+      const response = await axios.post(url, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
         onUploadProgress: (progressEvent) => {
-          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(progress);
+          if (!forceConfirm) {
+            const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(progress);
+          }
         },
       });
 
+      // Handle Verification Required (Restock Detected)
+      if (response.status === 202 && response.data.status === "requires_verification") {
+        setRestockInfo(response.data);
+        setPendingRestockFile(file);
+        setShowRestockVerifyDialog(true);
+        setLoading(false);
+        setUploadProgress(0);
+        return;
+      }
+
       setUploadProgress(100);
-      toast.success(`Today's data updated: ${response.data.updated_brands} brands updated, ${response.data.new_brands} new brands added`);
+      toast.success(
+        response.data.is_restock 
+          ? "🚀 Monthly Restock Processed! Data backed up and dashboard reset." 
+          : `Today's data updated: ${response.data.updated_brands || response.data.updated} brands updated, ${response.data.new_brands || response.data.added} new brands added`
+      );
       
       // Fetch analytics, trends, and upload history after successful upload
       await fetchAnalytics(overstockMultiplier);
       await fetchSalesTrends(trendsPeriod, selectedSalesMonth);
       await fetchUploadHistory();
+      
+      // Close dialog if it was open
+      setShowRestockVerifyDialog(false);
+      setPendingRestockFile(null);
       
     } catch (error) {
       console.error("Error uploading today's data:", error);
@@ -539,7 +564,13 @@ function App() {
     } finally {
       setLoading(false);
       setUploadProgress(0);
-      event.target.value = "";
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleConfirmRestock = () => {
+    if (pendingRestockFile) {
+      handleTodaysDataUpload(pendingRestockFile, true);
     }
   };
 
@@ -4589,6 +4620,75 @@ function App() {
 
       {/* Change Password Dialog */}
       {/* Change Password Dialog removed - Auth disabled */}
+
+      {/* Monthly Restock Verification Dialog */}
+      <Dialog open={showRestockVerifyDialog} onOpenChange={setShowRestockVerifyDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2 text-indigo-600">
+              <Zap className="w-5 h-5" />
+              <span>Monthly Restock Detected?</span>
+            </DialogTitle>
+            <DialogDescription>
+              We detected a stock increase in multiple brands. Is this your monthly restock?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {restockInfo && (
+            <div className="space-y-4">
+              <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-lg">
+                <p className="text-sm text-indigo-900 mb-2">
+                  <strong>{restockInfo.inc_count} brands</strong> showed a stock increase in this file, including:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {restockInfo.inc_brands.slice(0, 8).map((brand, idx) => (
+                    <Badge key={idx} variant="outline" className="bg-white text-[10px]">
+                      {brand}
+                    </Badge>
+                  ))}
+                  {restockInfo.inc_brands.length > 8 && (
+                    <span className="text-[10px] text-indigo-600 font-medium">
+                      +{restockInfo.inc_brands.length - 8} more
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-orange-50 border border-orange-100 rounded-lg">
+                <h4 className="font-semibold text-orange-900 text-sm mb-1">Important:</h4>
+                <p className="text-xs text-orange-800">
+                  If you confirm this as a <strong>Monthly Restock</strong>, the system will:
+                </p>
+                <ul className="mt-1 ml-3 list-disc space-y-1 text-xs text-orange-800">
+                  <li>Create an automated backup of current data</li>
+                  <li>Reset the dashboard (clear current stock)</li>
+                  <li>Start a new data period with these stock levels</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRestockVerifyDialog(false);
+                    setPendingRestockFile(null);
+                  }}
+                  disabled={loading}
+                >
+                  Cancel Upload
+                </Button>
+                <Button
+                  onClick={handleConfirmRestock}
+                  disabled={loading}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {loading ? 'Processing...' : 'Yes, This is a Monthly Restock'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Period Selection Modal for Reports */}
       <PeriodSelectionModal
