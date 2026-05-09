@@ -477,7 +477,7 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
         is_fresh = (db_count == 0)
         
         updated, added = 0, 0
-        history_snapshot = {"updated": {}, "added": []}
+        history_snapshot = {"brands_updated": {}, "brands_added": []}
 
         for name, info in brands_data.items():
             qty = info['stock_qty']
@@ -486,7 +486,21 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
             existing = await collections.liquor_data.find_one({"brand_name": name})
             
             if existing and not is_fresh:
-                # Normal Daily Update
+                # Normal Daily Update - Save previous state for undo
+                history_snapshot["brands_updated"][existing["id"]] = {
+                    "DL_date": existing.get("DL_date"),
+                    "DL_stock": existing.get("DL_stock"),
+                    "current_stock_qty": existing.get("current_stock_qty"),
+                    "total_sales_qty": existing.get("total_sales_qty"),
+                    "avg_daily_sales_qty": existing.get("avg_daily_sales_qty"),
+                    "days_analyzed": existing.get("days_analyzed"),
+                    "monthly_sale_qty": existing.get("monthly_sale_qty"),
+                    "monthly_sale_value": existing.get("monthly_sale_value"),
+                    "stock_value_today": existing.get("stock_value_today"),
+                    "stock_available_days": existing.get("stock_available_days"),
+                    "stock_ratio": existing.get("stock_ratio")
+                }
+                
                 old_daily = existing.get('daily_sales', {})
                 old_daily[normalize_date_key(new_date_column)] = qty
                 
@@ -529,15 +543,19 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
                 }
                 await collections.liquor_data.insert_one(new_doc)
                 added += 1
-                history_snapshot["added"].append(new_doc["id"])
+                history_snapshot["brands_added"].append(new_doc["id"])
 
         # Save History
         upload_hist = UploadHistory(
             filename=file.filename,
-            upload_type="restock" if is_restock else "daily",
+            upload_type="daily_update",
             records_count=len(brands_data),
             file_size=len(content),
-            changes_snapshot=history_snapshot
+            changes_snapshot={
+                **history_snapshot,
+                "date_added": normalize_date_key(new_date_column),
+                "new_date_column": new_date_column
+            }
         )
         await collections.upload_history.insert_one(upload_hist.dict())
         
@@ -625,7 +643,7 @@ async def undo_upload(upload_id: str):
         brands_deleted = 0
         
         # Process undo based on upload type
-        if upload_type == "daily_update":
+        if upload_type in ["daily_update", "daily", "restock"]:
             # For Today's Data updates, reverse the changes
             brands_updated = changes_snapshot.get("brands_updated", {})
             brands_added = changes_snapshot.get("brands_added", [])
@@ -667,6 +685,85 @@ async def undo_upload(upload_id: str):
             if brands_added:
                 result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
                 brands_deleted = result.deleted_count
+
+            # Infer date_added if missing (for legacy records)
+            if not date_added and upload_type in ["daily_update", "daily", "restock"]:
+                # Try to infer from the brands that were updated (if snapshot exists)
+                if brands_updated:
+                    sample_brand_id = list(brands_updated.keys())[0]
+                    # We can't know the date from the state unless we have it saved, 
+                    # but we can check the record's current DL_date if it's not undone
+                    sample_brand = await collections.liquor_data.find_one({"id": sample_brand_id})
+                    if sample_brand:
+                        date_added = sample_brand.get("DL_date")
+                        logging.info(f"Inferred date_added '{date_added}' from sample brand")
+                
+                # If still no date, try to find the most recent date in any brand's daily_sales
+                if not date_added:
+                    sample_brand = await collections.liquor_data.find_one({})
+                    if sample_brand and sample_brand.get("DL_date"):
+                        date_added = sample_brand.get("DL_date")
+                        logging.info(f"Inferred date_added '{date_added}' from most recent DB state")
+
+            # FAILSAFE: Ensure the date is removed from ALL brands, even if snapshot missed them
+            # This is critical for trendline accuracy and preventing "date already exists" errors
+            if date_added:
+                logging.info(f"Running failsafe cleanup for date: {date_added}")
+                from utils.date_helper import parse_date
+                
+                # Normalize the date to match daily_sales format
+                def normalize_date_key_for_cleanup(date_str):
+                    import re
+                    try:
+                        date_str = str(date_str).strip()
+                        if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
+                            dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                            return dt.strftime("%d-%b-%y")
+                        match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
+                        if match:
+                            day, month_name, year_suffix = match.groups()
+                            if not year_suffix or len(year_suffix) < 2:
+                                year_suffix = '25'
+                            elif len(year_suffix) == 4:
+                                year_suffix = year_suffix[2:]
+                            day = day.zfill(2)
+                            month_name = month_name.capitalize()
+                            return f"{day}-{month_name}-{year_suffix}"
+                    except Exception as e:
+                        logging.warning(f"Could not normalize date '{date_str}': {e}")
+                    return str(date_str)
+                
+                normalized_date = normalize_date_key_for_cleanup(date_added)
+                
+                # Find all brands that have this date in their daily_sales
+                affected_brands = await collections.liquor_data.find({
+                    "daily_sales." + normalized_date: {"$exists": True}
+                }).to_list(10000)
+                
+                for brand in affected_brands:
+                    # If already reverted by the loop above, skip
+                    if brand.get("id") in brands_updated:
+                        continue
+                        
+                    daily = brand.get('daily_sales', {})
+                    if normalized_date in daily:
+                        del daily[normalized_date]
+                        update_fields = {"daily_sales": daily}
+                        
+                        # CRITICAL: If this was the DL_date, we MUST roll it back
+                        if brand.get('DL_date') == date_added or brand.get('DL_date') == normalized_date:
+                            if daily:
+                                sorted_dates = sorted(daily.keys(), key=lambda x: parse_date(x), reverse=True)
+                                new_dl = sorted_dates[0]
+                                update_fields["DL_date"] = new_dl
+                                update_fields["DL_stock"] = daily[new_dl]
+                                update_fields["current_stock_qty"] = int(daily[new_dl])
+                                # Recalculate stock value if rate is available
+                                rate = brand.get('selling_rate', brand.get('rate', 0.0))
+                                update_fields["stock_value_today"] = float(daily[new_dl] * rate)
+                        
+                        await collections.liquor_data.update_one({"_id": brand["_id"]}, {"$set": update_fields})
+                        brands_reverted += 1
         
         elif upload_type == "full_monthly":
             # For Full Monthly upload, restore from backup
@@ -2093,7 +2190,7 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
         if revert_data and not upload_record.get("undone_at"):
             logging.info(f"Reverting data changes for upload {upload_id} (type: {upload_type})")
             
-            if upload_type == "daily_update":
+            if upload_type in ["daily_update", "daily", "restock"]:
                 # Revert daily update changes
                 brands_updated = changes_snapshot.get("brands_updated", {})
                 brands_added = changes_snapshot.get("brands_added", [])
@@ -2136,10 +2233,19 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                     result = await collections.liquor_data.delete_many({"id": {"$in": brands_added}})
                     brands_deleted = result.deleted_count
                 
+                # Infer date_added if missing (for legacy records)
+                if not date_added:
+                    # Try to find the most recent date in DB to use as a cleanup target
+                    sample_brand = await collections.liquor_data.find_one({})
+                    if sample_brand and sample_brand.get("DL_date"):
+                        date_added = sample_brand.get("DL_date")
+                        logging.info(f"Inferred date_added '{date_added}' for delete failsafe")
+
                 # FAILSAFE: If snapshot is incomplete, remove the date from ALL brands
                 # This handles cases where the snapshot didn't capture all brands
-                if date_added and len(brands_updated) < total_brands_in_db:
-                    logging.warning(f"Snapshot incomplete ({len(brands_updated)} < {total_brands_in_db}). Running failsafe cleanup...")
+                if date_added:
+                    logging.info(f"Running failsafe cleanup for date: {date_added}")
+                    from utils.date_helper import parse_date
                     
                     # Normalize the date to match daily_sales format
                     def normalize_date_key_for_cleanup(date_str):
@@ -2165,12 +2271,35 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                     
                     normalized_date = normalize_date_key_for_cleanup(date_added)
                     
-                    # Remove the date key from ALL brands using $unset
-                    result = await collections.liquor_data.update_many(
-                        {},  # Update ALL documents
-                        {"$unset": {f"daily_sales.{normalized_date}": ""}}
-                    )
-                    logging.info(f"Failsafe cleanup: Removed '{normalized_date}' from {result.modified_count} additional brands")
+                    # Find all brands that have this date in their daily_sales
+                    affected_brands = await collections.liquor_data.find({
+                        "daily_sales." + normalized_date: {"$exists": True}
+                    }).to_list(10000)
+                    
+                    for brand in affected_brands:
+                        # If already reverted by the loop above, skip
+                        if brand.get("id") in brands_updated:
+                            continue
+                            
+                        daily = brand.get('daily_sales', {})
+                        if normalized_date in daily:
+                            del daily[normalized_date]
+                            update_fields = {"daily_sales": daily}
+                            
+                            # CRITICAL: If this was the DL_date, we MUST roll it back
+                            if brand.get('DL_date') == date_added or brand.get('DL_date') == normalized_date:
+                                if daily:
+                                    sorted_dates = sorted(daily.keys(), key=lambda x: parse_date(x), reverse=True)
+                                    new_dl = sorted_dates[0]
+                                    update_fields["DL_date"] = new_dl
+                                    update_fields["DL_stock"] = daily[new_dl]
+                                    update_fields["current_stock_qty"] = int(daily[new_dl])
+                                    # Recalculate stock value if rate is available
+                                    rate = brand.get('selling_rate', brand.get('rate', 0.0))
+                                    update_fields["stock_value_today"] = float(daily[new_dl] * rate)
+                            
+                            await collections.liquor_data.update_one({"_id": brand["_id"]}, {"$set": update_fields})
+                            brands_reverted += 1
                 
                 data_reverted = True
                 logging.info(f"Reverted daily_update: {brands_reverted} brands updated, {brands_deleted} brands deleted")
