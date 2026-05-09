@@ -13,7 +13,16 @@ import json
 import pytz
 import pandas as pd
 import re
+import sys
 from pathlib import Path
+
+# Add the current directory to sys.path so that sibling modules can be imported
+# This allows running from root (e.g. gunicorn backend.server:app) 
+# or from backend (e.g. uvicorn server:app)
+current_dir = Path(__file__).parent
+if str(current_dir) not in sys.path:
+    sys.path.append(str(current_dir))
+
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
@@ -37,9 +46,20 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL')
+db_name = os.environ.get('DB_NAME')
+
+if not mongo_url or not db_name:
+    logging.error("CRITICAL ERROR: MONGO_URL or DB_NAME environment variables are missing!")
+    if not mongo_url: logging.error("Missing: MONGO_URL")
+    if not db_name: logging.error("Missing: DB_NAME")
+    # Don't exit immediately in local dev if you want, but for Render we need these
+    # Let's provide a fallback for local testing but log warning
+    if not mongo_url: mongo_url = "mongodb://localhost:27017"
+    if not db_name: db_name = "booze_analysis_dev"
+
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # Collection name prefixes for data separation
 LIQUOR_PREFIX = "liquor_"
@@ -57,6 +77,21 @@ class Collections:
 
 collections = Collections()
 app = FastAPI()
+
+# Health check endpoint for Render
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "BoozeAnalysis Backend is running"}
+
+@app.get("/health")
+async def health():
+    try:
+        # Check DB connection
+        await client.admin.command('ping')
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
 api_router = APIRouter(prefix="/api")
 
 # --- Helper functions (refactored) ---
