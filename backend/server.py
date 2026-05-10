@@ -117,21 +117,26 @@ async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], fil
         # Get existing data from database
         existing_records = await collections.liquor_data.find({}, {"daily_sales": 1, "DL_date": 1}).to_list(1000)
         
-        # Extract existing dates from database
+        # Extract existing dates from database with normalization
         existing_dates = set()
+        from utils.date_helper import normalize_date_key
+        
         for record in existing_records:
             # Check DL_date
             dl_date = record.get('DL_date')
             if dl_date:
-                existing_dates.add(dl_date)
+                existing_dates.add(normalize_date_key(dl_date))
             
             # Check daily_sales dates
             daily_sales = record.get('daily_sales', {}) or {}
             for date_key in daily_sales.keys():
-                existing_dates.add(date_key)
+                existing_dates.add(normalize_date_key(date_key))
+        
+        # Normalize new dates for comparison
+        normalized_new_dates = {normalize_date_key(d) for d in new_dates}
         
         # Find duplicate dates
-        duplicate_dates = new_dates.intersection(existing_dates)
+        duplicate_dates = normalized_new_dates.intersection(existing_dates)
         
         if duplicate_dates:
             duplicate_list = sorted(list(duplicate_dates))
@@ -613,7 +618,13 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
             "message": f"Successfully processed upload. {'Restock triggered!' if is_restock else ''}",
             "updated": updated,
             "added": added,
-            "is_restock": is_restock
+            "is_restock": is_restock,
+            "debug": {
+                "date_picked": new_date_column,
+                "normalized_date": normalize_date_key(new_date_column),
+                "brands_in_file": len(brands_data),
+                "db_brands_checked": db_count
+            }
         }
     except Exception as e:
         logging.error(f"Error in upload_todays_data: {e}")
