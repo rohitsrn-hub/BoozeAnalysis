@@ -5,16 +5,16 @@ from datetime import datetime, timezone
 
 class LiquorData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    brand_name: str
-    rate: float
+    brand_name: str = Field(default="Unknown Brand")
+    rate: float = Field(default=0.0)
     daily_sales: Dict[str, float] = Field(default_factory=dict)
-    monthly_sale_qty: int
-    monthly_sale_value: float
-    avg_daily_sale: float
-    stock_available_days: float
-    stock_value_before: float
-    stock_value_today: float
-    stock_ratio: float
+    monthly_sale_qty: int = Field(default=0)
+    monthly_sale_value: float = Field(default=0.0)
+    avg_daily_sale: float = Field(default=0.0)
+    stock_available_days: float = Field(default=0.0)
+    stock_value_before: float = Field(default=0.0)
+    stock_value_today: float = Field(default=0.0)
+    stock_ratio: float = Field(default=0.0)
     index_number: int = Field(default=0)
     wholesale_rate: float = Field(default=0.0)
     selling_rate: float = Field(default=0.0)
