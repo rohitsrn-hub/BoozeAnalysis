@@ -163,13 +163,23 @@ def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
         df.columns = [str(col).strip() for col in df.columns]
         brand_col, new_date_col = None, None
         
+        # We search from right to left to find the MOST RECENT date column
+        for col in reversed(df.columns):
+            col_str = str(col).strip()
+            if not new_date_col and parse_date(col_str) != datetime.min:
+                new_date_col = col
+            
+        # Then find the brand name column
         for col in df.columns:
-            col_lower = col.lower()
-            if 'brand' in col_lower and 'name' in col_lower: brand_col = col
-            elif parse_date(col) != datetime.min: new_date_col = col
+            col_lower = str(col).lower()
+            if 'brand' in col_lower and 'name' in col_lower:
+                brand_col = col
+                break
             
         if not brand_col or not new_date_col:
-            raise HTTPException(status_code=400, detail="Missing Brand or Date column")
+            logging.error(f"Upload parsing failed: brand_col={brand_col}, new_date_col={new_date_col}")
+            logging.info(f"Available columns: {list(df.columns)}")
+            raise HTTPException(status_code=400, detail=f"Missing Brand or Date column. Found brand='{brand_col}', date='{new_date_col}'")
             
         brands_data = {}
         df = df[df[brand_col].notna()]
@@ -472,7 +482,12 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
         new_date_column = todays_data['new_date_column']
         brands_data = todays_data['brands_data']
         
-        # 1. Fetch current stock to detect restocks
+        # 1. Validate for duplicates BEFORE processing
+        # This prevents multiple uploads for the same date from creating duplicate history
+        await check_duplicate_dates_in_upload(
+            parsed_data=[{'brand_name': n, 'DL_date': new_date_column} for n in brands_data.keys()],
+            filename=file.filename
+        )
         existing_stock = {}
         async for brand in collections.liquor_data.find({}, {"brand_name": 1, "DL_stock": 1}):
             existing_stock[brand['brand_name']] = brand.get('DL_stock', 0.0)
@@ -3642,7 +3657,8 @@ async def get_projected_data_from_historical():
                 'DL_stock': record.get('DL_stock', 0),
                 'D1_date': record.get('D1_date', 'N/A'),
                 'DL_date': record.get('DL_date', 'N/A'),
-                'daily_sales': record.get('daily_sales', {}),  # Include daily_sales for trends
+                'daily_sales': record.get('daily_sales', {}),
+                'selling_rate': record.get('selling_rate', record.get('rate', 0.0))
             }
         
         # Create projected records based on historical averages
@@ -3660,7 +3676,10 @@ async def get_projected_data_from_historical():
             # Get current stock if available, otherwise default to 0
             current_stock_info = current_stock_dict.get(brand_name, {})
             current_stock_qty = current_stock_info.get('current_stock_qty', 0)
+            # Use current stock value if available, otherwise calculate from historical rate
             stock_value_today = current_stock_info.get('stock_value_today', 0)
+            if stock_value_today == 0 and current_stock_qty > 0:
+                stock_value_today = current_stock_qty * selling_rate
             
             # Calculate stock ratios
             if avg_daily_qty > 0:
