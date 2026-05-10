@@ -1390,278 +1390,175 @@ async def get_database_view():
 @api_router.get("/sales-trends")
 async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str] = None):
     """
-    Get sales trends with D1-DL sales periods from current AND historical data
-    period: 'quarterly' (last 3 sales periods), 'yearly' (last 12 periods), 'single' (specific period)
-    sales_month: Format 'Sep-Oct 2025' - required when period='single'
-    Returns: dict with 'series' (list of sales periods with daily data from current + history)
+    Get sales trends with D1-DL sales periods from current AND historical data.
+    Fixed to handle brand additions/removals and mid-month restock periods correctly.
     """
     try:
         from collections import defaultdict
         import re
+        from utils.date_helper import parse_date
         
         def parse_date_for_sorting(date_str):
-            """Parse various date formats for chronological sorting"""
-            try:
-                if not date_str:
-                    return datetime.min
-                
-                date_str = str(date_str).strip()
-                
-                # Handle full datetime strings (YYYY-MM-DD HH:MM:SS format)
-                if 'T' in date_str or len(date_str) > 15:
-                    try:
-                        dt = datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
-                        # Validate year is reasonable (2020-2030)
-                        if dt.year < 2020 or dt.year > 2030:
-                            logging.warning(f"Invalid year {dt.year} in date '{date_str}', attempting correction")
-                            # Try to fix common issues (2052 -> 2025)
-                            if dt.year > 2030:
-                                dt = dt.replace(year=2025)
-                        return dt
-                    except Exception as e:
-                        logging.warning(f"Failed to parse datetime '{date_str}': {e}")
-                
-                # Parse various date formats
-                match = re.search(r'(\d{1,2})[-/](\w{3})[-/](\d{2,4})', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name, year = match.groups()
-                    year = f"20{year}" if len(year) == 2 else year
-                    full_date = f"{day}-{month_name}-{year}"
-                    dt = datetime.strptime(full_date, "%d-%b-%Y")
-                    # Validate year
-                    if dt.year < 2020 or dt.year > 2030:
-                        dt = dt.replace(year=2025)
-                    return dt
-                
-                match = re.search(r'(\d{1,2})[-/](\w{3})$', date_str, re.IGNORECASE)
-                if match:
-                    day, month_name = match.groups()
-                    year = "2025"
-                    full_date = f"{day}-{month_name}-{year}"
-                    return datetime.strptime(full_date, "%d-%b-%Y")
-                
-                logging.warning(f"Could not parse date '{date_str}'")
-                return datetime.min
-                
-            except Exception as e:
-                logging.warning(f"Could not parse date '{date_str}': {e}")
-                return datetime.min
-        
-        # 1. Get CURRENT month data from liquor_data
+            dt = parse_date(date_str)
+            return dt if dt != datetime.min else datetime.min
+
+        def get_period_label(d1_parsed, dl_parsed):
+            if d1_parsed == datetime.min or dl_parsed == datetime.min:
+                return "Unknown Period"
+            d1_month = d1_parsed.strftime("%b")
+            dl_month = dl_parsed.strftime("%b")
+            year = dl_parsed.strftime("%Y")
+            if d1_month == dl_month:
+                return f"{d1_month} {year}"
+            return f"{d1_month}-{dl_month} {year}"
+
+        # 1. Get CURRENT data and determine the global current period
         current_data = await collections.liquor_data.find().to_list(10000)
         
-        # 2. Get HISTORICAL data from stock_backups - ONLY pre_reset_backup types
-        # These represent complete sales periods that were committed to history
+        period_to_data = {}
+        period_info = {}
+        
+        if current_data:
+            # Find global D1/DL for all current brands to treat them as one period
+            global_d1 = None
+            global_dl = None
+            
+            for record in current_data:
+                d1 = parse_date_for_sorting(record.get('D1_date'))
+                dl = parse_date_for_sorting(record.get('DL_date'))
+                
+                if d1 != datetime.min:
+                    global_d1 = d1 if global_d1 is None else min(global_d1, d1)
+                if dl != datetime.min:
+                    global_dl = dl if global_dl is None else max(global_dl, dl)
+            
+            if global_d1 and global_dl:
+                current_label = get_period_label(global_d1, global_dl)
+                period_to_data[current_label] = current_data
+                period_info[current_label] = {
+                    'd1': global_d1,
+                    'dl': global_dl,
+                    'd1_str': global_d1.strftime("%d-%b-%y"),
+                    'dl_str': global_dl.strftime("%d-%b-%y"),
+                    'source': 'current'
+                }
+
+        # 2. Get HISTORICAL data from backups
         backups = await collections.stock_backups.find({
             "backup_reason": "pre_reset_backup"
         }).sort("backup_timestamp", -1).to_list(100)
         
-        # Create a dict to store data by period - use most recent backup only
-        period_to_data = {}
-        period_info = {}
-        
-        # First, process current data (highest priority)
-        if current_data:
-            for record in current_data:
-                d1_date = record.get('D1_date')
-                dl_date = record.get('DL_date')
-                
-                # Skip records with None, 'N/A', or empty dates
-                if d1_date and dl_date and d1_date != 'N/A' and dl_date != 'N/A':
-                    d1_parsed = parse_date_for_sorting(d1_date)
-                    dl_parsed = parse_date_for_sorting(dl_date)
-                    
-                    if d1_parsed != datetime.min and dl_parsed != datetime.min:
-                        d1_month = d1_parsed.strftime("%b")
-                        dl_month = dl_parsed.strftime("%b")
-                        year = dl_parsed.strftime("%Y")
-                        
-                        if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
-                        else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
-                        
-                        if period_label not in period_to_data:
-                            period_to_data[period_label] = []
-                            period_info[period_label] = {
-                                'd1': d1_parsed,
-                                'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
-                                'source': 'current'
-                            }
-                        
-                        period_to_data[period_label].append(record)
-        
-        # Then, process historical backups (only if period not already in current data)
-        periods_seen_in_backups = set()
-        
         for backup in backups:
             data_snapshot = backup.get('data_snapshot', [])
+            if not data_snapshot: continue
             
-            # Group this backup's records by period first
-            backup_periods = defaultdict(list)
-            
+            # Find global D1/DL for this specific backup
+            b_d1, b_dl = None, None
             for record in data_snapshot:
-                d1_date = record.get('D1_date')
-                dl_date = record.get('DL_date')
-                
-                # Skip records with None, 'N/A', or empty dates
-                if d1_date and dl_date and d1_date != 'N/A' and dl_date != 'N/A':
-                    d1_parsed = parse_date_for_sorting(d1_date)
-                    dl_parsed = parse_date_for_sorting(dl_date)
-                    
-                    if d1_parsed != datetime.min and dl_parsed != datetime.min:
-                        d1_month = d1_parsed.strftime("%b")
-                        dl_month = dl_parsed.strftime("%b")
-                        year = dl_parsed.strftime("%Y")
-                        
-                        if d1_month == dl_month:
-                            period_label = f"{d1_month} {year}"
-                        else:
-                            period_label = f"{d1_month}-{dl_month} {year}"
-                        
-                        backup_periods[period_label].append(record)
-                        
-                        if period_label not in period_info:
-                            period_info[period_label] = {
-                                'd1': d1_parsed,
-                                'dl': dl_parsed,
-                                'd1_str': d1_date,
-                                'dl_str': dl_date,
-                                'source': 'historical'
-                            }
+                d1 = parse_date_for_sorting(record.get('D1_date'))
+                dl = parse_date_for_sorting(record.get('DL_date'))
+                if d1 != datetime.min: b_d1 = d1 if b_d1 is None else min(b_d1, d1)
+                if dl != datetime.min: b_dl = dl if b_dl is None else max(b_dl, dl)
             
-            # Now add periods from this backup, but only if not already seen
-            for period_label, records in backup_periods.items():
-                # Skip if period already exists in current data
-                if period_label in period_to_data and period_info[period_label]['source'] == 'current':
+            if b_d1 and b_dl:
+                b_label = get_period_label(b_d1, b_dl)
+                
+                # Skip if this backup matches the current period (already handled)
+                if b_label in period_to_data and period_info[b_label]['source'] == 'current':
                     continue
                 
-                # Skip if we've already processed this period from a more recent backup
-                if period_label in periods_seen_in_backups:
-                    continue
-                
-                # Add all records for this period from this backup
-                period_to_data[period_label] = records
-                periods_seen_in_backups.add(period_label)
-        
-        # Collect daily sales for each period (now deduplicated)
+                # Add if not already seen in more recent backups
+                if b_label not in period_to_data:
+                    period_to_data[b_label] = data_snapshot
+                    period_info[b_label] = {
+                        'd1': b_d1,
+                        'dl': b_dl,
+                        'd1_str': b_d1.strftime("%d-%b-%y"),
+                        'dl_str': b_dl.strftime("%d-%b-%y"),
+                        'source': 'historical'
+                    }
+
+        # 3. Calculate daily sales for each period
         period_trends = {}
         
         for period_label, records in period_to_data.items():
-            # Calculate daily sales from stock positions
-            # Sales = Previous Day Stock - Current Day Stock
-            all_daily_sales = {}
+            # Correct logic: Calculate sales per brand to handle brand additions/removals
+            daily_sales_by_date = defaultdict(float)
+            all_dates = set()
             
             for record in records:
                 daily_sales = record.get('daily_sales', {}) or {}
-                for date_str, stock_qty in daily_sales.items():
-                    if date_str not in all_daily_sales:
-                        all_daily_sales[date_str] = []
-                    all_daily_sales[date_str].append(stock_qty)
-            
-            # Calculate daily sales quantities by subtracting consecutive days
-            daily_sales_qty = {}
-            sorted_dates = sorted(all_daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
-            
-            for i, date in enumerate(sorted_dates):
-                if i == 0:
-                    # First day has no previous day, so sales = 0
-                    daily_sales_qty[date] = 0
-                else:
-                    # Sales on current day = Previous day total stock - Current day total stock
-                    prev_date = sorted_dates[i-1]
-                    prev_total = sum(all_daily_sales[prev_date])
-                    current_total = sum(all_daily_sales[date])
-                    daily_sales_qty[date] = max(0, prev_total - current_total)
+                if not daily_sales: continue
+                
+                # Sort dates for this specific brand
+                brand_dates = sorted(daily_sales.keys(), key=lambda d: parse_date_for_sorting(d))
+                all_dates.update(brand_dates)
+                
+                for i in range(1, len(brand_dates)):
+                    curr_d = brand_dates[i]
+                    prev_d = brand_dates[i-1]
+                    # Sales = Previous Stock - Current Stock
+                    sale = max(0, daily_sales[prev_d] - daily_sales[curr_d])
+                    daily_sales_by_date[curr_d] += sale
             
             # Create sequential day numbers for chart
+            sorted_dates = sorted(list(all_dates), key=lambda d: parse_date_for_sorting(d))
             day_data = []
             for day_num, date_str in enumerate(sorted_dates, start=1):
                 date_obj = parse_date_for_sorting(date_str)
                 day_data.append({
                     "day": day_num,
                     "date": date_obj.strftime("%d-%b") if date_obj != datetime.min else date_str,
-                    "sales": round(daily_sales_qty.get(date_str, 0), 2)
+                    "sales": round(daily_sales_by_date.get(date_str, 0), 2)
                 })
             
             period_trends[period_label] = day_data
-        
-        # Sort periods chronologically
-        sorted_periods = sorted(
+
+        # 4. Sort and Filter periods
+        sorted_keys = sorted(
             period_trends.keys(),
-            key=lambda p: period_info[p]['d1'] if p in period_info else datetime.min
+            key=lambda k: period_info[k]['d1'] if k in period_info else datetime.min
         )
         
-        # Select periods based on request
-        series_data = []
-        
+        selected_keys = []
         if period == "quarterly":
-            selected_periods = sorted_periods[-3:] if len(sorted_periods) >= 3 else sorted_periods
-            for period_label in selected_periods:
-                # Safely access period_info to avoid KeyError
-                if period_label in period_info and period_label in period_trends:
-                    series_data.append({
-                        "month": period_label,
-                        "data": period_trends[period_label],
-                        "d1_date": period_info[period_label]['d1_str'],
-                        "dl_date": period_info[period_label]['dl_str']
-                    })
-        
+            selected_keys = sorted_keys[-3:]
         elif period == "yearly":
-            selected_periods = sorted_periods[-12:] if len(sorted_periods) >= 12 else sorted_periods
-            for period_label in selected_periods:
-                # Safely access period_info to avoid KeyError
-                if period_label in period_info and period_label in period_trends:
-                    series_data.append({
-                        "month": period_label,
-                        "data": period_trends[period_label],
-                        "d1_date": period_info[period_label]['d1_str'],
-                        "dl_date": period_info[period_label]['dl_str']
-                    })
-        
+            selected_keys = sorted_keys[-12:]
         elif period == "single" and sales_month:
-            # Safely access period_info to avoid KeyError
-            if sales_month in period_trends and sales_month in period_info:
-                series_data.append({
-                    "month": sales_month,
-                    "data": period_trends[sales_month],
-                    "d1_date": period_info[sales_month]['d1_str'],
-                    "dl_date": period_info[sales_month]['dl_str']
-                })
-        
-        # Calculate summary - use actual total_sales_qty from records for accuracy
-        # This ensures the total matches the actual D1 - DL calculation per brand
-        series_with_totals = []
-        for series in series_data:
-            period_label = series["month"]
-            # Get the actual total_sales_qty from the records for this period
-            if period_label in period_to_data:
-                records_for_period = period_to_data[period_label]
-                actual_total = sum(r.get('total_sales_qty', 0) for r in records_for_period)
-                series["total_sales"] = round(actual_total, 2)
-            else:
-                # Fallback to summing daily sales from trend line
-                series["total_sales"] = round(sum(day_data["sales"] for day_data in series["data"]), 2)
-            series_with_totals.append(series)
-        
-        total_sales = sum(s.get("total_sales", 0) for s in series_with_totals)
+            selected_keys = [sales_month] if sales_month in period_trends else []
+        else:
+            selected_keys = sorted_keys[-3:]
+
+        # 5. Build final series with accurate totals
+        final_series = []
+        for key in selected_keys:
+            if key not in period_info or key not in period_trends: continue
+            
+            records = period_to_data[key]
+            # Use the calculated total_sales_qty from brand records for consistency
+            total_sales_period = sum(r.get('total_sales_qty', 0) for r in records)
+            
+            final_series.append({
+                "month": key,
+                "data": period_trends[key],
+                "d1_date": period_info[key]['d1_str'],
+                "dl_date": period_info[key]['dl_str'],
+                "total_sales": round(total_sales_period, 2)
+            })
+
+        total_sales_all = sum(s["total_sales"] for s in final_series)
         
         return {
-            "period": period,
-            "selected_month": sales_month,
-            "available_months": sorted_periods,
-            "series": series_with_totals,
-            "summary": {
-                "total_sales": round(total_sales, 2),
-                "periods_count": len(series_with_totals)
-            }
+            "series": final_series,
+            "total_sales": round(total_sales_all, 2),
+            "period_type": period
         }
         
     except Exception as e:
-        logging.error(f"Error getting sales trends: {e}")
-        raise HTTPException(status_code=500, detail=f"Error calculating sales trends: {str(e)}")
+        logging.error(f"Error in get_sales_trends: {e}")
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/refresh-analytics")
 async def refresh_analytics():
@@ -2496,6 +2393,24 @@ async def fix_database_integrity():
                     issues_found.append(f"Brand '{brand_name}': {field} was None")
                     update_data[field] = default_value
                     record_updated = True
+            
+            # Fix 3: Ensure DL_date and DL_stock match the last entry in daily_sales
+            if daily_sales and isinstance(daily_sales, dict) and len(daily_sales) > 0:
+                try:
+                    from utils.date_helper import parse_date
+                    sorted_keys = sorted(daily_sales.keys(), key=lambda d: parse_date(d))
+                    if sorted_keys:
+                        last_date = sorted_keys[-1]
+                        last_stock = daily_sales[last_date]
+                        
+                        if record.get('DL_date') != last_date:
+                            issues_found.append(f"Brand '{brand_name}': DL_date mismatch ({record.get('DL_date')} vs {last_date})")
+                            update_data['DL_date'] = last_date
+                            update_data['DL_stock'] = float(last_stock)
+                            update_data['current_stock_qty'] = int(last_stock)
+                            record_updated = True
+                except Exception as e:
+                    logging.warning(f"Could not sync DL_date for {brand_name}: {e}")
             
             # Apply updates if any
             if record_updated and brand_id:
