@@ -896,16 +896,16 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         # Convert to dict format for calculations
         data_dicts = [
             {
-                'brand_name': record['brand_name'],
-                'rate': record['rate'],
-                'daily_sales': record['daily_sales'],
-                'monthly_sale_qty': record['monthly_sale_qty'],
-                'monthly_sale_value': record['monthly_sale_value'],
-                'avg_daily_sale': record['avg_daily_sale'],
-                'stock_available_days': record['stock_available_days'],
-                'stock_value_before': record['stock_value_before'],
-                'stock_value_today': record['stock_value_today'],
-                'stock_ratio': record['stock_ratio']
+                'brand_name': record.get('brand_name', 'Unknown'),
+                'rate': record.get('rate', record.get('selling_rate', 0.0)),
+                'daily_sales': record.get('daily_sales', {}),
+                'monthly_sale_qty': record.get('monthly_sale_qty', 0),
+                'monthly_sale_value': record.get('monthly_sale_value', 0.0),
+                'avg_daily_sale': record.get('avg_daily_sale', record.get('avg_daily_sales_qty', 0.0)),
+                'stock_available_days': record.get('stock_available_days', 0.0),
+                'stock_value_before': record.get('stock_value_before', 0.0),
+                'stock_value_today': record.get('stock_value_today', 0.0),
+                'stock_ratio': record.get('stock_ratio', 0.0)
             }
             for record in liquor_records
         ]
@@ -1058,13 +1058,13 @@ async def get_charts_data():
         # Convert to dict format for calculations
         data_dicts = [
             {
-                'brand_name': record['brand_name'],
-                'rate': record['rate'],
+                'brand_name': record.get('brand_name', 'Unknown'),
+                'rate': record.get('rate', record.get('selling_rate', 0.0)),
                 'current_stock_qty': record.get('current_stock_qty', 0),
-                'monthly_sale_value': record['monthly_sale_value'],
-                'stock_value_today': record['stock_value_today'],
-                'stock_available_days': record['stock_available_days'],
-                'stock_ratio': record['stock_ratio']
+                'monthly_sale_value': record.get('monthly_sale_value', 0.0),
+                'stock_value_today': record.get('stock_value_today', 0.0),
+                'stock_available_days': record.get('stock_available_days', 0.0),
+                'stock_ratio': record.get('stock_ratio', 0.0)
             }
             for record in liquor_records
         ]
@@ -2572,11 +2572,14 @@ async def fix_database_integrity():
                     daily_sales = normalized  # Use normalized for subsequent checks
                     record_updated = True
             
-            # Fix 3: Ensure numeric fields are not None
+            # Fix 3: Ensure ALL required numeric fields are present with consistent names
+            # Some parts of the app use 'avg_daily_sale' while others use 'avg_daily_sales_qty'
+            # We ensure both are synced here.
             numeric_fields = {
                 'current_stock_qty': 0,
                 'total_sales_qty': 0.0,
                 'avg_daily_sales_qty': 0.0,
+                'avg_daily_sale': 0.0, # Required by analytics
                 'monthly_sales_qty': 0.0,
                 'monthly_sale_qty': 0,
                 'monthly_sale_value': 0.0,
@@ -2584,12 +2587,17 @@ async def fix_database_integrity():
                 'stock_ratio': 0.0,
                 'D1_stock': 0.0,
                 'DL_stock': 0.0,
-                'days_analyzed': 1
+                'days_analyzed': 1,
+                'stock_value_before': 0.0, # Required by analytics
+                'stock_value_today': 0.0,
+                'rate': record.get('selling_rate', 0.0), # Required by analytics
+                'selling_rate': record.get('rate', 0.0),
+                'wholesale_rate': record.get('wholesale_rate', 0.0)
             }
             
             for field, default_value in numeric_fields.items():
                 if record.get(field) is None:
-                    issues_found.append(f"Brand '{brand_name}': {field} was None")
+                    issues_found.append(f"Brand '{brand_name}': {field} was missing/None")
                     update_data[field] = default_value
                     record_updated = True
             
@@ -2617,7 +2625,7 @@ async def fix_database_integrity():
                         # Fix 5: Recalculate derived fields
                         d1_stock = update_data.get('D1_stock', record.get('D1_stock', first_stock))
                         dl_stock = update_data.get('DL_stock', record.get('DL_stock', last_stock))
-                        selling_rate = record.get('selling_rate', record.get('rate', 0))
+                        selling_rate = update_data.get('selling_rate', record.get('selling_rate', record.get('rate', 0.0)))
                         days = len(sorted_keys)
                         
                         total_sales_qty = max(0, float(d1_stock) - float(dl_stock))
@@ -2629,9 +2637,16 @@ async def fix_database_integrity():
                         update_data['days_analyzed'] = days
                         update_data['total_sales_qty'] = total_sales_qty
                         update_data['avg_daily_sales_qty'] = avg_daily
+                        update_data['avg_daily_sale'] = avg_daily # Sync
                         update_data['stock_value_today'] = stock_val
                         update_data['monthly_sale_qty'] = int(monthly_qty)
                         update_data['monthly_sale_value'] = monthly_val
+                        update_data['rate'] = selling_rate # Sync
+                        
+                        # Recalculate stock ratio if possible
+                        if monthly_qty > 0:
+                            update_data['stock_ratio'] = float(dl_stock) / monthly_qty
+                        
                         record_updated = True
                         
                 except Exception as e:
