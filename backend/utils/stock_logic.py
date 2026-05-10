@@ -51,7 +51,7 @@ def detect_monthly_restock(parsed_data: List[Dict], existing_data: Dict[str, flo
         # Compare with existing stock in database if available
         old_stock = existing_data.get(brand_name)
         
-        if old_stock is not None and new_stock > old_stock:
+        if old_stock is not None and new_stock is not None and new_stock > old_stock:
             increases_count += 1
             increased_brands.append(brand_name)
             
