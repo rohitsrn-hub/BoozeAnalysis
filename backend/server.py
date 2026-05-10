@@ -1549,14 +1549,99 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
 
         total_sales_all = sum(s["total_sales"] for s in final_series)
         
+        # Build available_months list for the Single Period dropdown
+        # Sort all known periods chronologically
+        all_available = sorted(
+            period_trends.keys(),
+            key=lambda k: period_info[k]['d1'] if k in period_info else datetime.min
+        )
+        
         return {
             "series": final_series,
             "total_sales": round(total_sales_all, 2),
-            "period_type": period
+            "period_type": period,
+            "available_months": all_available,
+            "summary": {
+                "total_sales": round(total_sales_all, 2),
+                "periods_count": len(final_series)
+            }
         }
         
     except Exception as e:
         logging.error(f"Error in get_sales_trends: {e}")
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/admin/debug-sales-periods")
+async def debug_sales_periods():
+    """Diagnostic endpoint to see what periods exist in backups and current data"""
+    try:
+        from utils.date_helper import parse_date
+        
+        def parse_dt(date_str):
+            dt = parse_date(date_str)
+            return dt if dt != datetime.min else None
+        
+        result = {"current_period": None, "backup_periods": [], "raw_backup_info": []}
+        
+        # 1. Current data analysis
+        current_data = await collections.liquor_data.find().to_list(10000)
+        if current_data:
+            all_d1 = []
+            all_dl = []
+            all_daily_dates = set()
+            for rec in current_data:
+                d1 = parse_dt(rec.get('D1_date'))
+                dl = parse_dt(rec.get('DL_date'))
+                if d1: all_d1.append(d1)
+                if dl: all_dl.append(dl)
+                ds = rec.get('daily_sales', {}) or {}
+                all_daily_dates.update(ds.keys())
+            
+            result["current_period"] = {
+                "brand_count": len(current_data),
+                "global_D1": min(all_d1).strftime("%d-%b-%Y") if all_d1 else None,
+                "global_DL": max(all_dl).strftime("%d-%b-%Y") if all_dl else None,
+                "unique_D1_dates": sorted(set(d.strftime("%d-%b-%Y") for d in all_d1)),
+                "unique_DL_dates": sorted(set(d.strftime("%d-%b-%Y") for d in all_dl)),
+                "all_daily_sales_dates": sorted(list(all_daily_dates)),
+                "total_daily_dates": len(all_daily_dates)
+            }
+        
+        # 2. Backup analysis
+        backups = await collections.stock_backups.find().sort("backup_timestamp", -1).to_list(100)
+        for backup in backups:
+            snapshot = backup.get('data_snapshot', [])
+            b_d1_list = []
+            b_dl_list = []
+            b_daily_dates = set()
+            for rec in snapshot:
+                d1 = parse_dt(rec.get('D1_date'))
+                dl = parse_dt(rec.get('DL_date'))
+                if d1: b_d1_list.append(d1)
+                if dl: b_dl_list.append(dl)
+                ds = rec.get('daily_sales', {}) or {}
+                b_daily_dates.update(ds.keys())
+            
+            min_d1 = min(b_d1_list).strftime("%d-%b-%Y") if b_d1_list else None
+            max_dl = max(b_dl_list).strftime("%d-%b-%Y") if b_dl_list else None
+            
+            result["raw_backup_info"].append({
+                "backup_id": backup.get('id'),
+                "backup_reason": backup.get('backup_reason'),
+                "backup_timestamp": str(backup.get('backup_timestamp')),
+                "record_count": len(snapshot),
+                "computed_D1": min_d1,
+                "computed_DL": max_dl,
+                "daily_sales_dates": sorted(list(b_daily_dates)),
+                "unique_D1_dates": sorted(set(d.strftime("%d-%b-%Y") for d in b_d1_list)) if b_d1_list else [],
+                "unique_DL_dates": sorted(set(d.strftime("%d-%b-%Y") for d in b_dl_list)) if b_dl_list else []
+            })
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"Error in debug-sales-periods: {e}")
         logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2336,14 +2421,16 @@ async def cleanup_old_upload_history():
         logging.error(f"Error cleaning up upload history: {e}")
         raise HTTPException(status_code=500, detail=f"Error cleaning up upload history: {str(e)}")
 
-@api_router.post("/admin/fix-database-integrity")
+@api_router.api_route("/admin/fix-database-integrity", methods=["GET", "POST"])
 async def fix_database_integrity():
     """
     Administrative utility to fix database integrity issues.
+    Supports both GET and POST for easy browser access.
     This endpoint will:
     1. Fix any records where daily_sales is null (set to empty dict)
     2. Ensure all numeric fields have valid values
-    3. Return a summary of fixes applied
+    3. Sync DL_date/DL_stock with latest daily_sales entry
+    4. Return a summary of fixes applied
     """
     try:
         issues_found = []
