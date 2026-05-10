@@ -2319,35 +2319,16 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                 # This handles cases where the snapshot didn't capture all brands
                 if date_added:
                     logging.info(f"Running failsafe cleanup for date: {date_added}")
-                    from utils.date_helper import parse_date
+                    from utils.date_helper import parse_date, normalize_date_key
                     
-                    # Normalize the date to match daily_sales format
-                    def normalize_date_key_for_cleanup(date_str):
-                        import re
-                        try:
-                            date_str = str(date_str).strip()
-                            if re.match(r'\d{4}-\d{2}-\d{2}', date_str):
-                                dt = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                                return dt.strftime("%d-%b-%y")
-                            match = re.search(r'(\d{1,2})[-/](\w{3})[-/]?(\d{0,4})', date_str, re.IGNORECASE)
-                            if match:
-                                day, month_name, year_suffix = match.groups()
-                                if not year_suffix or len(year_suffix) < 2:
-                                    year_suffix = '25'
-                                elif len(year_suffix) == 4:
-                                    year_suffix = year_suffix[2:]
-                                day = day.zfill(2)
-                                month_name = month_name.capitalize()
-                                return f"{day}-{month_name}-{year_suffix}"
-                        except Exception as e:
-                            logging.warning(f"Could not normalize date '{date_str}': {e}")
-                        return str(date_str)
+                    normalized_date = normalize_date_key(date_added)
                     
-                    normalized_date = normalize_date_key_for_cleanup(date_added)
-                    
-                    # Find all brands that have this date in their daily_sales
+                    # Find all brands that have this date (normalized OR raw) in their daily_sales
                     affected_brands = await collections.liquor_data.find({
-                        "daily_sales." + normalized_date: {"$exists": True}
+                        "$or": [
+                            {"daily_sales." + normalized_date: {"$exists": True}},
+                            {"daily_sales." + str(date_added): {"$exists": True}}
+                        ]
                     }).to_list(10000)
                     
                     for brand in affected_brands:
@@ -2356,12 +2337,15 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                             continue
                             
                         daily = brand.get('daily_sales', {})
-                        if normalized_date in daily:
-                            del daily[normalized_date]
+                        keys_to_remove = [k for k in daily.keys() if k == normalized_date or k == date_added]
+                        
+                        if keys_to_remove:
+                            for k in keys_to_remove:
+                                del daily[k]
                             update_fields = {"daily_sales": daily}
                             
                             # CRITICAL: If this was the DL_date, we MUST roll it back
-                            if brand.get('DL_date') == date_added or brand.get('DL_date') == normalized_date:
+                            if brand.get('DL_date') in keys_to_remove:
                                 if daily:
                                     sorted_dates = sorted(daily.keys(), key=lambda x: parse_date(x), reverse=True)
                                     new_dl = sorted_dates[0]
@@ -2371,6 +2355,11 @@ async def delete_upload_history(upload_id: str, revert_data: bool = True):
                                     # Recalculate stock value if rate is available
                                     rate = brand.get('selling_rate', brand.get('rate', 0.0))
                                     update_fields["stock_value_today"] = float(daily[new_dl] * rate)
+                                else:
+                                    # This was the ONLY date, shouldn't happen but handle it
+                                    update_fields["DL_date"] = brand.get("D1_date")
+                                    update_fields["DL_stock"] = brand.get("D1_stock", 0)
+                                    update_fields["current_stock_qty"] = int(brand.get("D1_stock", 0))
                             
                             await collections.liquor_data.update_one({"_id": brand["_id"]}, {"$set": update_fields})
                             brands_reverted += 1
@@ -2497,22 +2486,35 @@ async def fix_database_integrity():
         issues_found = []
         fixes_applied = []
         
-        # Step 0: Find dates that should be removed (from undone uploads)
-        undone_uploads = await collections.upload_history.find({
-            "undone_at": {"$ne": None}
+        # Step 0: Find ALL valid dates that SHOULD exist in daily_sales
+        # A date is valid if it exists in an active (not undone) upload history record
+        # OR if it is a D1_date for any brand.
+        
+        valid_dates = set()
+        
+        # Get dates from active upload history
+        active_uploads = await collections.upload_history.find({
+            "undone_at": None
         }).to_list(1000)
         
-        orphan_dates = set()
-        for upload in undone_uploads:
+        for upload in active_uploads:
             snapshot = upload.get("changes_snapshot", {}) or {}
             date_added = snapshot.get("date_added")
             if date_added:
-                orphan_dates.add(date_added)
-                # Also add the normalized version
-                orphan_dates.add(normalize_date_key(date_added))
+                valid_dates.add(normalize_date_key(date_added))
         
-        if orphan_dates:
-            issues_found.append(f"Found {len(orphan_dates)} orphan dates from undone uploads: {sorted(orphan_dates)}")
+        # Get all current records to find D1_dates
+        all_records = await collections.liquor_data.find().to_list(10000)
+        
+        for record in all_records:
+            d1 = record.get("D1_date")
+            if d1:
+                valid_dates.add(normalize_date_key(d1))
+        
+        if valid_dates:
+            logging.info(f"Integrity check: Found {len(valid_dates)} valid dates in history/D1: {sorted(list(valid_dates))}")
+        else:
+            issues_found.append("No valid upload history or D1 dates found! Cleanup might be aggressive.")
         
         # Get all records
         all_records = await collections.liquor_data.find().to_list(10000)
@@ -2547,8 +2549,8 @@ async def fix_database_integrity():
                 for raw_key, value in daily_sales.items():
                     norm_key = normalize_date_key(raw_key)
                     
-                    # Check if this date is an orphan (from an undone upload)
-                    if raw_key in orphan_dates or norm_key in orphan_dates:
+                    # Check if this date is valid (exists in history or is a D1 date)
+                    if valid_dates and norm_key not in valid_dates:
                         removed_dates.append(raw_key)
                         continue
                     
