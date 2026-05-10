@@ -2527,6 +2527,7 @@ async def fix_database_integrity():
                 "fixes_applied": []
             }
         
+        all_removed_orphans = set()
         for record in all_records:
             brand_id = record.get('id')
             brand_name = record.get('brand_name', 'Unknown')
@@ -2552,6 +2553,7 @@ async def fix_database_integrity():
                     # Check if this date is valid (exists in history or is a D1 date)
                     if valid_dates and norm_key not in valid_dates:
                         removed_dates.append(raw_key)
+                        all_removed_orphans.add(raw_key)
                         continue
                     
                     # Check if key changed format
@@ -2647,7 +2649,8 @@ async def fix_database_integrity():
             "status": "success",
             "message": f"Database integrity check complete. Fixed {len(fixes_applied)} of {len(all_records)} records.",
             "total_records_checked": len(all_records),
-            "orphan_dates_found": sorted(list(orphan_dates)),
+            "valid_dates_in_history": sorted(list(valid_dates)),
+            "removed_orphans": sorted(list(all_removed_orphans)),
             "issues_found": len(issues_found),
             "fixes_applied": len(fixes_applied),
             "details": {
