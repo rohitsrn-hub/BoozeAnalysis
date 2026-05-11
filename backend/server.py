@@ -1189,10 +1189,20 @@ async def get_charts_data():
 async def get_demand_recommendations():
     """Get smart demand recommendations with historical data for zero D1 stock items"""
     try:
-        liquor_records = await collections.liquor_data.find().to_list(1000)
+        # STEP 1: Determine if we should use historical data
+        use_historical, current_days = await should_use_historical_data()
         
+        # STEP 2: Fetch appropriate data source
+        if use_historical:
+            liquor_records = await get_projected_data_from_historical()
+            if not liquor_records:
+                liquor_records = await collections.liquor_data.find().to_list(1000)
+                use_historical = False
+        else:
+            liquor_records = await collections.liquor_data.find().to_list(1000)
+            
         if not liquor_records:
-            raise HTTPException(status_code=404, detail="No data found")
+            raise HTTPException(status_code=404, detail="No data found. Please upload liquor data first.")
         
         # Fetch historical data from backups
         backups = await collections.stock_backups.find().sort("backup_timestamp", -1).limit(1).to_list(1)
@@ -1213,12 +1223,12 @@ async def get_demand_recommendations():
         recommendations = []
         
         for record in liquor_records:
-            brand_name = record['brand_name']
-            selling_rate = record.get('selling_rate', record['rate'])
-            wholesale_rate = record.get('wholesale_rate', 0.0)
-            current_stock_qty = record.get('current_stock_qty', 0) or 0
-            stock_days = record.get('stock_available_days', 0) or 0
-            monthly_sales_qty = record.get('monthly_sales_qty', record.get('monthly_sale_qty', 0)) or 0
+            brand_name = record.get('brand_name') or 'Unknown'
+            selling_rate = safe_float(record.get('selling_rate') or record.get('rate'))
+            wholesale_rate = safe_float(record.get('wholesale_rate'))
+            current_stock_qty = int(safe_float(record.get('current_stock_qty')))
+            stock_days = safe_float(record.get('stock_available_days'))
+            monthly_sales_qty = safe_float(record.get('monthly_sales_qty') or record.get('monthly_sale_qty'))
             
             # Get D1 stock (stock on first day) - use the D1_stock field directly
             d1_stock = record.get('D1_stock', 0)
@@ -1358,9 +1368,13 @@ async def get_demand_recommendations():
         
         return recommendations
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Error generating demand recommendations: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+        import traceback
+        err_msg = f"Error generating demand recommendations: {str(e)}\n{traceback.format_exc()}"
+        logging.error(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 @api_router.delete("/clear-data")
 async def clear_all_data():
