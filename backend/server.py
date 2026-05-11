@@ -922,16 +922,16 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         # Convert to dict format for calculations
         data_dicts = [
             {
-                'brand_name': record.get('brand_name', 'Unknown'),
-                'rate': record.get('rate', record.get('selling_rate', 0.0)),
-                'daily_sales': record.get('daily_sales', {}),
-                'monthly_sale_qty': record.get('monthly_sale_qty', 0),
-                'monthly_sale_value': record.get('monthly_sale_value', 0.0),
-                'avg_daily_sale': record.get('avg_daily_sale', record.get('avg_daily_sales_qty', 0.0)),
-                'stock_available_days': record.get('stock_available_days', 0.0),
-                'stock_value_before': record.get('stock_value_before', 0.0),
-                'stock_value_today': record.get('stock_value_today', 0.0),
-                'stock_ratio': record.get('stock_ratio', 0.0)
+                'brand_name': record.get('brand_name') or 'Unknown',
+                'rate': record.get('rate') or record.get('selling_rate') or 0.0,
+                'daily_sales': record.get('daily_sales') or {},
+                'monthly_sale_qty': record.get('monthly_sale_qty') or 0,
+                'monthly_sale_value': record.get('monthly_sale_value') or 0.0,
+                'avg_daily_sale': record.get('avg_daily_sale') or record.get('avg_daily_sales_qty') or 0.0,
+                'stock_available_days': record.get('stock_available_days') or 0.0,
+                'stock_value_before': record.get('stock_value_before') or 0.0,
+                'stock_value_today': record.get('stock_value_today') or 0.0,
+                'stock_ratio': record.get('stock_ratio') or 0.0
             }
             for record in liquor_records
         ]
@@ -1084,13 +1084,13 @@ async def get_charts_data():
         # Convert to dict format for calculations
         data_dicts = [
             {
-                'brand_name': record.get('brand_name', 'Unknown'),
-                'rate': record.get('rate', record.get('selling_rate', 0.0)),
-                'current_stock_qty': record.get('current_stock_qty', 0),
-                'monthly_sale_value': record.get('monthly_sale_value', 0.0),
-                'stock_value_today': record.get('stock_value_today', 0.0),
-                'stock_available_days': record.get('stock_available_days', 0.0),
-                'stock_ratio': record.get('stock_ratio', 0.0)
+                'brand_name': record.get('brand_name') or 'Unknown',
+                'rate': record.get('rate') or record.get('selling_rate') or 0.0,
+                'current_stock_qty': record.get('current_stock_qty') or 0,
+                'monthly_sale_value': record.get('monthly_sale_value') or 0.0,
+                'stock_value_today': record.get('stock_value_today') or 0.0,
+                'stock_available_days': record.get('stock_available_days') or 0.0,
+                'stock_ratio': record.get('stock_ratio') or 0.0
             }
             for record in liquor_records
         ]
@@ -3675,10 +3675,10 @@ async def get_projected_data_from_historical():
         # Create projected records based on historical averages
         projected_records = []
         for hist_record in historical_records:
-            brand_name = hist_record['brand_name']
-            avg_daily_qty = hist_record['average_daily_sales_qty']
-            selling_rate = hist_record['selling_rate']
-            wholesale_rate = hist_record['wholesale_rate']
+            brand_name = hist_record.get('brand_name') or 'Unknown'
+            avg_daily_qty = hist_record.get('average_daily_sales_qty') or 0.0
+            selling_rate = hist_record.get('selling_rate') or 0.0
+            wholesale_rate = hist_record.get('wholesale_rate') or 0.0
             
             # Project for 30 days (full month)
             projected_monthly_qty = avg_daily_qty * 30
