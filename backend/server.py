@@ -1773,9 +1773,8 @@ async def debug_sales_periods():
 
 @api_router.post("/refresh-analytics")
 async def refresh_analytics():
-    """Force refresh of all analytics calculations"""
+    """Manually trigger recalculation of analytics for all brands"""
     try:
-        # Get all records
         all_records = await collections.liquor_data.find().to_list(1000)
         
         if not all_records:
@@ -1856,10 +1855,20 @@ async def refresh_analytics():
 
 @api_router.get("/calculation-details")
 async def get_calculation_details():
-    """Get detailed calculations for all brands for verification"""
+    """Get detailed calculations for all brands for verification with historical data support"""
     try:
-        liquor_records = await collections.liquor_data.find().to_list(1000)
+        # STEP 1: Determine if we should use historical data
+        use_historical, current_days = await should_use_historical_data()
         
+        # STEP 2: Fetch appropriate data source
+        if use_historical:
+            liquor_records = await get_projected_data_from_historical()
+            if not liquor_records:
+                liquor_records = await collections.liquor_data.find().to_list(1000)
+                use_historical = False
+        else:
+            liquor_records = await collections.liquor_data.find().to_list(1000)
+            
         if not liquor_records:
             raise HTTPException(status_code=404, detail="No data found")
         
@@ -1867,8 +1876,8 @@ async def get_calculation_details():
         
         for record in liquor_records:
             # Calculate multiplier value (current stock value / monthly sales value)
-            current_stock_value = record.get('stock_value_today', 0)
-            monthly_sales_value = record.get('monthly_sale_value', 0)
+            current_stock_value = safe_float(record.get('stock_value_today'))
+            monthly_sales_value = safe_float(record.get('monthly_sale_value'))
             multiplier_value = current_stock_value / max(1, monthly_sales_value) if monthly_sales_value > 0 else 0
             
             detail = {
@@ -1907,9 +1916,13 @@ async def get_calculation_details():
         
         return calculation_details
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Error getting calculation details: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting calculation details: {str(e)}")
+        import traceback
+        err_msg = f"Error getting calculation details: {str(e)}\n{traceback.format_exc()}"
+        logging.error(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 @api_router.get("/export-demand-list")
 async def export_demand_list():
