@@ -159,6 +159,18 @@ async def check_duplicate_dates_in_upload(parsed_data: List[Dict[str, Any]], fil
         print(f"Warning: Could not validate dates for duplicate checking: {e}")
         # Don't block upload if date validation fails, just log the warning
 
+def safe_float(val, default=0.0):
+    """Ensure a value is a finite float, safe for JSON serialization"""
+    try:
+        if val is None: return default
+        f_val = float(val)
+        import math
+        if math.isnan(f_val) or math.isinf(f_val):
+            return default
+        return f_val
+    except:
+        return default
+
 def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
     """Parse today's stock data - extract new date column and stock values"""
     try:
@@ -923,15 +935,15 @@ async def get_analytics(overstock_multiplier: float = 3.0):
         data_dicts = [
             {
                 'brand_name': record.get('brand_name') or 'Unknown',
-                'rate': record.get('rate') or record.get('selling_rate') or 0.0,
+                'rate': safe_float(record.get('rate') or record.get('selling_rate')),
                 'daily_sales': record.get('daily_sales') or {},
-                'monthly_sale_qty': record.get('monthly_sale_qty') or 0,
-                'monthly_sale_value': record.get('monthly_sale_value') or 0.0,
-                'avg_daily_sale': record.get('avg_daily_sale') or record.get('avg_daily_sales_qty') or 0.0,
-                'stock_available_days': record.get('stock_available_days') or 0.0,
-                'stock_value_before': record.get('stock_value_before') or 0.0,
-                'stock_value_today': record.get('stock_value_today') or 0.0,
-                'stock_ratio': record.get('stock_ratio') or 0.0
+                'monthly_sale_qty': int(safe_float(record.get('monthly_sale_qty'))),
+                'monthly_sale_value': safe_float(record.get('monthly_sale_value')),
+                'avg_daily_sale': safe_float(record.get('avg_daily_sale') or record.get('avg_daily_sales_qty')),
+                'stock_available_days': safe_float(record.get('stock_available_days')),
+                'stock_value_before': safe_float(record.get('stock_value_before')),
+                'stock_value_today': safe_float(record.get('stock_value_today')),
+                'stock_ratio': safe_float(record.get('stock_ratio'))
             }
             for record in liquor_records
         ]
@@ -1085,12 +1097,12 @@ async def get_charts_data():
         data_dicts = [
             {
                 'brand_name': record.get('brand_name') or 'Unknown',
-                'rate': record.get('rate') or record.get('selling_rate') or 0.0,
-                'current_stock_qty': record.get('current_stock_qty') or 0,
-                'monthly_sale_value': record.get('monthly_sale_value') or 0.0,
-                'stock_value_today': record.get('stock_value_today') or 0.0,
-                'stock_available_days': record.get('stock_available_days') or 0.0,
-                'stock_ratio': record.get('stock_ratio') or 0.0
+                'rate': safe_float(record.get('rate') or record.get('selling_rate')),
+                'current_stock_qty': int(safe_float(record.get('current_stock_qty'))),
+                'monthly_sale_value': safe_float(record.get('monthly_sale_value')),
+                'stock_value_today': safe_float(record.get('stock_value_today')),
+                'stock_available_days': safe_float(record.get('stock_available_days')),
+                'stock_ratio': safe_float(record.get('stock_ratio'))
             }
             for record in liquor_records
         ]
@@ -1153,8 +1165,10 @@ async def get_charts_data():
         )
         
     except Exception as e:
-        logging.error(f"Error getting charts data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error getting charts data: {str(e)}")
+        import traceback
+        err_msg = f"Error getting charts data: {str(e)}\n{traceback.format_exc()}"
+        logging.error(err_msg)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 @api_router.get("/demand-recommendations")
 async def get_demand_recommendations():
