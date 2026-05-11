@@ -1070,6 +1070,8 @@ async def get_analytics(overstock_multiplier: float = 3.0):
             sales_trends=sorted_trends
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Error getting analytics: {e}")
         raise HTTPException(status_code=500, detail=f"Error calculating analytics: {str(e)}")
@@ -1086,12 +1088,22 @@ async def get_all_brands():
 
 @api_router.get("/charts", response_model=ChartsResponse)
 async def get_charts_data():
-    """Get data for performance charts and visualizations"""
+    """Get data for performance charts and visualizations with smart data source selection"""
     try:
-        liquor_records = await collections.liquor_data.find().to_list(1000)
+        # STEP 1: Determine if we should use historical data
+        use_historical, current_days = await should_use_historical_data()
         
+        # STEP 2: Fetch appropriate data source
+        if use_historical:
+            liquor_records = await get_projected_data_from_historical()
+            if not liquor_records:
+                liquor_records = await collections.liquor_data.find().to_list(1000)
+                use_historical = False
+        else:
+            liquor_records = await collections.liquor_data.find().to_list(1000)
+            
         if not liquor_records:
-            raise HTTPException(status_code=404, detail="No data found")
+            raise HTTPException(status_code=404, detail="No data found. Please upload liquor data first.")
         
         # Convert to dict format for calculations
         data_dicts = [
@@ -1164,6 +1176,9 @@ async def get_charts_data():
             revenue_proportion=revenue_proportion
         )
         
+    except HTTPException:
+        # Re-raise HTTPExceptions so FastAPI can handle them with correct status codes
+        raise
     except Exception as e:
         import traceback
         err_msg = f"Error getting charts data: {str(e)}\n{traceback.format_exc()}"
