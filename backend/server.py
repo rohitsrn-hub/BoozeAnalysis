@@ -513,31 +513,13 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
         parsed_list = [{'brand_name': n, 'DL_stock': i['stock_qty']} for n, i in brands_data.items()]
         is_restock, inc_count, inc_brands = detect_monthly_restock(parsed_list, existing_stock)
         
-        # 2. Monthly Restock Logic (threshold met)
+        # 2. Monthly Restock Logic — INFORMATIONAL ONLY
+        # The auto-reset is DISABLED. User must manually click "Reset Stock" to start a new period.
+        # We only log potential restocks for awareness.
         if is_restock:
-            if not confirm_restock:
-                # PAUSE: Ask for user verification
-                return JSONResponse(
-                    status_code=202, # Accepted but not processed
-                    content={
-                        "status": "requires_verification",
-                        "message": f"🚀 Monthly Restock detected ({inc_count} brands)! Stock increased for brands like {', '.join(inc_brands[:3])}...",
-                        "inc_count": inc_count,
-                        "inc_brands": inc_brands
-                    }
-                )
-            
-            # User confirmed! Trigger Monthly Restock Workflow
-            print(f"🚀 User confirmed Monthly Restock. Triggering backup and reset.")
-            await internal_reset_stock()
-            # After reset, current upload becomes fresh D1 data
-            
+            logging.info(f"ℹ️ Potential restock detected ({inc_count} brands increased). Auto-reset is DISABLED. User must use Reset Stock button.")
         elif inc_count > 0:
-            # 3. Small increase detected - treat as error per user instructions
-            raise HTTPException(
-                status_code=400,
-                detail=f"⚠️ Potential Error Detected: Stock increased for only {inc_count} brands ({', '.join(inc_brands[:3])}...). Monthly restocks should affect at least 5 brands. Please check your file for typos."
-            )
+            logging.info(f"ℹ️ Minor stock increases for {inc_count} brands ({', '.join(inc_brands[:3])}...). Proceeding with normal upload.")
             
         # 3. Process Upload
         db_count = await collections.liquor_data.count_documents({})
@@ -568,20 +550,44 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
                     "stock_ratio": existing.get("stock_ratio")
                 }
                 
-                old_daily = existing.get('daily_sales', {})
+                old_daily = existing.get('daily_sales', {}) or {}
                 old_daily[normalize_date_key(new_date_column)] = qty
                 
-                # Use modular logic for movements (this will be improved in next steps)
+                # Recalculate analytics from D1 to current DL
                 d1_stock = existing.get('D1_stock', qty)
-                s_rate = existing.get('selling_rate', 0.0)
+                s_rate = existing.get('selling_rate', 0.0) or 0.0
+                d1_date = existing.get('D1_date', new_date_column)
                 
-                # Simplified update for now
+                # Calculate total sales: D1 stock minus current stock (negative means restock happened)
+                total_sales_qty = max(0, d1_stock - qty)
+                
+                # Calculate days analyzed from daily_sales entries
+                days_analyzed = len(old_daily)
+                avg_daily_sales_qty = total_sales_qty / max(1, days_analyzed)
+                
+                # Monthly projections (project to 24-day sales period)
+                monthly_sale_qty = int(avg_daily_sales_qty * 24)
+                monthly_sale_value = monthly_sale_qty * s_rate
+                
+                # Stock metrics
+                stock_value_today = float(qty * s_rate)
+                stock_available_days = (qty / max(0.1, avg_daily_sales_qty)) if avg_daily_sales_qty > 0 else 999
+                stock_ratio = stock_value_today / max(1, monthly_sale_value) if monthly_sale_value > 0 else 0
+                
                 update_fields = {
                     "daily_sales": old_daily,
                     "DL_date": new_date_column,
                     "DL_stock": float(qty),
                     "current_stock_qty": int(qty),
-                    "stock_value_today": float(qty * s_rate),
+                    "stock_value_today": stock_value_today,
+                    "total_sales_qty": float(total_sales_qty),
+                    "avg_daily_sales_qty": float(avg_daily_sales_qty),
+                    "avg_daily_sale": float(monthly_sale_value / 30) if monthly_sale_value > 0 else 0.0,
+                    "days_analyzed": days_analyzed,
+                    "monthly_sale_qty": monthly_sale_qty,
+                    "monthly_sale_value": float(monthly_sale_value),
+                    "stock_available_days": float(min(999, max(0, stock_available_days))),
+                    "stock_ratio": float(stock_ratio),
                     "upload_timestamp": datetime.now(timezone.utc)
                 }
                 await collections.liquor_data.update_one({"_id": existing["_id"]}, {"$set": update_fields})
@@ -627,15 +633,16 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
         await collections.upload_history.insert_one(upload_hist.dict())
         
         return {
-            "message": f"Successfully processed upload. {'Restock triggered!' if is_restock else ''}",
+            "message": f"Successfully processed upload.",
             "updated": updated,
             "added": added,
-            "is_restock": is_restock,
+            "is_restock": False,
             "debug": {
                 "date_picked": new_date_column,
                 "normalized_date": normalize_date_key(new_date_column),
                 "brands_in_file": len(brands_data),
-                "db_brands_checked": db_count
+                "db_brands_checked": db_count,
+                "restock_detected": inc_count if is_restock else 0
             }
         }
     except Exception as e:
