@@ -735,24 +735,59 @@ async def undo_upload(upload_id: str):
                 
                 if brand_record:
                     # Remove the date that was added
-                    current_daily_sales = brand_record.get('daily_sales', {})
+                    current_daily_sales = brand_record.get('daily_sales', {}) or {}
                     if date_added and date_added in current_daily_sales:
                         del current_daily_sales[date_added]
                     
-                    # Restore previous values
+                    # Also try normalized version of the date
+                    if date_added:
+                        norm_date = normalize_date_key(date_added)
+                        if norm_date in current_daily_sales:
+                            del current_daily_sales[norm_date]
+                    
+                    # Restore DL_date and DL_stock from previous state
+                    # If previous state has None, calculate from remaining daily_sales
+                    prev_dl_date = previous_state.get("DL_date")
+                    prev_dl_stock = previous_state.get("DL_stock")
+                    
+                    if (prev_dl_date is None or prev_dl_stock is None) and current_daily_sales:
+                        # Calculate from remaining daily_sales
+                        from utils.date_helper import parse_date as pd_helper
+                        sorted_dates = sorted(current_daily_sales.keys(), key=lambda x: pd_helper(x), reverse=True)
+                        if sorted_dates:
+                            prev_dl_date = prev_dl_date or sorted_dates[0]
+                            prev_dl_stock = prev_dl_stock or current_daily_sales[sorted_dates[0]]
+                    
+                    # Fallback to D1 values if still None
+                    prev_dl_date = prev_dl_date or brand_record.get('D1_date', 'N/A')
+                    prev_dl_stock = prev_dl_stock if prev_dl_stock is not None else brand_record.get('D1_stock', 0)
+                    
+                    # Recalculate analytics from D1 to restored DL
+                    d1_stock = brand_record.get('D1_stock', 0) or 0
+                    s_rate = brand_record.get('selling_rate', 0.0) or brand_record.get('rate', 0.0) or 0.0
+                    days = len(current_daily_sales) if current_daily_sales else 1
+                    total_sales = max(0, d1_stock - (prev_dl_stock or 0))
+                    avg_daily = total_sales / max(1, days)
+                    monthly_qty = int(avg_daily * 24)
+                    monthly_val = monthly_qty * s_rate
+                    stock_val = float((prev_dl_stock or 0) * s_rate)
+                    stock_days = ((prev_dl_stock or 0) / max(0.1, avg_daily)) if avg_daily > 0 else 999
+                    s_ratio = stock_val / max(1, monthly_val) if monthly_val > 0 else 0
+                    
                     update_data = {
                         "daily_sales": current_daily_sales,
-                        "DL_date": previous_state.get("DL_date"),
-                        "DL_stock": previous_state.get("DL_stock"),
-                        "current_stock_qty": previous_state.get("current_stock_qty"),
-                        "total_sales_qty": previous_state.get("total_sales_qty"),
-                        "avg_daily_sales_qty": previous_state.get("avg_daily_sales_qty"),
-                        "days_analyzed": previous_state.get("days_analyzed"),
-                        "monthly_sale_value": previous_state.get("monthly_sale_value"),
-                        "avg_daily_sale": previous_state.get("avg_daily_sale"),
-                        "stock_value_today": previous_state.get("stock_value_today"),
-                        "stock_available_days": previous_state.get("stock_available_days"),
-                        "stock_ratio": previous_state.get("stock_ratio")
+                        "DL_date": prev_dl_date,
+                        "DL_stock": float(prev_dl_stock or 0),
+                        "current_stock_qty": int(prev_dl_stock or 0),
+                        "total_sales_qty": float(total_sales),
+                        "avg_daily_sales_qty": float(avg_daily),
+                        "avg_daily_sale": float(monthly_val / 30) if monthly_val > 0 else 0.0,
+                        "days_analyzed": days,
+                        "monthly_sale_qty": monthly_qty,
+                        "monthly_sale_value": float(monthly_val),
+                        "stock_value_today": stock_val,
+                        "stock_available_days": float(min(999, max(0, stock_days))),
+                        "stock_ratio": float(s_ratio)
                     }
                     
                     await collections.liquor_data.update_one(
