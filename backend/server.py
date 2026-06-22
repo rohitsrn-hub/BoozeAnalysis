@@ -2664,6 +2664,26 @@ async def fix_database_integrity():
                 "fixes_applied": []
             }
         
+        # Fetch rates from backups if current rates are missing in database
+        backup_rates = {}
+        try:
+            backups = await collections.stock_backups.find().sort("backup_timestamp", -1).to_list(100)
+            for backup in backups:
+                snapshot = backup.get('data_snapshot', []) or []
+                for r in snapshot:
+                    name = r.get('brand_name')
+                    s_rate = r.get('selling_rate') or r.get('rate') or 0.0
+                    w_rate = r.get('wholesale_rate') or 0.0
+                    if name and float(s_rate) > 0 and name not in backup_rates:
+                        backup_rates[name] = {
+                            'selling_rate': float(s_rate),
+                            'wholesale_rate': float(w_rate)
+                        }
+            if backup_rates:
+                logging.info(f"Integrity check: Loaded rates for {len(backup_rates)} brands from backups")
+        except Exception as e:
+            logging.error(f"Error loading rates from backups: {e}")
+
         all_removed_orphans = set()
         for record in all_records:
             brand_id = record.get('id')
@@ -2671,6 +2691,33 @@ async def fix_database_integrity():
             record_updated = False
             update_data = {}
             
+            # Fix 0: Restore rates from backups if missing (0.0)
+            selling_rate = record.get('selling_rate') or record.get('rate') or 0.0
+            wholesale_rate = record.get('wholesale_rate') or 0.0
+            
+            if float(selling_rate) == 0.0 and brand_name in backup_rates:
+                selling_rate = backup_rates[brand_name]['selling_rate']
+                wholesale_rate = backup_rates[brand_name]['wholesale_rate']
+                update_data['selling_rate'] = selling_rate
+                update_data['rate'] = selling_rate
+                update_data['wholesale_rate'] = wholesale_rate
+                record_updated = True
+                fixes_applied.append(f"Restored rate for '{brand_name}' from backups: selling={selling_rate}, wholesale={wholesale_rate}")
+                
+                try:
+                    await collections.brands_master.update_one(
+                        {"brand_name": brand_name},
+                        {"$set": {
+                            "brand_name": brand_name,
+                            "selling_rate": selling_rate,
+                            "wholesale_rate": wholesale_rate,
+                            "last_updated": datetime.now(timezone.utc)
+                        }},
+                        upsert=True
+                    )
+                except Exception as e:
+                    logging.error(f"Error updating brands_master for {brand_name}: {e}")
+
             # Fix 1: Ensure daily_sales is a dict, not null
             daily_sales = record.get('daily_sales')
             if daily_sales is None:
@@ -2712,6 +2759,9 @@ async def fix_database_integrity():
             # Fix 3: Ensure ALL required numeric fields are present with consistent names
             # Some parts of the app use 'avg_daily_sale' while others use 'avg_daily_sales_qty'
             # We ensure both are synced here.
+            current_selling_rate = update_data.get('selling_rate', record.get('selling_rate') or record.get('rate') or 0.0)
+            current_wholesale_rate = update_data.get('wholesale_rate', record.get('wholesale_rate') or 0.0)
+            
             numeric_fields = {
                 'current_stock_qty': 0,
                 'total_sales_qty': 0.0,
@@ -2727,9 +2777,9 @@ async def fix_database_integrity():
                 'days_analyzed': 1,
                 'stock_value_before': 0.0, # Required by analytics
                 'stock_value_today': 0.0,
-                'rate': record.get('selling_rate', 0.0), # Required by analytics
-                'selling_rate': record.get('rate', 0.0),
-                'wholesale_rate': record.get('wholesale_rate', 0.0)
+                'rate': current_selling_rate, # Required by analytics
+                'selling_rate': current_selling_rate,
+                'wholesale_rate': current_wholesale_rate
             }
             
             for field, default_value in numeric_fields.items():
