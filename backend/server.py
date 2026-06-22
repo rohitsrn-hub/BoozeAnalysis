@@ -172,13 +172,14 @@ def safe_float(val, default=0.0):
         return default
 
 def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
-    """Parse today's stock data - extract new date column and stock values"""
+    """Parse today's stock data - extract new date column, stock values, and optional rates"""
     try:
         df = pd.read_excel(io.BytesIO(file_content))
         if df.empty: raise HTTPException(status_code=400, detail="File is empty")
         
         df.columns = [str(col).strip() for col in df.columns]
         brand_col, new_date_col = None, None
+        wholesale_rate_col, selling_rate_col = None, None
         
         # We search from right to left to find the MOST RECENT date column
         for col in reversed(df.columns):
@@ -186,12 +187,17 @@ def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
             if not new_date_col and parse_date(col_str) != datetime.min:
                 new_date_col = col
             
-        # Then find the brand name column
+        # Find the brand name and rate columns
         for col in df.columns:
             col_lower = str(col).lower()
             if 'brand' in col_lower and 'name' in col_lower:
                 brand_col = col
-                break
+            elif 'wholesale' in col_lower and 'rate' in col_lower:
+                wholesale_rate_col = col
+            elif 'selling' in col_lower and 'rate' in col_lower:
+                selling_rate_col = col
+            elif 'rate' in col_lower and not wholesale_rate_col:
+                selling_rate_col = col
             
         if not brand_col or not new_date_col:
             logging.error(f"Upload parsing failed: brand_col={brand_col}, new_date_col={new_date_col}")
@@ -207,7 +213,23 @@ def parse_todays_data(file_content: bytes) -> Dict[str, Any]:
             try:
                 raw_val = row[new_date_col]
                 stock_qty = float(raw_val) if pd.notna(raw_val) and str(raw_val).strip() != '' else None
-                brands_data[brand_name] = {'stock_qty': stock_qty}
+                
+                # Optionally parse rates if they exist in this row
+                s_rate = 0.0
+                if selling_rate_col and selling_rate_col in row:
+                    try: s_rate = float(row[selling_rate_col]) if pd.notna(row[selling_rate_col]) else 0.0
+                    except: pass
+                
+                w_rate = 0.0
+                if wholesale_rate_col and wholesale_rate_col in row:
+                    try: w_rate = float(row[wholesale_rate_col]) if pd.notna(row[wholesale_rate_col]) else 0.0
+                    except: pass
+                
+                brands_data[brand_name] = {
+                    'stock_qty': stock_qty,
+                    'selling_rate': s_rate,
+                    'wholesale_rate': w_rate
+                }
             except: continue
             
         return {'new_date_column': str(new_date_col), 'brands_data': brands_data}
@@ -594,10 +616,30 @@ async def upload_todays_data(file: UploadFile = File(...), confirm_restock: bool
                 updated += 1
             else:
                 # Fresh Record (New month or new brand)
-                # Fetch rate from brands_master if not in Excel
+                # Fetch rate from Excel if present, otherwise fallback to brands_master
+                excel_s_rate = info.get('selling_rate', 0.0)
+                excel_w_rate = info.get('wholesale_rate', 0.0)
+                
                 master = await collections.brands_master.find_one({"brand_name": name})
-                s_rate = master.get('selling_rate', 0.0) if master else 0.0
-                w_rate = master.get('wholesale_rate', 0.0) if master else 0.0
+                
+                s_rate = excel_s_rate if excel_s_rate > 0.0 else (master.get('selling_rate', 0.0) if master else 0.0)
+                w_rate = excel_w_rate if excel_w_rate > 0.0 else (master.get('wholesale_rate', 0.0) if master else 0.0)
+                
+                # Save/update to brands_master as well to persist it for the future
+                if s_rate > 0.0:
+                    try:
+                        await collections.brands_master.update_one(
+                            {"brand_name": name},
+                            {"$set": {
+                                "brand_name": name,
+                                "selling_rate": s_rate,
+                                "wholesale_rate": w_rate,
+                                "last_updated": datetime.now(timezone.utc)
+                            }},
+                            upsert=True
+                        )
+                    except Exception as e:
+                        logging.error(f"Error saving rate to brands_master for {name}: {e}")
                 
                 new_doc = {
                     "id": str(uuid.uuid4()),
