@@ -1660,6 +1660,19 @@ async def get_sales_trends(period: str = "quarterly", sales_month: Optional[str]
                 if b_label in period_to_data:
                     continue
                 
+                # Check for overlaps with already accepted periods
+                is_overlapping = False
+                for p_label, p_inf in period_info.items():
+                    p_d1 = p_inf['d1']
+                    p_dl = p_inf['dl']
+                    if max(b_d1, p_d1) <= min(b_dl, p_dl):
+                        is_overlapping = True
+                        logging.info(f"Skipping overlapping backup period {b_d1.strftime('%d-%b')}-{b_dl.strftime('%d-%b')} because it overlaps with {p_label} ({p_d1.strftime('%d-%b')}-{p_dl.strftime('%d-%b')})")
+                        break
+                
+                if is_overlapping:
+                    continue
+                
                 period_to_data[b_label] = data_snapshot
                 period_info[b_label] = {
                     'd1': b_d1,
@@ -2967,6 +2980,42 @@ async def get_historical_periods():
             if d1_dates and dl_dates:
                 d1_date = min(d1_dates)
                 dl_date = max(dl_dates)
+                
+                # Parse backup dates
+                try:
+                    b_d1 = datetime.fromisoformat(d1_date.replace(' ', 'T').split('.')[0])
+                    b_dl = datetime.fromisoformat(dl_date.replace(' ', 'T').split('.')[0])
+                except:
+                    try:
+                        b_d1 = datetime.strptime(d1_date, "%d-%b-%y")
+                        b_dl = datetime.strptime(dl_date, "%d-%b-%y")
+                    except:
+                        b_d1, b_dl = None, None
+                
+                if b_d1 and b_dl:
+                    # Check overlap with already added periods
+                    is_overlapping = False
+                    for existing_p in periods:
+                        e_d1_str = existing_p.get('d1_date')
+                        e_dl_str = existing_p.get('dl_date')
+                        try:
+                            e_d1 = datetime.fromisoformat(e_d1_str.replace(' ', 'T').split('.')[0])
+                            e_dl = datetime.fromisoformat(e_dl_str.replace(' ', 'T').split('.')[0])
+                        except:
+                            try:
+                                e_d1 = datetime.strptime(e_d1_str, "%d-%b-%y")
+                                e_dl = datetime.strptime(e_dl_str, "%d-%b-%y")
+                            except:
+                                e_d1, e_dl = None, None
+                        
+                        if e_d1 and e_dl:
+                            if max(b_d1, e_d1) <= min(b_dl, e_dl):
+                                is_overlapping = True
+                                break
+                    
+                    if is_overlapping:
+                        continue
+                
                 period_key = f"{d1_date}_{dl_date}"
                 
                 # Only keep the most recent backup for each period
@@ -3706,13 +3755,14 @@ async def calculate_and_store_historical_averages(source_records=None):
 async def get_days_of_current_data() -> int:
     """Count how many days of sales data we have in current month"""
     try:
-        liquor_records = await collections.liquor_data.find().to_list(1)
+        # Find the maximum days_analyzed across all records
+        cursor = collections.liquor_data.find({}, {"days_analyzed": 1}).sort("days_analyzed", -1).limit(1)
+        records = await cursor.to_list(1)
         
-        if not liquor_records:
+        if not records:
             return 0
         
-        # Get days_analyzed from first record
-        days_analyzed = liquor_records[0].get('days_analyzed', 0)
+        days_analyzed = records[0].get('days_analyzed', 0)
         return days_analyzed
         
     except Exception as e:
